@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: smis
+          POSTGRES_PASSWORD: smis
+          POSTGRES_DB: smis
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U smis"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL: postgres://smis:smis@localhost:5432/smis
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-only-access-secret-not-used-anywhere-real-000
+      JWT_REFRESH_SECRET: ci-only-refresh-secret-not-used-anywhere-real-00
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY: ci
+      S3_SECRET_KEY: ci
+      S3_BUCKET_DEFAULT: smis
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      SMTP_FROM: ci@hexschool.local
+      CORS_ORIGINS: http://localhost:3000
+      SETTINGS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef
+      ADMIN_DASH_PASS: ci-only-pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run migration:run
+      - run: npm run test:e2e
+      - run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: >
+          docker build
+          --target production
+          --build-arg BUILD_SHA=${{ github.sha }}
+          --build-arg BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          -t hexschool-backend:${{ github.sha }} .

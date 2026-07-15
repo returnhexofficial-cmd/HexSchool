@@ -1,73 +1,103 @@
-import {
-  DeepPartial,
-  EntityManager,
-  FindOptionsOrder,
-  FindOptionsRelations,
-  FindOptionsWhere,
-  ILike,
-  Repository,
-} from 'typeorm';
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { NotFoundException } from '@nestjs/common';
-import { AppBaseEntity } from './base.entity';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../../database/prisma/prisma.service';
 import { PaginationQueryDto } from '../dto/pagination-query.dto';
 import { buildPaginationMeta, PaginatedResult } from '../dto/paginated.dto';
 
-export interface PaginateOptions<T> {
-  /** Columns `search` is matched against with ILIKE (OR-combined). */
-  searchColumns?: (keyof T & string)[];
+/** PrismaService or an interactive-transaction client. */
+export type PrismaClientLike = PrismaService | Prisma.TransactionClient;
+
+/**
+ * The structural subset of a Prisma model delegate that BaseRepository
+ * uses. Prisma generates a distinct delegate type per model with no
+ * common generic interface, so args/results are typed `unknown` here and
+ * narrowed by the generics on the public methods (justified `unknown`
+ * casts — see class doc).
+ */
+interface BaseDelegate {
+  findFirst(args?: unknown): Promise<unknown>;
+  findMany(args?: unknown): Promise<unknown[]>;
+  count(args?: unknown): Promise<number>;
+  create(args: { data: unknown }): Promise<unknown>;
+  update(args: { where: unknown; data: unknown }): Promise<unknown>;
+  updateMany(args: { where: unknown; data: unknown }): Promise<unknown>;
+}
+
+export interface BaseRepositoryOptions {
+  /** Applies `deleted_at IS NULL` scoping to every default query. */
+  softDeletable?: boolean;
+  /** Entity carries `school_id`; enables tenant scoping. */
+  schoolScoped?: boolean;
+}
+
+export interface PaginateOptions<Where> {
+  /** Columns `search` is matched against (case-insensitive contains, OR-combined). */
+  searchColumns?: string[];
   /** Whitelist for `sort=field:dir`; defaults to createdAt only. */
-  sortableColumns?: (keyof T & string)[];
-  where?: FindOptionsWhere<T> | FindOptionsWhere<T>[];
-  relations?: FindOptionsRelations<T>;
-  /** Tenant scope — applied to every clause when the entity carries school_id. */
+  sortableColumns?: string[];
+  where?: Where;
+  /** Tenant scope — applied to every clause when the entity is school-scoped. */
   schoolId?: string;
 }
 
 /**
- * Repository-pattern foundation (PROJECT_CONTEXT §4): all data access goes
- * through per-entity repositories extending this class. Services never touch
- * the ORM/QueryBuilder; controllers never touch repositories.
+ * Repository-pattern foundation (PROJECT_CONTEXT §4), Prisma edition: all
+ * data access goes through per-entity repositories extending this class.
+ * Services never touch PrismaService directly; controllers never touch
+ * repositories. Provides CRUD, pagination, automatic soft-delete scoping,
+ * `school_id` scoping, and a `withTransaction` unit-of-work helper.
  *
- * Provides: CRUD, pagination, automatic soft-delete scoping (via
- * DeleteDateColumn), `school_id` scoping, and a `withTransaction`
- * unit-of-work helper.
+ * `T` is the Prisma model type, `Where`/`Create`/`Update` the generated
+ * `Prisma.XWhereInput`/`XUncheckedCreateInput`/`XUpdateInput` types.
+ * Internals cast through the untyped BaseDelegate — the generics keep the
+ * public surface fully typed.
  */
-export abstract class BaseRepository<T extends AppBaseEntity> {
-  protected constructor(protected readonly repo: Repository<T>) {}
+export abstract class BaseRepository<
+  T extends { id: string },
+  Where extends Record<string, unknown> = Record<string, unknown>,
+  Create = unknown,
+  Update = unknown,
+> {
+  private readonly softDeletable: boolean;
+  private readonly schoolScoped: boolean;
 
-  get manager(): EntityManager {
-    return this.repo.manager;
+  protected constructor(
+    protected readonly prisma: PrismaService,
+    /** Resolves the model delegate from a client (supports transactions). */
+    private readonly resolveDelegate: (client: PrismaClientLike) => unknown,
+    private readonly modelName: string,
+    options: BaseRepositoryOptions = {},
+  ) {
+    this.softDeletable = options.softDeletable ?? true;
+    this.schoolScoped = options.schoolScoped ?? true;
+  }
+
+  protected delegate(tx?: PrismaClientLike): BaseDelegate {
+    return this.resolveDelegate(tx ?? this.prisma) as BaseDelegate;
   }
 
   async findById(id: string, schoolId?: string): Promise<T | null> {
-    return this.repo.findOne({
-      where: this.scope({ id } as FindOptionsWhere<T>, schoolId),
-    });
+    return this.findOne({ id } as unknown as Where, schoolId);
   }
 
   async findByIdOrFail(id: string, schoolId?: string): Promise<T> {
     const entity = await this.findById(id, schoolId);
     if (!entity) {
-      throw new NotFoundException(`${this.repo.metadata.name} ${id} not found`);
+      throw new NotFoundException(`${this.modelName} ${id} not found`);
     }
     return entity;
   }
 
-  async findOne(
-    where: FindOptionsWhere<T> | FindOptionsWhere<T>[],
-    schoolId?: string,
-  ): Promise<T | null> {
-    return this.repo.findOne({ where: this.scopeAll(where, schoolId) });
+  async findOne(where: Where, schoolId?: string): Promise<T | null> {
+    return (await this.delegate().findFirst({
+      where: this.scope(where, schoolId),
+    })) as T | null;
   }
 
-  async findAll(
-    where?: FindOptionsWhere<T> | FindOptionsWhere<T>[],
-    schoolId?: string,
-  ): Promise<T[]> {
-    return this.repo.find({
-      where: where ? this.scopeAll(where, schoolId) : this.scope({}, schoolId),
-    });
+  async findAll(where?: Where, schoolId?: string): Promise<T[]> {
+    return (await this.delegate().findMany({
+      where: this.scope(where ?? ({} as Where), schoolId),
+    })) as T[];
   }
 
   /**
@@ -76,126 +106,116 @@ export abstract class BaseRepository<T extends AppBaseEntity> {
    */
   async paginate(
     query: PaginationQueryDto,
-    options: PaginateOptions<T> = {},
+    options: PaginateOptions<Where> = {},
   ): Promise<PaginatedResult<T>> {
     const { page, limit } = query;
     const where = this.buildPaginateWhere(query, options);
-    const order = this.buildOrder(query, options);
+    const orderBy = this.buildOrder(query, options);
 
-    const [items, total] = await this.repo.findAndCount({
-      where,
-      order,
-      relations: options.relations,
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const [items, total] = await Promise.all([
+      this.delegate().findMany({
+        where,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.delegate().count({ where }),
+    ]);
 
-    return { data: items, meta: buildPaginationMeta(page, limit, total) };
+    return {
+      data: items as T[],
+      meta: buildPaginationMeta(page, limit, total),
+    };
   }
 
-  create(data: DeepPartial<T>): T {
-    return this.repo.create(data);
+  async create(data: Create, tx?: PrismaClientLike): Promise<T> {
+    return (await this.delegate(tx).create({ data })) as T;
   }
 
-  async save(entity: DeepPartial<T>): Promise<T> {
-    return this.repo.save(entity);
-  }
-
-  async update(id: string, data: QueryDeepPartialEntity<T>): Promise<T> {
-    await this.repo.update(id, data);
-    return this.findByIdOrFail(id);
+  async update(id: string, data: Update, tx?: PrismaClientLike): Promise<T> {
+    await this.findByIdOrFail(id); // respects soft-delete scope
+    return (await this.delegate(tx).update({ where: { id }, data })) as T;
   }
 
   async softDelete(id: string): Promise<void> {
-    await this.repo.softDelete(id);
+    if (!this.softDeletable) {
+      throw new Error(`${this.modelName} does not support soft delete`);
+    }
+    await this.delegate().updateMany({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
   }
 
   async restore(id: string): Promise<void> {
-    await this.repo.restore(id);
+    if (!this.softDeletable) {
+      throw new Error(`${this.modelName} does not support soft delete`);
+    }
+    await this.delegate().updateMany({
+      where: { id },
+      data: { deletedAt: null },
+    });
   }
 
-  async count(
-    where?: FindOptionsWhere<T> | FindOptionsWhere<T>[],
-    schoolId?: string,
-  ): Promise<number> {
-    return this.repo.count({
-      where: where ? this.scopeAll(where, schoolId) : this.scope({}, schoolId),
+  async count(where?: Where, schoolId?: string): Promise<number> {
+    return this.delegate().count({
+      where: this.scope(where ?? ({} as Where), schoolId),
     });
   }
 
   /**
-   * Unit-of-work helper: runs `fn` inside a single DB transaction. Pass the
-   * provided EntityManager to other repositories via their `withManager`
-   * escape hatch when a business operation spans entities.
+   * Unit-of-work helper: runs `fn` inside a single interactive
+   * transaction. Pass the provided client to other repositories' methods
+   * (they all accept an optional `tx`) when an operation spans entities.
    */
   async withTransaction<R>(
-    fn: (manager: EntityManager) => Promise<R>,
+    fn: (tx: Prisma.TransactionClient) => Promise<R>,
   ): Promise<R> {
-    return this.repo.manager.transaction(fn);
-  }
-
-  /** Transactional variant of this repository bound to `manager`. */
-  withManager(manager: EntityManager): Repository<T> {
-    return manager.getRepository<T>(this.repo.target);
+    return this.prisma.$transaction(fn);
   }
 
   // ── internals ─────────────────────────────────────────────────────
 
-  private hasSchoolColumn(): boolean {
-    return this.repo.metadata.columns.some(
-      (c) => c.databaseName === 'school_id',
-    );
-  }
-
-  protected scope(
-    where: FindOptionsWhere<T>,
-    schoolId?: string,
-  ): FindOptionsWhere<T> {
-    if (schoolId && this.hasSchoolColumn()) {
-      return { ...where, schoolId };
-    }
-    return where;
-  }
-
-  private scopeAll(
-    where: FindOptionsWhere<T> | FindOptionsWhere<T>[],
-    schoolId?: string,
-  ): FindOptionsWhere<T> | FindOptionsWhere<T>[] {
-    return Array.isArray(where)
-      ? where.map((w) => this.scope(w, schoolId))
-      : this.scope(where, schoolId);
+  protected scope(where: Where, schoolId?: string): Record<string, unknown> {
+    return {
+      ...where,
+      ...(this.softDeletable ? { deletedAt: null } : {}),
+      ...(this.schoolScoped && schoolId ? { schoolId } : {}),
+    };
   }
 
   private buildPaginateWhere(
     query: PaginationQueryDto,
-    options: PaginateOptions<T>,
-  ): FindOptionsWhere<T> | FindOptionsWhere<T>[] | undefined {
-    const base = this.scope(
-      (options.where as FindOptionsWhere<T>) ?? {},
-      options.schoolId,
-    );
+    options: PaginateOptions<Where>,
+  ): Record<string, unknown> {
+    const base = this.scope(options.where ?? ({} as Where), options.schoolId);
 
     if (query.search && options.searchColumns?.length) {
-      // OR across searchable columns, AND-ed with the base filter.
-      return options.searchColumns.map((col) => ({
-        ...base,
-        [col]: ILike(`%${query.search}%`),
-      }));
+      return {
+        AND: [
+          base,
+          {
+            OR: options.searchColumns.map((col) => ({
+              [col]: { contains: query.search, mode: 'insensitive' },
+            })),
+          },
+        ],
+      };
     }
     return base;
   }
 
   private buildOrder(
     query: PaginationQueryDto,
-    options: PaginateOptions<T>,
-  ): FindOptionsOrder<T> {
+    options: PaginateOptions<Where>,
+  ): Record<string, 'asc' | 'desc'> {
     const sortable = options.sortableColumns ?? ['createdAt'];
     if (query.sort) {
       const [field, dir] = query.sort.split(':');
-      if ((sortable as string[]).includes(field)) {
-        return { [field]: dir.toUpperCase() } as FindOptionsOrder<T>;
+      if (sortable.includes(field)) {
+        return { [field]: dir?.toLowerCase() === 'desc' ? 'desc' : 'asc' };
       }
     }
-    return { createdAt: 'DESC' } as FindOptionsOrder<T>;
+    return { createdAt: 'desc' };
   }
 }

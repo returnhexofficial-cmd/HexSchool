@@ -6,9 +6,10 @@ import {
   HealthCheckResult,
   HealthCheckService,
   MemoryHealthIndicator,
-  TypeOrmHealthIndicator,
 } from '@nestjs/terminus';
+import { Public } from '../../common/decorators/public.decorator';
 import { SkipEnvelope } from '../../common/decorators/skip-envelope.decorator';
+import { PrismaHealthIndicator } from './prisma.health';
 import { RedisHealthIndicator } from './redis.health';
 
 // check-disk-space shells out to `wmic`, which modern Windows 11 no longer
@@ -17,11 +18,12 @@ import { RedisHealthIndicator } from './redis.health';
 const CHECK_DISK = process.platform !== 'win32';
 
 @ApiTags('health')
+@Public() // orchestrator/uptime probes carry no credentials
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
-    private readonly db: TypeOrmHealthIndicator,
+    private readonly db: PrismaHealthIndicator,
     private readonly redis: RedisHealthIndicator,
     private readonly disk: DiskHealthIndicator,
     private readonly memory: MemoryHealthIndicator,
@@ -34,7 +36,7 @@ export class HealthController {
   @SkipEnvelope()
   check(): Promise<HealthCheckResult> {
     return this.health.check([
-      () => this.db.pingCheck('database', { timeout: 3000 }),
+      () => this.db.isHealthy('database'),
       () => this.redis.isHealthy('redis'),
       ...(CHECK_DISK
         ? [

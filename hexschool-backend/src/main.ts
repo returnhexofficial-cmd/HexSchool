@@ -11,6 +11,7 @@ import { Logger, LoggerErrorInterceptor } from 'nestjs-pino';
 import type { Queue } from 'bullmq';
 import basicAuth from 'express-basic-auth';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { SYSTEM_QUEUE } from './queues/queues.constants';
@@ -29,6 +30,7 @@ async function bootstrap(): Promise<void> {
   // Security & performance
   app.use(helmet());
   app.use(compression());
+  app.use(cookieParser()); // refresh token cookie (M02)
   app.enableCors({
     origin: config.getOrThrow<string[]>('app.corsOrigins'),
     credentials: true,

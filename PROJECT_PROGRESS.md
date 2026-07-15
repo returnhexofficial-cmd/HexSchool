@@ -1,26 +1,27 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-15 · **Overall completion: 3 % (1 / 32 modules)**
+> **Last updated:** 2026-07-15 · **Overall completion: 6 % (2 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01 |
-| **Current module** | **02 — Authentication** |
-| Remaining | 31 |
+| Completed modules | 01, 02 |
+| **Current module** | **03 — Authorization, Roles & Audit Logging** |
+| Remaining | 30 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 02: `users`, `refresh_tokens`, `otp_codes`, `login_activities` entities + migrations (on `BaseRepository` foundation).
-2. Module 02: `AuthService` with argon2id, rotation + reuse detection, lockout; global `JwtAuthGuard` + `@Public()`.
-3. Module 02: frontend `(auth)` flows (login/forgot/verify/reset) wiring the existing single-flight refresh interceptor to real `/auth/refresh`.
-4. Housekeeping: push both repos to GitHub and confirm CI green (workflows are authored, unverified).
+1. Module 03: permission code registry (TS source of truth) + `permissions`/`roles`/`role_permissions`/`user_roles`/`audit_logs` Prisma models + migration.
+2. Module 03: `PermissionsGuard` + `@RequirePermissions()` (Redis-cached permission sets, invalidated on role change; Super Admin bypass) — slots into the M02 `JwtAuthGuard` pipeline.
+3. Module 03: global `AuditInterceptor` (old/new diff, secret redaction) + role management UI + `<Can>` component wired to `/auth/me` permissions.
+4. Housekeeping: push both repos to GitHub and confirm CI green (workflows are authored, unverified; backend CI now runs `prisma migrate deploy`).
 
 ## Recently Completed
 
+- **Module 02 — Authentication** (2026-07-15): full JWT auth live — login/lockout, rotating refresh tokens w/ reuse detection (theft ⇒ revoke all + SMS alert), OTP-backed reset via new `notifications` queue, session manager, global `JwtAuthGuard` + `@Public()`, nightly purge job; frontend login/forgot/verify/reset/change flows (RHF+Zod), Redux Toolkit auth store, `proxy.ts` route guards, forced-password-change interstitial. **Stack changes:** ORM switched TypeORM → **Prisma 7** (owner decision; data layer rebuilt, migrations via `prisma migrate`), frontend global state on **Redux Toolkit** (owner decision, replaces planned Zustand). 43 backend + 25 frontend tests green. See `docs/modules/02-authentication.md`.
 - **Module 01 — Project Setup & Core Infrastructure** (2026-07-15): both repos bootstrapped production-grade; Docker dev environment (postgres/redis/minio/mailpit) verified live; global pipes/filters/interceptors, BaseRepository, Swagger, Bull Board, health/version endpoints; shadcn/ui + shared components v1; 23 tests green across repos. See `docs/modules/01-project-setup.md`.
 - Master roadmap, project context, dependency graph, and this tracker authored (project inception).
 
@@ -44,7 +45,7 @@
 | Module | Est. | Module | Est. | Module | Est. |
 |---|---|---|---|---|---|
 | ~~01 Setup~~ ✅ | 4 → **1** | 12 Attendance | 5 | 23 Library | 4 |
-| 02 Auth | 5 | 13 Timetable | 4 | 24 Inventory | 4 |
+| ~~02 Auth~~ ✅ | 5 → **1** | 13 Timetable | 4 | 24 Inventory | 4 |
 | 03 RBAC+Audit | 4 | 14 Examination | 5 | 25 Transport | 3 |
 | 04 School Setup | 3 | 15 Marks/Results | 8 | 26 Hostel | 3 |
 | 05 Session | 2 | 16 Fees/Payments | 8 | 27 Docs/Certs | 4 |
@@ -63,3 +64,4 @@
 | # | Module | Started | Completed | Actual effort | Completion doc |
 |---|--------|---------|-----------|---------------|----------------|
 | 01 | Project Setup & Core Infrastructure | 2026-07-15 | 2026-07-15 | 1 dev-day (est. 4) | `docs/modules/01-project-setup.md` |
+| 02 | Authentication (+ Prisma & Redux stack switches) | 2026-07-15 | 2026-07-15 | 1 dev-day (est. 5) | `docs/modules/02-authentication.md` |

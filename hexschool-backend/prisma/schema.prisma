@@ -1,0 +1,154 @@
+// HexSchool SMIS — Prisma schema (ORM decision revised in Module 02:
+// Prisma replaces TypeORM — see PROJECT_CONTEXT.md §16).
+//
+// Global conventions (SMIS_DEVELOPMENT_ROADMAP):
+//   - snake_case plural tables via @@map, snake_case columns via @map
+//   - UUID PKs via gen_random_uuid() (pgcrypto)
+//   - audit fields + soft delete (deleted_at) on business entities
+//   - every business table carries school_id (Module 31 readiness)
+//   - constraint prefixes fk_/uq_/idx_/chk_ (CHECKs + partial unique
+//     indexes are hand-written in migration SQL — Prisma can't express them)
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgcrypto, citext]
+}
+
+// ── Enums (PG native, names locked by @@map) ──────────────────────────
+
+enum UserType {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+  TEACHER
+  STUDENT
+  PARENT
+
+  @@map("user_type_enum")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+
+  @@map("user_status_enum")
+}
+
+enum OtpPurpose {
+  PASSWORD_RESET
+  LOGIN_2FA
+  PHONE_VERIFY
+  EMAIL_VERIFY
+  ADMISSION
+
+  @@map("otp_purpose_enum")
+}
+
+enum LoginEvent {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  REFRESH
+  PASSWORD_CHANGED
+  LOCKED
+  TOKEN_REUSE
+
+  @@map("login_event_enum")
+}
+
+// ── Module 02: Authentication ─────────────────────────────────────────
+
+/// Central account record for every human in the system. Role-specific
+/// profile tables (Modules 07–09) link back 1:1. Uniqueness of email/phone
+/// is enforced by partial unique indexes (WHERE deleted_at IS NULL) plus
+/// chk_users_contact (email OR phone) — see the migration SQL.
+/// school_id has no FK until Module 04 creates `schools`.
+model User {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId            String     @map("school_id") @db.Uuid
+  email               String?    @db.Citext
+  phone               String?    @db.VarChar(15)
+  passwordHash        String     @map("password_hash")
+  userType            UserType   @map("user_type")
+  status              UserStatus @default(ACTIVE)
+  lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz(6)
+  mustChangePassword  Boolean    @default(false) @map("must_change_password")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  refreshTokens   RefreshToken[]
+  otpCodes        OtpCode[]
+  loginActivities LoginActivity[]
+
+  @@map("users")
+}
+
+/// One row per issued refresh token (multi-device sessions). Only the
+/// SHA-256 hash is stored — the plaintext lives in the httpOnly cookie.
+/// Rotation links old → new via replaced_by_id; a revoked token presented
+/// again outside the race-grace window means theft. Purged nightly.
+model RefreshToken {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_refresh_tokens_user")
+  tokenHash    String    @unique(map: "uq_refresh_tokens_token_hash") @map("token_hash") @db.VarChar(64)
+  deviceInfo   Json      @default("{}") @map("device_info")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId], map: "idx_refresh_tokens_user_id")
+  @@map("refresh_tokens")
+}
+
+/// Hashed one-time codes (password reset, verification, admission…).
+/// user_id is nullable: admission applicants (Module 10) verify phones
+/// before having an account. Limits enforced in OtpService.
+model OtpCode {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?    @map("user_id") @db.Uuid
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull, map: "fk_otp_codes_user")
+  identifier String
+  codeHash   String     @map("code_hash") @db.VarChar(64)
+  purpose    OtpPurpose
+  expiresAt  DateTime   @map("expires_at") @db.Timestamptz(6)
+  consumedAt DateTime?  @map("consumed_at") @db.Timestamptz(6)
+  attempts   Int        @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([identifier, purpose, createdAt], map: "idx_otp_codes_identifier")
+  @@map("otp_codes")
+}
+
+/// Append-only security log (global business rule §11) — no updates, no
+/// soft delete. Written by event listeners only.
+model LoginActivity {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_login_activities_user")
+  event     LoginEvent
+  ip        String?    @db.VarChar(64)
+  userAgent String?    @map("user_agent") @db.VarChar(512)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt], map: "idx_login_activities_user_created")
+  @@map("login_activities")
+}

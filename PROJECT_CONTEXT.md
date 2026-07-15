@@ -1,14 +1,17 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-15 (Module 01 complete — infrastructure live, TypeORM confirmed)
+> **Last updated:** 2026-07-15 (Module 02 complete — auth live; ORM switched to **Prisma 7**, frontend state to **Redux Toolkit**)
 
 ---
 
 ## 1. Current Architecture
 
 - Two repos: `hexschool-frontend` (Next.js 16, TS, App Router, Turbopack), `hexschool-backend` (NestJS 11, TS). (Product branded HexSchool; DB/bucket keep the `smis` name.)
-- PostgreSQL 16+ single database; Redis for cache + BullMQ queues; S3-compatible object storage (MinIO in dev).
+- **ORM: Prisma 7** (owner decision in M02, replacing TypeORM). Schema in `prisma/schema.prisma`, CLI config in `prisma.config.ts`, runtime via `@prisma/adapter-pg`; migrations: `npx prisma migrate dev|deploy`. Partial indexes/CHECKs are hand-written into migration SQL (`--create-only`, then edit).
+- PostgreSQL 16+ single database (team dev DB currently on Neon; compose postgres remains for local use); Redis for cache + BullMQ queues; S3-compatible object storage (MinIO in dev).
+- Frontend global state: **Redux Toolkit** (owner decision in M02; roadmap originally said Zustand) — per-tab store via `StoreProvider`, typed hooks in `src/lib/store/hooks.ts`. Server state stays in TanStack Query.
+- Next 16 note: middleware is `src/proxy.ts` (renamed from middleware.ts) — optimistic route guards via the non-sensitive `hs_session` hint cookie; real enforcement is always API-side.
 - REST API under `/api/v1` (port 4000), Swagger at `/api/docs` (basic-auth in prod); Bull Board at `/admin/queues` (basic-auth always). Frontend dev on port 3000.
 - Dev infra via `hexschool-backend/docker-compose.yml`: postgres:16 (host port **5433** — 5432 is taken by a native install on the dev machine), redis:7, MinIO (9000/9001), Mailpit (1025/8025).
 - Single-school deployment now; **every business table carries `school_id`** so Module 31 can activate multi-tenancy without schema surgery.
@@ -40,7 +43,10 @@
 |---|---|---|
 | `SettingsService` | typed, cached, encrypted settings per group | M04 |
 | `StorageModule` | S3 upload/signed-url/delete | M01 |
-| `BaseRepository<T>` | repository-pattern base: CRUD, pagination, soft-delete + `school_id` scoping, `withTransaction` | M01 |
+| `BaseRepository<T>` | repository-pattern base (Prisma edition since M02): CRUD, pagination, soft-delete + `school_id` scoping, `withTransaction` | M01→02 |
+| `JwtAuthGuard` (global) + `@Public()` + `@CurrentUser()` | every route authenticated unless explicitly public | M02 |
+| `PasswordService` / `TokenService` / `OtpService` | argon2id + policy, JWT/reset/refresh tokens, hashed OTPs | M02 |
+| `notifications` BullMQ queue | email (SMTP) + SMS (log-only until M17) job contract | M02 |
 | `NotificationService.send()` | ALL SMS/email/in-app — no direct gateway calls anywhere | M17 |
 | Sequence/ID generator | gap-free document numbers | M07 |
 | `isHoliday(date)` | holiday awareness for attendance/payroll | M05 |
@@ -66,7 +72,7 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 9. Authentication Flow
 
-Login (email/phone + password, argon2id) → access JWT 15 min + rotating refresh 7/30 d (httpOnly cookie web) → refresh rotation with reuse-detection (reuse ⇒ revoke chain). OTP (6-digit, hashed, 5 min, 3 attempts) for reset/verification. Lockout 5 fails/15 min. Frontend: axios single-flight refresh interceptor; Next middleware guards route groups.
+**Live since M02.** Login (email/phone + password, argon2id) → access JWT 15 min (in memory) + rotating opaque refresh 7/30 d (httpOnly `hs_refresh` cookie, path `/api/v1/auth`) → rotation with reuse-detection (reuse outside 5 s two-tab grace ⇒ revoke ALL sessions + SMS alert; rotation never extends the session window). OTP (6-digit, hashed, 5 min, 3 attempts, 60 s resend) for reset/verification; verify-otp mints a 10-min reset token. Lockout 5 fails/15 min (423). Generic errors everywhere (no account enumeration). Frontend: axios single-flight refresh interceptor → `/auth/refresh`; `proxy.ts` guards route groups via the `hs_session` hint cookie; forced-change interstitial when `must_change_password`. Bootstrap Super Admin comes from the seed (`admin@hexschool.local`).
 
 ## 10. Authorization Flow
 
@@ -87,11 +93,11 @@ BD phone `^01[3-9]\d{8}$` (normalized). NID 10/13/17 digits. Birth cert 17 digit
 
 ## 13. Reusable Hooks (frontend)
 
-`usePermissions`, `useSession` (academic session switcher), `useDataTable`, `useDebounce`, `useConfirm`. (Grows per module.)
+`useAppDispatch`/`useAppSelector`/`useAuth` (typed Redux hooks, M02), `useDebounce`; planned: `usePermissions`, `useSession` (academic session switcher), `useDataTable`, `useConfirm`. (Grows per module.)
 
 ## 14. Environment Variables
 
-See `.env.example` in each repo. Core: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `S3_*`, `SMTP_*`, `SMS_GATEWAY_*`, `SSLCOMMERZ_*`, `BKASH_*`, `NAGAD_*`, `RECAPTCHA_*`, `SETTINGS_ENCRYPTION_KEY`, `CORS_ORIGINS`; frontend `NEXT_PUBLIC_API_URL`. Joi-validated at boot.
+See `.env.example` in each repo. Core: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `S3_*`, `SMTP_*`, `SMS_GATEWAY_*`, `SSLCOMMERZ_*`, `BKASH_*`, `NAGAD_*`, `RECAPTCHA_*`, `SETTINGS_ENCRYPTION_KEY`, `CORS_ORIGINS`, optional `SEED_SUPER_ADMIN_PASSWORD`; frontend `NEXT_PUBLIC_API_URL`. Joi-validated at boot.
 
 ## 15. Third-Party Integrations
 
@@ -101,7 +107,11 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 
 | Decision | Rationale | Module |
 |---|---|---|
-| TypeORM over Prisma | enum + migration ergonomics with NestJS DI | M01 (**confirmed**) |
+| **Prisma 7 over TypeORM** (reverses M01) | owner decision; generated type-safety, prisma migrate workflow; TypeORM fully removed | M02 |
+| Redux Toolkit over Zustand for frontend global state | owner decision; RTK slices + typed hooks, per-tab store for App Router | M02 |
+| Refresh tokens opaque (not JWT) | revocability needs a DB row anyway; SHA-256 hash stored, plaintext only in cookie | M02 |
+| Extra `TOKEN_REUSE` login-event enum value | theft response is distinct from lock in the audit trail | M02 |
+| `DEFAULT_SCHOOL_ID` constant until M04 | `schools` table doesn't exist yet; M04 must create the row with this exact id | M02 |
 | Health disk probe Linux-only | `check-disk-space` needs `wmic`, gone on modern Windows 11; prod is Linux | M01 |
 | shadcn `field.tsx` instead of legacy `form.tsx` | new shadcn registry deprecated the form wrapper; `FormDialog` uses RHF `FormProvider` directly | M01 |
 | Repository pattern over Active Record / direct ORM in services | data access isolated from business logic; swappable/testable (mock repos in unit tests); single place to enforce soft-delete + tenant scoping | M01 (owner decision) |
@@ -123,7 +133,11 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 
 ## 18. Outstanding Technical Debt
 
-- **M01:** CI workflows authored but never executed (no GitHub remotes yet) — verify on first push.
+- **M01:** CI workflows authored but never executed (no GitHub remotes yet) — verify on first push (backend CI now runs `prisma migrate deploy`).
 - **M01:** clean-clone `docker compose up` verified on Windows/Docker Desktop only; Ubuntu run pending.
 - **M01:** `DataTable` export is CSV-only; XLSX arrives with the report engine (M18).
 - **M01:** `BaseRepository` school scoping is an explicit parameter; request-scoped tenant injection deferred to M31.
+- **M02:** `users.school_id` has no FK until M04 creates `schools` (must use `DEFAULT_SCHOOL_ID` for the first school row).
+- **M02:** SMS is log-only until M17; OTP delivery to phone-only users not yet real.
+- **M02:** throttling disabled entirely under `NODE_ENV=test`; e2e never exercises rate limits.
+- **M02:** dev `.env` points `DATABASE_URL` at Neon while docker-compose still ships a local postgres — align when deployment story firms up (M30).

@@ -1,31 +1,66 @@
 import 'dotenv/config';
-import AppDataSource from '../data-source';
-import type { DataSource } from 'typeorm';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient, UserType } from '@prisma/client';
+import * as argon2 from 'argon2';
+import { DEFAULT_SCHOOL_ID } from '../../common/constants';
 
 /**
- * Idempotent seed runner (`npm run seed`). Each module appends its seeder
- * here (Module 03: permission registry + system roles, Module 04: NCTB
- * grading system, ...). Seeders must be safe to re-run.
+ * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
+ * via prisma.config.ts). Each module appends its seeder here (Module 03:
+ * permission registry + system roles, Module 04: NCTB grading system, ...).
+ * Seeders must be safe to re-run.
  */
-type Seeder = { name: string; run: (ds: DataSource) => Promise<void> };
+type Seeder = { name: string; run: (prisma: PrismaClient) => Promise<void> };
+
+const SUPER_ADMIN_EMAIL = 'admin@hexschool.local';
 
 const seeders: Seeder[] = [
-  // Module 01 ships no business data — structure only.
+  {
+    // Module 02: bootstrap Super Admin (forced password change on first
+    // login). Password comes from SEED_SUPER_ADMIN_PASSWORD when set.
+    name: 'super-admin (M02)',
+    run: async (prisma) => {
+      const existing = await prisma.user.findFirst({
+        where: { email: SUPER_ADMIN_EMAIL, deletedAt: null },
+      });
+      if (existing) {
+        console.log('already present — skipped;');
+        return;
+      }
+      const password = process.env.SEED_SUPER_ADMIN_PASSWORD ?? 'ChangeMe123!';
+      await prisma.user.create({
+        data: {
+          schoolId: DEFAULT_SCHOOL_ID,
+          email: SUPER_ADMIN_EMAIL,
+          passwordHash: await argon2.hash(password, {
+            type: argon2.argon2id,
+          }),
+          userType: UserType.SUPER_ADMIN,
+          mustChangePassword: true,
+        },
+      });
+      console.log(
+        `created ${SUPER_ADMIN_EMAIL}` +
+          (process.env.SEED_SUPER_ADMIN_PASSWORD
+            ? ' (password from env);'
+            : ' (default password "ChangeMe123!" — change on first login);'),
+      );
+    },
+  },
 ];
 
 async function main(): Promise<void> {
-  const ds = await AppDataSource.initialize();
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg(process.env.DATABASE_URL as string),
+  });
   try {
     for (const seeder of seeders) {
       process.stdout.write(`Seeding: ${seeder.name}... `);
-      await seeder.run(ds);
+      await seeder.run(prisma);
       process.stdout.write('done\n');
     }
-    if (seeders.length === 0) {
-      console.log('No seeders registered yet (expected before Module 03).');
-    }
   } finally {
-    await ds.destroy();
+    await prisma.$disconnect();
   }
 }
 

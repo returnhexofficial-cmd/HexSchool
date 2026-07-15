@@ -1,7 +1,8 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { SYSTEM_QUEUE } from './queues.constants';
+import { NOTIFICATIONS_QUEUE, SYSTEM_QUEUE } from './queues.constants';
+import { NotificationsProcessor } from './notifications.processor';
 import { SystemProcessor } from './system.processor';
 
 /**
@@ -33,9 +34,12 @@ import { SystemProcessor } from './system.processor';
         };
       },
     }),
-    BullModule.registerQueue({ name: SYSTEM_QUEUE }),
+    BullModule.registerQueue(
+      { name: SYSTEM_QUEUE },
+      { name: NOTIFICATIONS_QUEUE },
+    ),
   ],
-  providers: [SystemProcessor],
+  providers: [SystemProcessor, NotificationsProcessor],
   exports: [BullModule],
 })
 export class QueuesModule {}

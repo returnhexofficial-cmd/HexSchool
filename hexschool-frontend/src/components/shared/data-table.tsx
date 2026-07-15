@@ -85,6 +85,9 @@ export function DataTable<TData, TValue>({
   emptyTitle = "No records found",
   emptyDescription,
 }: DataTableProps<TData, TValue>) {
+  // TanStack Table is not React-Compiler-memoizable by design; the
+  // server-driven state here never relies on referential stability.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,

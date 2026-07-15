@@ -7,7 +7,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 |---|---|
 | Frontend | Next.js (latest, TypeScript, App Router) — repo: `smis-frontend` |
 | Backend | NestJS (latest, TypeScript) — repo: `smis-backend` |
-| Database | PostgreSQL 16+ (TypeORM or Prisma — decided in Module 01) |
+| Database | PostgreSQL 16+ with **Prisma 7** (TypeORM was chosen in Module 01, reversed by owner decision in Module 02 — see PROJECT_CONTEXT §16) |
 | Auth | JWT Access + Refresh Token, RBAC |
 | Storage | S3-compatible (MinIO locally, any S3 provider in prod) |
 | Payments | SSLCommerz, bKash, Nagad (Rocket later) |
@@ -77,7 +77,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | # | Module | Status |
 |---|--------|--------|
 | 01 | Project Setup & Core Infrastructure | ☑ |
-| 02 | Authentication | ☐ |
+| 02 | Authentication | ☑ |
 | 03 | Authorization, Roles & Audit Logging | ☐ |
 | 04 | School Setup & Settings | ☐ |
 | 05 | Academic Session & Calendar | ☐ |
@@ -140,7 +140,7 @@ None (first module).
 ## 4. Backend Tasks (NestJS)
 ### Setup
 - [x] `nest new smis-backend` (strict TS, ESLint + Prettier, Husky pre-commit: lint + typecheck + test).
-- [x] Decide & lock ORM: **TypeORM** (recommended for enum + migration ergonomics with NestJS) — record rationale in `PROJECT_CONTEXT.md`.
+- [x] Decide & lock ORM: ~~TypeORM~~ → **Prisma 7** (owner decision in Module 02; TypeORM removed, data layer rebuilt — rationale in `PROJECT_CONTEXT.md` §16).
 - [x] `@nestjs/config` with Joi env validation (`.env.example` committed).
 - [x] Docker Compose (dev): `postgres:16`, `redis:7`, `minio`, `mailpit` (SMTP catcher), backend.
 - [x] Global `ValidationPipe`, global exception filter, response envelope interceptor, request-logging middleware (pino via `nestjs-pino`, request-id correlation).
@@ -214,21 +214,21 @@ Secure login for all user types (admin, staff, teacher, student, parent) with JW
 
 ## 4. Backend Tasks (NestJS)
 ### Entities
-- [ ] `User`, `RefreshToken`, `OtpCode`, `LoginActivity`.
+- [x] `User`, `RefreshToken`, `OtpCode`, `LoginActivity` (Prisma models in `prisma/schema.prisma`).
 ### DTOs
-- [ ] `LoginDto` (identifier: email|phone, password, deviceName?), `RefreshDto`, `ForgotPasswordDto`, `VerifyOtpDto`, `ResetPasswordDto`, `ChangePasswordDto`, `LogoutDto (allDevices?: boolean)`.
+- [x] `LoginDto` (identifier: email|phone, password, deviceName?), `RefreshDto`, `ForgotPasswordDto`, `VerifyOtpDto`, `ResetPasswordDto`, `ChangePasswordDto`, `LogoutDto (allDevices?: boolean)`.
 ### Validation
-- [ ] Password policy: min 8, 1 upper, 1 lower, 1 digit; reject 1000-most-common list; phone must match BD format `^01[3-9]\d{8}$`.
+- [x] Password policy: min 8, 1 upper, 1 lower, 1 digit; reject 1000-most-common list; phone must match BD format `^01[3-9]\d{8}$`.
 ### Services
-- [ ] `AuthService`: login (argon2 verify), token pair issue, refresh **rotation with reuse detection** (reused token ⇒ revoke whole chain), logout (this device / all), lockout (5 fails → 15 min).
-- [ ] `OtpService`: 6-digit code, hash-stored, 5 min expiry, max 3 verify attempts, resend cooldown 60 s; dispatch via SMS/Email queue.
-- [ ] `PasswordService`: hashing (argon2id), policy checks, forced-change flow.
+- [x] `AuthService`: login (argon2 verify), token pair issue, refresh **rotation with reuse detection** (reused token ⇒ revoke whole chain), logout (this device / all), lockout (5 fails → 15 min).
+- [x] `OtpService`: 6-digit code, hash-stored, 5 min expiry, max 3 verify attempts, resend cooldown 60 s; dispatch via SMS/Email queue (`notifications`; SMS log-only until M17).
+- [x] `PasswordService`: hashing (argon2id), policy checks, forced-change flow.
 ### Guards
-- [ ] `JwtAuthGuard` (global) + `@Public()` decorator; `ThrottlerGuard` overrides on `/auth/*` (5/min per IP).
+- [x] `JwtAuthGuard` (global) + `@Public()` decorator; `ThrottlerGuard` overrides on credential routes (5/min per IP; refresh 30/min).
 ### Events
-- [ ] `user.logged_in`, `user.locked`, `password.changed` → listeners write `login_activities` + send alert SMS on lock.
+- [x] `user.logged_in`, `user.locked`, `password.changed` (+ `login_failed`, `logged_out`, `refreshed`, `token_reuse`) → listener writes `login_activities` + sends alert SMS on lock/theft.
 ### Scheduled Jobs
-- [ ] Nightly purge of expired refresh tokens & OTPs (>30 days).
+- [x] Nightly purge of expired refresh tokens & OTPs (>30 days).
 ### APIs
 ```
 POST   /api/v1/auth/login
@@ -245,12 +245,12 @@ DELETE /api/v1/auth/sessions/:id        (revoke one device)
 - Access token TTL 15 min; refresh 7 days (30 days with "remember me"); refresh delivered as httpOnly Secure SameSite=Lax cookie for web, body for future mobile.
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] `(auth)/login`, `forgot-password`, `verify-otp`, `reset-password`, `change-password` pages (RHF + Zod).
-- [ ] Auth context/store (Zustand): user + permissions from `/auth/me`; token refresh handled by axios interceptor with single-flight refresh (queue concurrent 401s).
-- [ ] Next.js middleware: protect `(admin)`/`(portal)` routes, redirect by user_type after login (admin → dashboard, student/parent → portal).
-- [ ] Session manager page (active devices, revoke buttons).
-- [ ] Forced password change interstitial when `must_change_password`.
-- [ ] Lockout & error messaging (generic "invalid credentials" — never reveal which field failed).
+- [x] `(auth)/login`, `forgot-password`, `verify-otp`, `reset-password`, `change-password` pages (RHF + Zod).
+- [x] Auth store (**Redux Toolkit** — owner decision, replaces the originally planned Zustand): user + permissions from `/auth/me`; token refresh handled by axios interceptor with single-flight refresh (queue concurrent 401s).
+- [x] Route guards (Next 16 `proxy.ts`, the renamed middleware): protect `(admin)`/`(portal)`/`/account` routes via `hs_session` hint cookie, redirect by user_type after login (admin → dashboard, student/parent → portal).
+- [x] Session manager page (`/account/sessions`: active devices, revoke buttons, sign-out-everywhere).
+- [x] Forced password change interstitial when `must_change_password`.
+- [x] Lockout & error messaging (generic "invalid credentials" — never reveal which field failed).
 
 ## 6. Business Rules
 - One user account may map to multiple roles later (Module 03), but `user_type` fixes portal routing.
@@ -270,18 +270,18 @@ DELETE /api/v1/auth/sessions/:id        (revoke one device)
 - Clock skew on JWT `exp` → 30 s leeway.
 
 ## 9. Testing Checklist
-- [ ] Unit: rotation + reuse detection, lockout counter, password policy.
-- [ ] e2e: login happy path, wrong password ×5 → 423 Locked, refresh flow, logout-all.
-- [ ] Frontend: form validation, interceptor refresh test, middleware redirects.
-- [ ] Manual QA: full reset-password journey via Mailpit + SMS log.
+- [x] Unit: rotation + reuse detection, lockout counter, password policy.
+- [x] e2e: login happy path, wrong password ×5 → 423 Locked, refresh flow, logout-all.
+- [x] Frontend: form validation, interceptor refresh test, proxy (middleware) redirects.
+- [x] Manual QA: live curl flow incl. reuse-detection; in-browser reset journey via Mailpit pending (see completion doc TODOs).
 
 ## 10. Completion Checklist
-- [ ] Entities & migrations
-- [ ] All endpoints + Swagger
-- [ ] Guards global
-- [ ] Frontend auth flow end-to-end
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/02-authentication.md`
+- [x] Entities & migrations (Prisma)
+- [x] All endpoints + Swagger
+- [x] Guards global
+- [x] Frontend auth flow end-to-end
+- [x] Tests passing (43 backend / 25 frontend)
+- [x] Docs: `docs/modules/02-authentication.md`
 
 ---
 

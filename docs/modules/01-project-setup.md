@@ -10,6 +10,12 @@
 > **Repo naming note:** the repositories are `hexschool-backend` (NestJS 11) and
 > `hexschool-frontend` (Next.js 16) — the product is branded HexSchool; "smis"
 > is retained as the database/bucket name.
+>
+> **Superseded (2026-07-15, Module 02):** the "TypeORM locked" decision below
+> was reversed by owner decision — the backend now uses **Prisma 7**
+> (`prisma/schema.prisma`, `prisma migrate`); `BaseRepository`, health DB
+> probe, and seeds were rebuilt with unchanged contracts. See
+> `docs/modules/02-authentication.md` and `PROJECT_CONTEXT.md` §16.
 
 ## Summary of Implemented Features
 

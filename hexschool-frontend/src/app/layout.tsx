@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Inter, Noto_Sans_Bengali } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/components/providers/auth-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { StoreProvider } from "@/components/providers/store-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -36,7 +38,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <QueryProvider>{children}</QueryProvider>
+        <StoreProvider>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
+        </StoreProvider>
         <Toaster richColors position="top-right" />
       </body>
     </html>

@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-15 (Module 02 complete — auth live; ORM switched to **Prisma 7**, frontend state to **Redux Toolkit**)
+> **Last updated:** 2026-07-16 (Module 03 complete — RBAC + global audit trail live; guard chain pinned in AppModule)
 
 ---
 
@@ -45,6 +45,10 @@
 | `StorageModule` | S3 upload/signed-url/delete | M01 |
 | `BaseRepository<T>` | repository-pattern base (Prisma edition since M02): CRUD, pagination, soft-delete + `school_id` scoping, `withTransaction` | M01→02 |
 | `JwtAuthGuard` (global) + `@Public()` + `@CurrentUser()` | every route authenticated unless explicitly public | M02 |
+| `PermissionsGuard` (global) + `@RequirePermissions` (AND) / `@RequireAnyPermission` (OR) | RBAC on any decorated route; Super Admin bypass | M03 |
+| `PermissionsService` (exported by `RbacModule`) | effective permission codes per user, Redis-cached 5 min, invalidated on role change | M03 |
+| Permission registry (`rbac/registry/permission.registry.ts`) | source of truth for codes; each module appends; seeder syncs (orphan-flags removed codes) | M03 |
+| `AuditContextService` (global `AuditModule`, AsyncLocalStorage) | services attach real old/new diffs + attribution to the in-flight request's audit entry | M03 |
 | `PasswordService` / `TokenService` / `OtpService` | argon2id + policy, JWT/reset/refresh tokens, hashed OTPs | M02 |
 | `notifications` BullMQ queue | email (SMTP) + SMS (log-only until M17) job contract | M02 |
 | `NotificationService.send()` | ALL SMS/email/in-app — no direct gateway calls anywhere | M17 |
@@ -54,7 +58,7 @@
 | Clearance service | aggregated dues/library/hostel clearance | M16→27 |
 | `PaymentGatewayService` + adapters (SSLCommerz/bKash/Nagad) | init/verify/reconcile | M16 |
 | Report engine registry | param-validated async report runs | M18→29 |
-| Audit interceptor | old/new diff on every mutation | M03 |
+| `AuditInterceptor` (global) | immutable audit_logs row per successful mutation: context-hook diffs → `@Audit()` meta → inference; secret redaction; `@SkipAudit()` for machine noise | M03 |
 
 ## 6. Shared Components (frontend)
 
@@ -76,7 +80,9 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 10. Authorization Flow
 
-RBAC: permission codes registry (code = source of truth) → roles → users. `PermissionsGuard` + `@RequirePermissions()`; permissions cached in Redis 5 min, invalidated on role change; Super Admin bypass. Frontend `<Can>` + menu permission config. Portals add ownership checks (student=self, parent=children via `student_guardians`).
+**Live since M03.** RBAC: permission codes registry (TS code = source of truth, idempotently synced to `permissions`; removed codes orphan-flagged and denied) → roles (11 system roles seeded per school, non-deletable/non-renamable, core sets locked extend-only) → users (`user_roles`; every user keeps ≥1 role, last `super-admin` holder protected). `PermissionsGuard` + `@RequirePermissions()` (AND) / `@RequireAnyPermission()` (OR); permissions cached in Redis 5 min (`perm:{userId}`), invalidated on role change, DB fallback if Redis is down; Super Admin (`user_type`) bypasses. **Guard chain is pinned in `AppModule` providers (Throttler → JwtAuthGuard → PermissionsGuard) — global-guard order follows provider registration order, so never register APP_GUARDs from feature modules.** Role edits use optimistic concurrency (`expectedUpdatedAt` → 409). Frontend `<Can>`/`usePermissions()` + `ADMIN_MENU` permission-per-item config (UI gating only; API is authoritative). Portals add ownership checks (student=self, parent=children via `student_guardians`).
+
+**Audit (M03):** every successful mutating request writes an immutable `audit_logs` row via the global `AuditInterceptor`. New modules: set precise diffs from services via `AuditContextService.set({entityType, entityId, oldValues, newValues})`; use `@Audit({action})` for verb overrides and `@SkipAudit()` only for machine noise. `action` is VARCHAR — extend `AUDIT_ACTIONS` (both repos) instead of migrating an enum.
 
 ## 11. Global Business Rules
 
@@ -93,7 +99,7 @@ BD phone `^01[3-9]\d{8}$` (normalized). NID 10/13/17 digits. Birth cert 17 digit
 
 ## 13. Reusable Hooks (frontend)
 
-`useAppDispatch`/`useAppSelector`/`useAuth` (typed Redux hooks, M02), `useDebounce`; planned: `usePermissions`, `useSession` (academic session switcher), `useDataTable`, `useConfirm`. (Grows per module.)
+`useAppDispatch`/`useAppSelector`/`useAuth` (typed Redux hooks, M02), `useDebounce`, `usePermissions` (`can`/`canAny`/`isSuperAdmin`, M03); planned: `useSession` (academic session switcher), `useDataTable`, `useConfirm`. (Grows per module.)
 
 ## 14. Environment Variables
 
@@ -118,7 +124,11 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | shadcn/ui as component library | vendored components (full control, no lockstep upgrades), Tailwind-native, RHF/Zod-friendly | M01 (owner decision) |
 | `school_id` on all tables from day one | Module 31 SaaS without rewrite | M01 |
 | Refresh in httpOnly cookie (web) | XSS-resistant; body-based reserved for mobile | M02 |
-| Permissions NOT in JWT | instant revocation via Redis cache | M03 |
+| Permissions NOT in JWT | instant revocation via Redis cache (5 min TTL + explicit invalidation; DB fallback when Redis down) | M03 |
+| All APP_GUARDs declared in AppModule (JwtAuthGuard moved out of AuthModule) | global-guard execution = provider registration order; root registers before imports, so cross-module ordering is only guaranteed in one providers array | M03 |
+| `audit_logs.action` VARCHAR, id BIGSERIAL, no FK to users | verbs grow per module without enum migrations; table stays partition-ready for M30 retention | M03 |
+| Audit writes fire-and-forget | auditing must never delay/fail the mutation; failures logged | M03 |
+| `RbacModule` re-provides `UsersRepository` instead of importing AuthModule | AuthModule imports RbacModule for /auth/me — keeps the module graph acyclic (repos are stateless) | M03 |
 | Grading snapshot copied into results | grade-system edits never mutate published results | M04/M15 |
 | Attendance/marks/fees keyed on `enrollment_id` | correct history across transfers/promotions | M11 |
 | Gateway SUCCESS only after server-side validate | redirect params are forgeable | M16 |
@@ -141,3 +151,6 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M02:** SMS is log-only until M17; OTP delivery to phone-only users not yet real.
 - **M02:** throttling disabled entirely under `NODE_ENV=test`; e2e never exercises rate limits.
 - **M02:** dev `.env` points `DATABASE_URL` at Neon while docker-compose still ships a local postgres — align when deployment story firms up (M30).
+- **M03:** audit fallback `newValues` is the redacted request body — services that mutate meaningful state must call `AuditContextService.set()` for real entity diffs (RolesService/AuthService are the reference implementations).
+- **M03:** user role assignment has API only (`GET/PUT /users/:id/roles`); the UI slot lives in the Module 07 user detail page.
+- **M03:** `audit_logs` monthly partitioning + retention deferred to M30; `roles.school_id`/`users.school_id` FKs to `schools` still deferred to M04.

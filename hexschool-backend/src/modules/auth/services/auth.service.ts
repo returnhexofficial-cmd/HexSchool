@@ -16,6 +16,8 @@ import {
   LogoutDto,
   ResetPasswordDto,
 } from '../dto';
+import { AuditContextService } from '../../audit/services/audit-context.service';
+import { PermissionsService } from '../../rbac/services/permissions.service';
 import { AUTH_EVENTS, AuthActivityEvent } from '../events/auth.events';
 import { DeviceInfo } from '../interfaces/device-info.interface';
 import { RefreshTokensRepository } from '../repositories/refresh-tokens.repository';
@@ -65,6 +67,8 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly otp: OtpService,
+    private readonly permissions: PermissionsService,
+    private readonly auditContext: AuditContextService,
     private readonly events: EventEmitter2,
   ) {}
 
@@ -111,6 +115,12 @@ export class AuthService {
       userId: user.id,
       event: LoginEvent.LOGIN_SUCCESS,
       ...ctx,
+    });
+    // Login is @Public (request.user unset) — attribute the audit entry.
+    this.auditContext.set({
+      userId: user.id,
+      schoolId: user.schoolId,
+      entityId: user.id,
     });
 
     return { user: this.toSafeUser(user), tokens };
@@ -244,6 +254,12 @@ export class AuthService {
       userId: user.id,
       event: LoginEvent.PASSWORD_CHANGED,
     });
+    // reset-password is @Public — attribute the audit entry.
+    this.auditContext.set({
+      userId: user.id,
+      schoolId: user.schoolId,
+      entityId: user.id,
+    });
   }
 
   async changePassword(
@@ -287,8 +303,13 @@ export class AuthService {
 
   async me(userId: string): Promise<{ user: SafeUser; permissions: string[] }> {
     const user = await this.users.findByIdOrFail(userId);
-    // Permission codes arrive with Module 03 (RBAC); shape is stable now.
-    return { user: this.toSafeUser(user), permissions: [] };
+    // RBAC (M03): Redis-cached role→permission resolution; Super Admins
+    // get the full catalog (they bypass the guard anyway).
+    const permissions = await this.permissions.getEffectivePermissionCodes(
+      user.id,
+      user.userType,
+    );
+    return { user: this.toSafeUser(user), permissions };
   }
 
   async listSessions(

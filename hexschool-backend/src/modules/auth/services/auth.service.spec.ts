@@ -63,6 +63,10 @@ describe('AuthService', () => {
       passwordService,
       tokenService,
       { issue: jest.fn(), verify: jest.fn() } as never,
+      // PermissionsService (M03) — only me() touches it in these tests.
+      { getEffectivePermissionCodes: jest.fn().mockResolvedValue([]) } as never,
+      // AuditContextService (M03) — set() is a no-op outside a request.
+      { set: jest.fn() } as never,
       events as unknown as EventEmitter2,
     );
   });

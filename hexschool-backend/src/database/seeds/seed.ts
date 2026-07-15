@@ -3,6 +3,11 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, UserType } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { DEFAULT_SCHOOL_ID } from '../../common/constants';
+import {
+  ensureUserRole,
+  seedSystemRoles,
+  syncPermissionRegistry,
+} from '../../modules/rbac/seed/rbac.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -45,6 +50,34 @@ const seeders: Seeder[] = [
             ? ' (password from env);'
             : ' (default password "ChangeMe123!" — change on first login);'),
       );
+    },
+  },
+  {
+    // Module 03: sync the TS permission registry into `permissions`
+    // (new codes inserted, removed codes flagged orphaned).
+    name: 'permission-registry (M03)',
+    run: async (prisma) => {
+      const { synced, orphaned } = await syncPermissionRegistry(prisma);
+      process.stdout.write(`${synced} codes, ${orphaned} newly orphaned; `);
+    },
+  },
+  {
+    // Module 03: system roles with their core permission sets, plus the
+    // super-admin role on the bootstrap Super Admin (≥1-role invariant).
+    name: 'system-roles (M03)',
+    run: async (prisma) => {
+      await seedSystemRoles(prisma, DEFAULT_SCHOOL_ID);
+      const superAdmin = await prisma.user.findFirst({
+        where: { email: SUPER_ADMIN_EMAIL, deletedAt: null },
+      });
+      if (superAdmin) {
+        await ensureUserRole(
+          prisma,
+          superAdmin.id,
+          DEFAULT_SCHOOL_ID,
+          'super-admin',
+        );
+      }
     },
   },
 ];

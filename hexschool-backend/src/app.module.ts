@@ -13,6 +13,10 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { PrismaModule } from './database/prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { AuditModule } from './modules/audit/audit.module';
+import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
+import { RbacModule } from './modules/rbac/rbac.module';
 import { HealthModule } from './modules/health/health.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VersionModule } from './modules/version/version.module';
@@ -78,12 +82,21 @@ import { QueuesModule } from './queues/queues.module';
     StorageModule,
     HealthModule,
     VersionModule,
+    // AuditModule registers the global AuditInterceptor; being an import,
+    // it sits OUTSIDE the root TransformResponseInterceptor below.
+    AuditModule,
+    RbacModule,
     AuthModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     { provide: APP_INTERCEPTOR, useClass: TransformResponseInterceptor },
+    // Global guards run in REGISTRATION order, and root-module providers
+    // register before imported modules' — so the auth pipeline is pinned
+    // here explicitly: throttle → authenticate → authorize (M02+M03).
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })
 export class AppModule {}

@@ -20,6 +20,19 @@ export enum UserStatus {
   PENDING = "PENDING",
 }
 
+/**
+ * Canonical audit action verbs so far (M03). Backend stores VARCHAR —
+ * later modules add verbs (EXPORT, APPROVE, …) without a migration.
+ */
+export const AUDIT_ACTIONS = [
+  "CREATE",
+  "UPDATE",
+  "DELETE",
+  "LOGIN",
+  "LOGOUT",
+  "EXPORT",
+] as const;
+
 /** Where each user type lands after login (M02 routing rule). */
 export function homePathFor(userType: UserType | string): string {
   switch (userType) {

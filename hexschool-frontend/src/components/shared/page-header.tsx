@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   /** Action buttons rendered on the right (e.g. "Add Student"). */
   children?: React.ReactNode;

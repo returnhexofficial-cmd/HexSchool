@@ -93,6 +93,7 @@ model User {
   refreshTokens   RefreshToken[]
   otpCodes        OtpCode[]
   loginActivities LoginActivity[]
+  userRoles       UserRole[]
 
   @@map("users")
 }
@@ -135,6 +136,108 @@ model OtpCode {
 
   @@index([identifier, purpose, createdAt], map: "idx_otp_codes_identifier")
   @@map("otp_codes")
+}
+
+// ── Module 03: Authorization, Roles & Audit Logging ──────────────────
+
+/// Granular permission catalog, synced from the TS code registry
+/// (src/modules/rbac/registry/permission.registry.ts — the source of
+/// truth). Global, not school-scoped: schools share one catalog and
+/// differ only in role→permission mappings. `is_orphaned` flags codes
+/// that were removed from the registry but are still referenced by
+/// roles — the guard ignores them (roadmap M03 §8).
+model Permission {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique(map: "uq_permissions_code") @db.VarChar(100)
+  module      String  @db.VarChar(50)
+  description String?
+  isOrphaned  Boolean @default(false) @map("is_orphaned")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+/// RBAC role. System roles (is_system) are seeded, cannot be deleted or
+/// renamed, and their seeded core permissions are locked (extend-only).
+/// Slug uniqueness is a partial unique index (school_id, slug) WHERE
+/// deleted_at IS NULL — hand-written in the migration SQL.
+model Role {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String  @map("school_id") @db.Uuid
+  name        String  @db.VarChar(64)
+  slug        String  @db.VarChar(64)
+  description String?
+  isSystem    Boolean @default(false) @map("is_system")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@index([schoolId], map: "idx_roles_school")
+  @@map("roles")
+}
+
+/// Role → permission grant (join table: no soft delete per conventions).
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "fk_role_permissions_role")
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, map: "fk_role_permissions_permission")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([roleId, permissionId], map: "pk_role_permissions")
+  @@index([permissionId], map: "idx_role_permissions_permission")
+  @@map("role_permissions")
+}
+
+/// User → role assignment (join table). Who assigned what is captured in
+/// audit_logs, not here.
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, map: "fk_user_roles_user")
+  roleId String @map("role_id") @db.Uuid
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade, map: "fk_user_roles_role")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([userId, roleId], map: "pk_user_roles")
+  @@index([roleId], map: "idx_user_roles_role")
+  @@map("user_roles")
+}
+
+/// Immutable audit trail written by the global AuditInterceptor on every
+/// mutating request (global business rule §11 — no update/delete API).
+/// BIGSERIAL id + no FK to users: partition-ready for monthly partitions
+/// and a retention policy in Module 30. `action` is VARCHAR, not a PG
+/// enum — the verb set grows per module (CREATE|UPDATE|DELETE|LOGIN|
+/// EXPORT|…) without needing enum migrations.
+model AuditLog {
+  id         BigInt  @id @default(autoincrement())
+  schoolId   String  @map("school_id") @db.Uuid
+  userId     String? @map("user_id") @db.Uuid
+  action     String  @db.VarChar(32)
+  entityType String  @map("entity_type") @db.VarChar(64)
+  entityId   String? @map("entity_id") @db.VarChar(64)
+  oldValues  Json?   @map("old_values")
+  newValues  Json?   @map("new_values")
+  ip         String? @db.VarChar(64)
+  userAgent  String? @map("user_agent") @db.VarChar(512)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([schoolId, entityType, entityId], map: "idx_audit_logs_entity")
+  @@index([userId, createdAt], map: "idx_audit_logs_user_created")
+  @@map("audit_logs")
 }
 
 /// Append-only security log (global business rule §11) — no updates, no

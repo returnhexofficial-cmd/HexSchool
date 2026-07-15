@@ -78,7 +78,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 |---|--------|--------|
 | 01 | Project Setup & Core Infrastructure | ☑ |
 | 02 | Authentication | ☑ |
-| 03 | Authorization, Roles & Audit Logging | ☐ |
+| 03 | Authorization, Roles & Audit Logging | ☑ |
 | 04 | School Setup & Settings | ☐ |
 | 05 | Academic Session & Calendar | ☐ |
 | 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☐ |
@@ -301,12 +301,12 @@ Full RBAC: roles, granular permissions, role-permission and user-role assignment
 - `audit_logs`: `id BIGSERIAL`, `school_id`, `user_id NULL`, `action` (`CREATE|UPDATE|DELETE|LOGIN|EXPORT|...`), `entity_type`, `entity_id`, `old_values JSONB NULL`, `new_values JSONB NULL`, `ip`, `user_agent`, `created_at`. Partition-ready (monthly) — index `(school_id, entity_type, entity_id)`, `(user_id, created_at)`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Permission registry: single TS file of all permission codes per module (source of truth; sync-to-DB seeder is idempotent — new codes inserted, removed codes flagged).
-- [ ] `PermissionsGuard` + `@RequirePermissions(...codes)` (AND semantics; `@RequireAnyPermission` for OR). Super Admin bypasses.
-- [ ] Permission set embedded in access-token claims? **No** — fetched at login into `/auth/me`, cached server-side (Redis, 5 min) for guard checks, invalidated on role change.
-- [ ] `AuditInterceptor`: applied globally to mutating routes; diffs old/new via service-layer hooks; sensitive fields (password_hash, token) redacted.
-- [ ] CRUD: roles, assign permissions to role, assign roles to user.
-- [ ] Seeder: system roles with sensible default permission sets.
+- [x] Permission registry: single TS file of all permission codes per module (source of truth; sync-to-DB seeder is idempotent — new codes inserted, removed codes flagged).
+- [x] `PermissionsGuard` + `@RequirePermissions(...codes)` (AND semantics; `@RequireAnyPermission` for OR). Super Admin bypasses.
+- [x] Permission set embedded in access-token claims? **No** — fetched at login into `/auth/me`, cached server-side (Redis, 5 min) for guard checks, invalidated on role change.
+- [x] `AuditInterceptor`: applied globally to mutating routes; diffs old/new via service-layer hooks (`AuditContextService`, AsyncLocalStorage); sensitive fields (password_hash, token) redacted.
+- [x] CRUD: roles, assign permissions to role, assign roles to user.
+- [x] Seeder: system roles with sensible default permission sets.
 ### APIs
 ```
 GET/POST/PUT/DELETE /api/v1/roles
@@ -318,10 +318,10 @@ GET                 /api/v1/audit-logs/:id
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Roles list + role editor (permission matrix grouped by module, check-all per module, search).
-- [ ] User role assignment UI (inside user detail, Module 07 will host it).
-- [ ] `<Can permission="x">` component + `usePermissions()` hook; sidebar menu config declares required permission per item.
-- [ ] Audit log viewer: filterable table, JSON diff viewer dialog (old vs new, highlighted).
+- [x] Roles list + role editor (permission matrix grouped by module, check-all per module, search).
+- [x] User role assignment UI (API live in M03; UI hosted by the Module 07 user detail page as planned).
+- [x] `<Can permission="x">` component + `usePermissions()` hook; sidebar menu config declares required permission per item.
+- [x] Audit log viewer: filterable table, JSON diff viewer dialog (old vs new, highlighted).
 
 ## 6. Business Rules
 - System roles cannot be deleted or renamed; their permissions can be extended but core ones locked.
@@ -338,17 +338,17 @@ GET                 /api/v1/audit-logs/:id
 - Huge audit tables → monthly partitions + retention policy (Module 30).
 
 ## 9. Testing Checklist
-- [ ] Unit: guard AND/OR logic, super-admin bypass, cache invalidation.
-- [ ] e2e: 403 without permission, 200 with; role CRUD; last-super-admin protection.
-- [ ] Frontend: `<Can>` hides/shows; permission matrix saves correctly.
+- [x] Unit: guard AND/OR logic, super-admin bypass, cache invalidation.
+- [x] e2e: 403 without permission, 200 with; role CRUD; last-super-admin protection (unit-tested; e2e covers grant/revoke round-trip).
+- [x] Frontend: `<Can>` hides/shows; permission matrix saves correctly.
 
 ## 10. Completion Checklist
-- [ ] RBAC tables + seeds
-- [ ] Guard + decorators wired into global setup
-- [ ] Audit interceptor live and used by all future modules
-- [ ] Role management UI
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/03-authorization-audit.md`
+- [x] RBAC tables + seeds
+- [x] Guard + decorators wired into global setup
+- [x] Audit interceptor live and used by all future modules
+- [x] Role management UI
+- [x] Tests passing (64 backend unit + 27 e2e / 38 frontend)
+- [x] Docs: `docs/modules/03-authorization-audit.md`
 
 ---
 

@@ -18,6 +18,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Public } from '../../../common/decorators/public.decorator';
+import { Audit, SkipAudit } from '../../audit/decorators/audit.decorator';
 import {
   ChangePasswordDto,
   ForgotPasswordDto,
@@ -54,6 +55,7 @@ export class AuthController {
   @Throttle(CREDENTIAL_THROTTLE)
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Audit({ action: 'LOGIN', entityType: 'Auth' })
   @ApiOperation({ summary: 'Login with email/phone + password' })
   async login(
     @Body() dto: LoginDto,
@@ -69,6 +71,9 @@ export class AuthController {
   @Throttle(REFRESH_THROTTLE)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  // Machine-driven every ~15 min per tab; login_activities already logs
+  // REFRESH events — audit_logs would only gain noise.
+  @SkipAudit()
   @ApiOperation({
     summary: 'Rotate the refresh token, mint a new access token',
   })
@@ -85,6 +90,7 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
+  @Audit({ action: 'LOGOUT', entityType: 'Auth' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout this device (or all devices)' })
   async logout(
@@ -107,6 +113,9 @@ export class AuthController {
   @Throttle(CREDENTIAL_THROTTLE)
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  // Anonymous + anti-enumeration routes: identifiers tried must not pile
+  // up in the business audit trail (OTP infra logs delivery instead).
+  @SkipAudit()
   @ApiOperation({
     summary: 'Request a password-reset OTP (never reveals account existence)',
   })
@@ -121,6 +130,7 @@ export class AuthController {
   @Throttle(CREDENTIAL_THROTTLE)
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
+  @SkipAudit()
   @ApiOperation({
     summary: 'Verify the reset OTP, receive a short-lived reset token',
   })
@@ -132,6 +142,7 @@ export class AuthController {
   @Throttle(CREDENTIAL_THROTTLE)
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Audit({ action: 'UPDATE', entityType: 'Auth' })
   @ApiOperation({ summary: 'Set a new password using the reset token' })
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.auth.resetPassword(dto);
@@ -141,6 +152,7 @@ export class AuthController {
   @Throttle(CREDENTIAL_THROTTLE)
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
+  @Audit({ action: 'UPDATE', entityType: 'Auth' })
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Change password (authenticated); other sessions are revoked',

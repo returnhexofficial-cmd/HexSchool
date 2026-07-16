@@ -12,4 +12,8 @@ export {
   SchoolType,
   SchoolStatus,
   SettingsGroup,
+  SessionStatus,
+  HolidayType,
+  HolidayAppliesTo,
+  CalendarEventType,
 } from '@prisma/client';

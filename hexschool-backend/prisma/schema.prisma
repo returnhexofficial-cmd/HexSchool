@@ -97,6 +97,43 @@ enum SettingsGroup {
   @@map("settings_group_enum")
 }
 
+enum SessionStatus {
+  UPCOMING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+
+  @@map("session_status_enum")
+}
+
+enum HolidayType {
+  GOVERNMENT
+  RELIGIOUS
+  SCHOOL
+  WEEKLY
+
+  @@map("holiday_type_enum")
+}
+
+enum HolidayAppliesTo {
+  ALL
+  STUDENTS
+  STAFF
+
+  @@map("holiday_applies_to_enum")
+}
+
+enum CalendarEventType {
+  EXAM
+  EVENT
+  MEETING
+  SPORTS
+  CULTURAL
+  OTHER
+
+  @@map("calendar_event_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -204,10 +241,11 @@ model School {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  users          User[]
-  roles          Role[]
-  settings       SchoolSetting[]
-  gradingSystems GradingSystem[]
+  users            User[]
+  roles            Role[]
+  settings         SchoolSetting[]
+  gradingSystems   GradingSystem[]
+  academicSessions AcademicSession[]
 
   @@map("schools")
 }
@@ -270,6 +308,86 @@ model GradePoint {
 
   @@unique([gradingSystemId, grade], map: "uq_grade_points_grade")
   @@map("grade_points")
+}
+
+// ── Module 05: Academic Session & Calendar ────────────────────────────
+
+/// Academic year — the temporal backbone every enrollment/attendance/
+/// exam/fee record scopes to (from M11 on). Exactly one is_current per
+/// school (partial unique index, hand-written); date ranges of a
+/// school's sessions never overlap (service-enforced); COMPLETED
+/// sessions become read-only for entry flows (enforced by consumers).
+model AcademicSession {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String        @map("school_id") @db.Uuid
+  school    School        @relation(fields: [schoolId], references: [id], map: "fk_academic_sessions_school")
+  name      String        @db.VarChar(50)
+  startDate DateTime      @map("start_date") @db.Date
+  endDate   DateTime      @map("end_date") @db.Date
+  status    SessionStatus @default(UPCOMING)
+  isCurrent Boolean       @default(false) @map("is_current")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  holidays       Holiday[]
+  calendarEvents CalendarEvent[]
+
+  @@index([schoolId], map: "idx_academic_sessions_school")
+  @@map("academic_sessions")
+}
+
+/// Non-working day range. Hard-deleted (spec: audit only, no soft
+/// delete) — cancelling a holiday removes it; the audit trail keeps the
+/// history. WEEKLY rows are ad-hoc extras; the recurring weekly holiday
+/// comes from the `general.weekly_holidays` setting (M04).
+model Holiday {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String           @map("school_id") @db.Uuid
+  sessionId String           @map("session_id") @db.Uuid
+  session   AcademicSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_holidays_session")
+  title     String           @db.VarChar(200)
+  startDate DateTime         @map("start_date") @db.Date
+  endDate   DateTime         @map("end_date") @db.Date
+  type      HolidayType      @default(SCHOOL)
+  appliesTo HolidayAppliesTo @default(ALL) @map("applies_to")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([schoolId, startDate, endDate], map: "idx_holidays_range")
+  @@index([sessionId], map: "idx_holidays_session")
+  @@map("holidays")
+}
+
+/// Calendar entry (exam window, meeting, sports day…). is_public rows
+/// surface on the public website (M19).
+model CalendarEvent {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String            @map("school_id") @db.Uuid
+  sessionId   String            @map("session_id") @db.Uuid
+  session     AcademicSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_calendar_events_session")
+  title       String            @db.VarChar(200)
+  description String?
+  startDate   DateTime          @map("start_date") @db.Date
+  endDate     DateTime          @map("end_date") @db.Date
+  type        CalendarEventType @default(EVENT)
+  isPublic    Boolean           @default(false) @map("is_public")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, startDate, endDate], map: "idx_calendar_events_range")
+  @@index([sessionId], map: "idx_calendar_events_session")
+  @@map("calendar_events")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

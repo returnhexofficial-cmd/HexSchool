@@ -1,5 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarDays,
+  CalendarRange,
   LayoutDashboard,
   ScrollText,
   Settings,
@@ -23,6 +25,18 @@ export interface AdminMenuItem {
 
 export const ADMIN_MENU: AdminMenuItem[] = [
   { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  {
+    label: "Academic Sessions",
+    href: "/admin/sessions",
+    icon: CalendarRange,
+    permission: "session.view",
+  },
+  {
+    label: "Calendar",
+    href: "/admin/calendar",
+    icon: CalendarDays,
+    permission: "calendar.view",
+  },
   {
     label: "Roles & Permissions",
     href: "/admin/roles",

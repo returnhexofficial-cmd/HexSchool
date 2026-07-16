@@ -1,25 +1,27 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-16 · **Overall completion: 13 % (4 / 32 modules)**
+> **Last updated:** 2026-07-16 · **Overall completion: 16 % (5 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04 |
-| **Current module** | **05 — Academic Session & Calendar** |
-| Remaining | 28 |
+| Completed modules | 01, 02, 03, 04, 05 |
+| **Current module** | **06 — Academic Structure** |
+| Remaining | 27 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 05: `academic_sessions` / `holidays` / `calendar_events` Prisma models + migration (single `is_current` partial unique index; date-range CHECKs; no session date overlap per school).
-2. Module 05: session CRUD + transactional `activate` endpoint; holiday/event CRUD; `isHoliday(date)` service (weekly holidays come from the M04 `general.weekly_holidays` setting); iCal export.
-3. Module 05: frontend sessions list + activate confirm; calendar month grid; **global session switcher in the admin header** (persisted per user — becomes a global convention).
+1. Module 06: `departments` / `shifts` / `classes` / `groups` / `sections` / `subjects` / `class_subjects` Prisma models + migration (sections session-scoped with `uq(school, session, class, name, shift)`; classes/subjects session-independent masters).
+2. Module 06: CRUD for all six entities + class-subject mapping (bulk assign, drag order, optional 4th-subject flag); **clone-structure-to-new-session service** (yearly rollover); delete guards with explanatory 409s.
+3. Module 06: frontend management pages (DataTable+FormDialog per entity), class detail tabs (Sections / Subjects per selected session — first consumers of `useAcademicSession()`), clone wizard with preview diff.
 4. Housekeeping: push both repos to GitHub and confirm CI green (workflows are authored, unverified; backend CI now runs `prisma migrate deploy`).
 
 ## Recently Completed
+
+- **Module 05 — Academic Session & Calendar** (2026-07-16): `academic_sessions` (one `is_current` per school via partial unique index, transactional activate w/ COMPLETED rollover, no date overlap, guarded delete + date corrections), `holidays` (within-session rule, **CSV bulk import with row-level error report**), `calendar_events` (`is_public` for M19); **`isHoliday()`** on the exported CalendarService (weekly off-days from the M04 setting + ranges) for Attendance/Payroll; `GET /calendar` month aggregate + **`/calendar.ics`** iCal export; strict date parsing (regex-shape blind spots like `2026-13-99` now 400, caught via e2e). Frontend: `/admin/sessions` (activate confirm w/ scoping warning), `/admin/calendar` (month grid w/ shaded weekly off-days + color-coded entries, list view, dialogs, iCal download), **global session switcher in the admin header** (Redux slice + `useAcademicSession()`, persisted per user — the session-scoping convention for all later modules). 13 new permission codes. 118 backend unit + 53 e2e / 55 frontend tests green. See `docs/modules/05-academic-session.md`.
 
 - **Module 04 — School Setup & Settings** (2026-07-16): `schools` table live with the bootstrap row (`DEFAULT_SCHOOL_ID`) inserted in-migration before the deferred `users`/`roles` FKs; settings registry as code (8 groups) + `SettingsService` (typed getters, Redis 60 s cache with bust-on-write, **AES-256-GCM secrets at rest**, `__SECRET__` masking); school profile CRUD + logo upload (sharp → 512px PNG → S3, signed URLs); grading systems CRUD with overlap/coverage validators + **NCTB Standard seed** as default (one-default partial unique index); test-email (via saved config, verified against Mailpit) / test-sms (log-only) endpoints; 8 new permission codes. Frontend: `/admin/settings` tabbed area (profile + logo, generic group forms with secret reveal + send-test, grading editor with live overlap/gap warnings), school name+logo in the admin sidebar. New deps: sharp. 91 backend unit + 42 e2e / 46 frontend tests green. See `docs/modules/04-school-setup.md`.
 
@@ -52,7 +54,7 @@
 | ~~02 Auth~~ ✅ | 5 → **1** | 13 Timetable | 4 | 24 Inventory | 4 |
 | ~~03 RBAC+Audit~~ ✅ | 4 → **1** | 14 Examination | 5 | 25 Transport | 3 |
 | ~~04 School Setup~~ ✅ | 3 → **1** | 15 Marks/Results | 8 | 26 Hostel | 3 |
-| 05 Session | 2 | 16 Fees/Payments | 8 | 27 Docs/Certs | 4 |
+| ~~05 Session~~ ✅ | 2 → **1** | 16 Fees/Payments | 8 | 27 Docs/Certs | 4 |
 | 06 Structure | 3 | 17 Communication | 5 | 28 Cmp/Vis/Alumni | 4 |
 | 07 Staff/Users | 4 | 18 Portals | 6 | 29 Reports v2 | 5 |
 | 08 Teachers | 4 | 19 Website CMS | 7 | 30 SysAdmin | 6 |
@@ -71,3 +73,4 @@
 | 02 | Authentication (+ Prisma & Redux stack switches) | 2026-07-15 | 2026-07-15 | 1 dev-day (est. 5) | `docs/modules/02-authentication.md` |
 | 03 | Authorization, Roles & Audit Logging | 2026-07-15 | 2026-07-16 | 1 dev-day (est. 4) | `docs/modules/03-authorization-audit.md` |
 | 04 | School Setup & Settings | 2026-07-16 | 2026-07-16 | 1 dev-day (est. 3) | `docs/modules/04-school-setup.md` |
+| 05 | Academic Session & Calendar | 2026-07-16 | 2026-07-16 | 1 dev-day (est. 2) | `docs/modules/05-academic-session.md` |

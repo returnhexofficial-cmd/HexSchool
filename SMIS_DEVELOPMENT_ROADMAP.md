@@ -80,7 +80,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 02 | Authentication | ☑ |
 | 03 | Authorization, Roles & Audit Logging | ☑ |
 | 04 | School Setup & Settings | ☑ |
-| 05 | Academic Session & Calendar | ☐ |
+| 05 | Academic Session & Calendar | ☑ |
 | 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☐ |
 | 07 | Staff & User Management | ☐ |
 | 08 | Teacher Management | ☐ |
@@ -428,9 +428,9 @@ Academic years/sessions, holidays, and the academic calendar — the temporal ba
 - Weekly holiday config in settings (default Friday, optional Saturday — configurable per school).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Session CRUD; `activate` endpoint (transactional: demote current, promote target).
-- [ ] Holiday & event CRUD; date-range overlap queries; `isHoliday(date)` service used by Attendance/Payroll.
-- [ ] iCal export of calendar (`GET /calendar.ics`).
+- [x] Session CRUD; `activate` endpoint (transactional: demote current, promote target; demoted ACTIVE → COMPLETED).
+- [x] Holiday & event CRUD; date-range overlap queries; `isHoliday(date)` service used by Attendance/Payroll (weekly off-days from the M04 setting + holiday ranges). CSV bulk holiday import with row-level error report.
+- [x] iCal export of calendar (`GET /calendar.ics`).
 ### APIs
 ```
 GET/POST/PUT/DELETE /api/v1/academic-sessions
@@ -441,9 +441,9 @@ GET                 /api/v1/calendar?month=&session_id=
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Sessions list with status badges + activate confirm dialog (warning copy about scoping effects).
-- [ ] Calendar page: month grid (holidays/events color-coded), list view, add-event dialog, iCal download.
-- [ ] Global session switcher in admin header (persisted per user, defaults to current session) — all session-scoped pages read from it.
+- [x] Sessions list with status badges + activate confirm dialog (warning copy about scoping effects).
+- [x] Calendar page: month grid (holidays/events color-coded), list view, add-event dialog, iCal download.
+- [x] Global session switcher in admin header (persisted per user, defaults to current session) — all session-scoped pages read from it (`useAcademicSession()`).
 
 ## 6. Business Rules
 - Exactly one current session. Sessions cannot overlap in dates for the same school.
@@ -458,15 +458,15 @@ GET                 /api/v1/calendar?month=&session_id=
 - Bangladeshi context: government holidays announced late → bulk holiday import (CSV) supported.
 
 ## 9. Testing Checklist
-- [ ] Unit: single-current invariant, overlap detection, `isHoliday`.
-- [ ] e2e: activate flow, blocked delete.
-- [ ] Frontend: calendar renders holidays; session switcher persists.
+- [x] Unit: single-current invariant, overlap detection, `isHoliday`.
+- [x] e2e: activate flow, blocked delete (+ CSV import, iCal, month aggregate).
+- [x] Frontend: calendar renders holidays (grid util tested); session switcher persists (localStorage per user; in-browser click-through pending — see completion doc TODOs).
 
 ## 10. Completion Checklist
-- [ ] Tables + APIs + UI
-- [ ] Session switcher adopted as a global convention (documented in PROJECT_CONTEXT)
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/05-academic-session.md`
+- [x] Tables + APIs + UI
+- [x] Session switcher adopted as a global convention (documented in PROJECT_CONTEXT §13)
+- [x] Tests passing (118 backend unit + 53 e2e / 55 frontend)
+- [x] Docs: `docs/modules/05-academic-session.md`
 
 ---
 

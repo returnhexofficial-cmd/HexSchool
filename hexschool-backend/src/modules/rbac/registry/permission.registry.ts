@@ -55,7 +55,25 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['grading.update', 'Edit grading systems and set the default'],
     ['grading.delete', 'Delete grading systems'],
   ]),
-  // Modules 05+ append their codes here (session.*, student.*, …).
+  // ── Module 05: Academic Session & Calendar ──────────────────────────
+  ...define('sessions', [
+    ['session.view', 'View academic sessions'],
+    ['session.create', 'Create academic sessions'],
+    ['session.update', 'Edit academic sessions (dates, status)'],
+    ['session.delete', 'Delete academic sessions'],
+    ['session.activate', 'Switch the current academic session'],
+  ]),
+  ...define('calendar', [
+    ['calendar.view', 'View the academic calendar, holidays, and events'],
+    ['holiday.create', 'Add holidays'],
+    ['holiday.update', 'Edit holidays'],
+    ['holiday.delete', 'Remove holidays'],
+    ['holiday.import', 'Bulk-import holidays from CSV'],
+    ['event.create', 'Add calendar events'],
+    ['event.update', 'Edit calendar events'],
+    ['event.delete', 'Remove calendar events'],
+  ]),
+  // Modules 06+ append their codes here (class.*, student.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

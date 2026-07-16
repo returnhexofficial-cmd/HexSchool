@@ -13,6 +13,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { PrismaModule } from './database/prisma/prisma.module';
 import { RedisModule } from './database/redis/redis.module';
+import { AcademicModule } from './modules/academic/academic.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AuditModule } from './modules/audit/audit.module';
@@ -92,6 +93,7 @@ import { QueuesModule } from './queues/queues.module';
     RbacModule,
     AuthModule,
     SchoolModule,
+    AcademicModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

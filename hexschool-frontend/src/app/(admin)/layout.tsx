@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Can } from "@/components/shared/can";
+import { SessionSwitcher } from "@/components/shared/session-switcher";
 import { UserMenu } from "@/components/shared/user-menu";
 import { schoolApi } from "@/lib/api/school";
 import { ADMIN_MENU } from "@/lib/config/admin-menu";
@@ -75,8 +76,12 @@ export default function AdminLayout({
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b p-3">
-          <UserMenu />
+        <header className="flex items-center gap-3 border-b p-3">
+          {/* Global session switcher (M05) — session-scoped pages read it. */}
+          <SessionSwitcher />
+          <div className="min-w-0 flex-1">
+            <UserMenu />
+          </div>
         </header>
         <div className="flex-1">{children}</div>
       </div>

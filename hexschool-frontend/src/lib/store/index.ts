@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { academicSessionReducer } from "./academic-session-slice";
 import { authReducer } from "./auth-slice";
 
 /**
@@ -10,6 +11,7 @@ export function makeStore() {
   return configureStore({
     reducer: {
       auth: authReducer,
+      academicSession: academicSessionReducer,
     },
   });
 }

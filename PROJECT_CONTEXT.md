@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-16 (Module 04 complete — schools table + deferred FKs live, SettingsService with encrypted secrets, NCTB grading seed)
+> **Last updated:** 2026-07-16 (Module 05 complete — academic sessions + calendar live; global session-switcher convention established)
 
 ---
 
@@ -55,7 +55,10 @@
 | `notifications` BullMQ queue | email (SMTP) + SMS (log-only until M17) job contract | M02 |
 | `NotificationService.send()` | ALL SMS/email/in-app — no direct gateway calls anywhere | M17 |
 | Sequence/ID generator | gap-free document numbers | M07 |
-| `isHoliday(date)` | holiday awareness for attendance/payroll | M05 |
+| `CalendarService.isHoliday(schoolId, date, appliesTo?)` (exported by `AcademicModule`) | weekly off-days (M04 setting `general.weekly_holidays`) + holiday ranges → `{holiday, reason, title}`; consumed by Attendance (M12) / Payroll (M21) | M05 |
+| `SessionsService` (exported by `AcademicModule`) | current-session resolution + session rules for session-scoped modules | M05 |
+| `parseDate` (`academic/calendar/date.util.ts`) | strict YYYY-MM-DD parsing (regex shape ≠ valid date — always parse through this) | M05 |
+| `buildIcs` (`academic/calendar/ics.util.ts`) | dependency-free RFC 5545 writer (all-day events) | M05 |
 | `getSectionStudents()` / `getStudentCurrentEnrollment()` | canonical roster queries | M11 |
 | Clearance service | aggregated dues/library/hostel clearance | M16→27 |
 | `PaymentGatewayService` + adapters (SSLCommerz/bKash/Nagad) | init/verify/reconcile | M16 |
@@ -64,7 +67,9 @@
 
 ## 6. Shared Components (frontend)
 
-UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/components/ui`). Shared app components built on it: `DataTable` (server pagination/sort/filter/export), `FormDialog`, `ConfirmDialog`, `PageHeader`, `StatCard`, `EmptyState`, `ErrorState`, `Can` (permission gate), skeletons. Forms = React Hook Form + Zod (schemas in `src/lib/validations`, mirroring backend DTOs). Session switcher in admin header scopes all session-bound pages.
+UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/components/ui`). Shared app components built on it: `DataTable` (server pagination/sort/filter/export), `FormDialog`, `ConfirmDialog`, `PageHeader`, `StatCard`, `EmptyState`, `ErrorState`, `Can` (permission gate), `SessionSwitcher` (M05), `JsonDiff` (M03), skeletons. Forms = React Hook Form + Zod (schemas in `src/lib/validations`, mirroring backend DTOs).
+
+**Session-switcher convention (live since M05):** the admin header hosts `SessionSwitcher`; selection lives in the `academicSession` Redux slice, persisted per user in localStorage (`hs_academic_session:{userId}`), defaulting to the school's `is_current` session. Every session-scoped page/query (M06 sections, M11 enrollment, M12 attendance, …) MUST read `useAcademicSession().selected` — never fetch "current" independently.
 
 ## 7. API Conventions
 
@@ -88,7 +93,7 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 11. Global Business Rules
 
-- One `is_current` academic session; COMPLETED sessions read-only.
+- One `is_current` academic session (DB partial unique index since M05); sessions never overlap in dates; COMPLETED sessions read-only for entry flows (consumers enforce from M12/M15). Activate rolls the demoted ACTIVE session to COMPLETED.
 - One enrollment per student per session; roll unique per section.
 - Published results/receipts/vouchers/certificates are immutable — corrections via reversal/reissue with audit trail.
 - All money NUMERIC(12,2) BDT; every monetary override needs permission + reason.
@@ -101,7 +106,7 @@ BD phone `^01[3-9]\d{8}$` (normalized). NID 10/13/17 digits. Birth cert 17 digit
 
 ## 13. Reusable Hooks (frontend)
 
-`useAppDispatch`/`useAppSelector`/`useAuth` (typed Redux hooks, M02), `useDebounce`, `usePermissions` (`can`/`canAny`/`isSuperAdmin`, M03); planned: `useSession` (academic session switcher), `useDataTable`, `useConfirm`. (Grows per module.)
+`useAppDispatch`/`useAppSelector`/`useAuth` (typed Redux hooks, M02), `useDebounce`, `usePermissions` (`can`/`canAny`/`isSuperAdmin`, M03), `useAcademicSession` (session switcher: `sessions`/`selected`/`current`/`select`, M05); planned: `useDataTable`, `useConfirm`. (Grows per module.)
 
 ## 14. Environment Variables
 
@@ -134,6 +139,10 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | `audit_logs.action` VARCHAR, id BIGSERIAL, no FK to users | verbs grow per module without enum migrations; table stays partition-ready for M30 retention | M03 |
 | Audit writes fire-and-forget | auditing must never delay/fail the mutation; failures logged | M03 |
 | `RbacModule` re-provides `UsersRepository` instead of importing AuthModule | AuthModule imports RbacModule for /auth/me — keeps the module graph acyclic (repos are stateless) | M03 |
+| Calendar dates as `@db.Date` + YYYY-MM-DD strings end-to-end | no timezone ambiguity; strict `parseDate` round-trip catches regex-shape-valid but impossible dates (`2026-13-99` reached Prisma as Invalid Date before) | M05 |
+| Holidays hard-deleted, events soft-deleted | per roadmap spec — cancelling a holiday removes it (audit trail keeps history); events keep the standard business-entity lifecycle | M05 |
+| Weekly off-days = M04 setting, not holiday rows | one source of truth, per-school configurable; `isHoliday` merges setting + ranges | M05 |
+| `src/modules/academic/` namespace shared by M05+M06 | sessions/calendar and classes/sections/subjects are one domain; avoids `academic-*` module sprawl | M05 |
 | Grading snapshot copied into results | grade-system edits never mutate published results | M04/M15 |
 | Attendance/marks/fees keyed on `enrollment_id` | correct history across transfers/promotions | M11 |
 | Gateway SUCCESS only after server-side validate | redirect params are forgeable | M16 |

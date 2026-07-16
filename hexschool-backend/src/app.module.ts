@@ -12,12 +12,14 @@ import { envValidationSchema } from './config/env.validation';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
 import { PrismaModule } from './database/prisma/prisma.module';
+import { RedisModule } from './database/redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AuditModule } from './modules/audit/audit.module';
 import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { HealthModule } from './modules/health/health.module';
+import { SchoolModule } from './modules/school/school.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VersionModule } from './modules/version/version.module';
 import { QueuesModule } from './queues/queues.module';
@@ -56,6 +58,8 @@ import { QueuesModule } from './queues/queues.module';
     // DB unreachable at boot → PrismaService.$connect throws → bootstrap
     // exits non-zero and the orchestrator restarts it.
     PrismaModule,
+    // Best-effort JSON cache (M04); callers always fall back to the DB.
+    RedisModule,
 
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
@@ -87,6 +91,7 @@ import { QueuesModule } from './queues/queues.module';
     AuditModule,
     RbacModule,
     AuthModule,
+    SchoolModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

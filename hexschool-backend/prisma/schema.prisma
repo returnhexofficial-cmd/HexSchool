@@ -63,6 +63,40 @@ enum LoginEvent {
   @@map("login_event_enum")
 }
 
+enum SchoolType {
+  PRIMARY
+  HIGH_SCHOOL
+  KINDERGARTEN
+  ENGLISH_VERSION
+  ENGLISH_MEDIUM
+  MADRASA
+  VOCATIONAL
+  COLLEGE
+
+  @@map("school_type_enum")
+}
+
+enum SchoolStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+
+  @@map("school_status_enum")
+}
+
+enum SettingsGroup {
+  general
+  academic
+  sms
+  email
+  payment
+  attendance
+  exam
+  fees
+
+  @@map("settings_group_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -73,6 +107,7 @@ enum LoginEvent {
 model User {
   id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   schoolId            String     @map("school_id") @db.Uuid
+  school              School     @relation(fields: [schoolId], references: [id], map: "fk_users_school")
   email               String?    @db.Citext
   phone               String?    @db.VarChar(15)
   passwordHash        String     @map("password_hash")
@@ -138,6 +173,105 @@ model OtpCode {
   @@map("otp_codes")
 }
 
+// ── Module 04: School Setup & Settings ────────────────────────────────
+
+/// The tenant root — every business table's school_id points here since
+/// M04 (users/roles carried the column FK-less from M02/03; this module
+/// adds the constraints). Single row today; Module 31 turns this into
+/// the multi-school catalog. The migration inserts the bootstrap row
+/// with the fixed DEFAULT_SCHOOL_ID before wiring the FKs.
+model School {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String       @db.VarChar(200)
+  nameBn          String?      @map("name_bn") @db.VarChar(200)
+  /// Short unique code used in generated document numbers (M07+).
+  code            String       @db.VarChar(10)
+  /// BD Education Board EIIN (6 digits) — nullable for kindergartens etc.
+  eiinNumber      String?      @map("eiin_number") @db.VarChar(6)
+  type            SchoolType   @default(HIGH_SCHOOL)
+  address         String?
+  phone           String?      @db.VarChar(20)
+  email           String?      @db.Citext
+  website         String?      @db.VarChar(200)
+  logoUrl         String?      @map("logo_url") @db.VarChar(500)
+  establishedYear Int?         @map("established_year")
+  principalName   String?      @map("principal_name") @db.VarChar(120)
+  status          SchoolStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  users          User[]
+  roles          Role[]
+  settings       SchoolSetting[]
+  gradingSystems GradingSystem[]
+
+  @@map("schools")
+}
+
+/// Generic key-value configuration, one row per key. Keys/types/secrecy
+/// are declared in the TS settings registry (settings.registry.ts);
+/// secret values are AES-256-GCM encrypted before they land here.
+model SchoolSetting {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], onDelete: Cascade, map: "fk_school_settings_school")
+  key      String        @db.VarChar(100)
+  value    Json
+  group    SettingsGroup
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([schoolId, key], map: "uq_school_settings_key")
+  @@index([schoolId, group], map: "idx_school_settings_group")
+  @@map("school_settings")
+}
+
+/// Grade scale container. Exactly one default per school (partial unique
+/// index, hand-written); a system may only become default once its grade
+/// ranges cover 0–100 with no gaps/overlaps (service-enforced).
+model GradingSystem {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], onDelete: Cascade, map: "fk_grading_systems_school")
+  name      String  @db.VarChar(100)
+  isDefault Boolean @default(false) @map("is_default")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  gradePoints GradePoint[]
+
+  @@index([schoolId], map: "idx_grading_systems_school")
+  @@map("grading_systems")
+}
+
+/// One grade band (A+ 80–100 → 5.00). Child rows are replaced wholesale
+/// with their system — no soft delete. Range sanity (min ≤ max) is a DB
+/// CHECK; non-overlap is service-enforced.
+model GradePoint {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gradingSystemId String        @map("grading_system_id") @db.Uuid
+  gradingSystem   GradingSystem @relation(fields: [gradingSystemId], references: [id], onDelete: Cascade, map: "fk_grade_points_system")
+  grade           String        @db.VarChar(5)
+  point           Decimal       @db.Decimal(3, 2)
+  minMark         Int           @map("min_mark")
+  maxMark         Int           @map("max_mark")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([gradingSystemId, grade], map: "uq_grade_points_grade")
+  @@map("grade_points")
+}
+
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────
 
 /// Granular permission catalog, synced from the TS code registry
@@ -168,6 +302,7 @@ model Permission {
 model Role {
   id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   schoolId    String  @map("school_id") @db.Uuid
+  school      School  @relation(fields: [schoolId], references: [id], map: "fk_roles_school")
   name        String  @db.VarChar(64)
   slug        String  @db.VarChar(64)
   description String?

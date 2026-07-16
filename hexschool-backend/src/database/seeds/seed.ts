@@ -8,6 +8,7 @@ import {
   seedSystemRoles,
   syncPermissionRegistry,
 } from '../../modules/rbac/seed/rbac.seeder';
+import { seedNctbGradingSystem } from '../../modules/school/seed/school.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -78,6 +79,15 @@ const seeders: Seeder[] = [
           'super-admin',
         );
       }
+    },
+  },
+  {
+    // Module 04: NCTB default grading system (the school row itself is
+    // created by the M04 migration — FK ordering).
+    name: 'nctb-grading-system (M04)',
+    run: async (prisma) => {
+      const created = await seedNctbGradingSystem(prisma, DEFAULT_SCHOOL_ID);
+      process.stdout.write(created ? 'created; ' : 'already present; ');
     },
   },
 ];

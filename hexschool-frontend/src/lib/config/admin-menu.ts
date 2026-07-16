@@ -1,5 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { LayoutDashboard, ScrollText, ShieldCheck } from "lucide-react";
+import {
+  LayoutDashboard,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+} from "lucide-react";
 
 /**
  * Admin sidebar config — each item declares the permission it needs
@@ -29,5 +34,11 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/audit-logs",
     icon: ScrollText,
     permission: "audit.view",
+  },
+  {
+    label: "Settings",
+    href: "/admin/settings",
+    icon: Settings,
+    anyOf: ["school.update", "settings.view", "grading.view"],
   },
 ];

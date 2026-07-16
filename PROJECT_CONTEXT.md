@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-16 (Module 03 complete — RBAC + global audit trail live; guard chain pinned in AppModule)
+> **Last updated:** 2026-07-16 (Module 04 complete — schools table + deferred FKs live, SettingsService with encrypted secrets, NCTB grading seed)
 
 ---
 
@@ -41,7 +41,9 @@
 
 | Service | Provides | Since |
 |---|---|---|
-| `SettingsService` | typed, cached, encrypted settings per group | M04 |
+| `SettingsService` (exported by `SchoolModule`) | registry-declared keys per group (`settings.registry.ts`); `getValue<T>()` typed getters w/ defaults, Redis 60 s cache + bust-on-write, AES-256-GCM secrets at rest, `__SECRET__` masking over the API | M04 |
+| `RedisCacheService` (global `RedisModule`) | generic best-effort JSON cache (get/set/del, Redis-down ⇒ miss/no-op) | M04 |
+| Grade-range validators (`grading/grade-range.validator.ts`) | pure overlap + 0–100 coverage checks (frontend mirror in `lib/utils/grade-ranges.ts`) | M04 |
 | `StorageModule` | S3 upload/signed-url/delete | M01 |
 | `BaseRepository<T>` | repository-pattern base (Prisma edition since M02): CRUD, pagination, soft-delete + `school_id` scoping, `withTransaction` | M01→02 |
 | `JwtAuthGuard` (global) + `@Public()` + `@CurrentUser()` | every route authenticated unless explicitly public | M02 |
@@ -103,7 +105,7 @@ BD phone `^01[3-9]\d{8}$` (normalized). NID 10/13/17 digits. Birth cert 17 digit
 
 ## 14. Environment Variables
 
-See `.env.example` in each repo. Core: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `S3_*`, `SMTP_*`, `SMS_GATEWAY_*`, `SSLCOMMERZ_*`, `BKASH_*`, `NAGAD_*`, `RECAPTCHA_*`, `SETTINGS_ENCRYPTION_KEY`, `CORS_ORIGINS`, optional `SEED_SUPER_ADMIN_PASSWORD`; frontend `NEXT_PUBLIC_API_URL`. Joi-validated at boot.
+See `.env.example` in each repo. Core: `DATABASE_URL`, `REDIS_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `S3_*` (+ optional `S3_BUCKET_BRANDING` since M04), `SMTP_*`, `SETTINGS_ENCRYPTION_KEY` (32 chars — consumed since M04; rotating it orphans stored secrets), `CORS_ORIGINS`, optional `SEED_SUPER_ADMIN_PASSWORD`; frontend `NEXT_PUBLIC_API_URL`. Gateway credentials (SMS/SSLCommerz/bKash/Nagad) live in **encrypted school settings**, not env (M04 decision); `RECAPTCHA_*` arrives with M10. Joi-validated at boot.
 
 ## 15. Third-Party Integrations
 
@@ -117,7 +119,10 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | Redux Toolkit over Zustand for frontend global state | owner decision; RTK slices + typed hooks, per-tab store for App Router | M02 |
 | Refresh tokens opaque (not JWT) | revocability needs a DB row anyway; SHA-256 hash stored, plaintext only in cookie | M02 |
 | Extra `TOKEN_REUSE` login-event enum value | theft response is distinct from lock in the audit trail | M02 |
-| `DEFAULT_SCHOOL_ID` constant until M04 | `schools` table doesn't exist yet; M04 must create the row with this exact id | M02 |
+| `DEFAULT_SCHOOL_ID` constant until M04 | `schools` table doesn't exist yet; M04 must create the row with this exact id — **done: the M04 migration inserts it before adding the users/roles FKs** | M02→04 |
+| Settings keys declared in a TS registry (like permission codes) | typed/validated writes, per-key secrecy, no migration to add keys within a group | M04 |
+| School logo stored as S3 key, URL signed on every read | signed URLs expire (1 h); the key is the stable reference | M04 |
+| Settings secrets envelope `iv.tag.cipher` (AES-256-GCM) | GCM authenticates — tampered rows fail closed to registry defaults; key rotation = re-enter secrets | M04 |
 | Health disk probe Linux-only | `check-disk-space` needs `wmic`, gone on modern Windows 11; prod is Linux | M01 |
 | shadcn `field.tsx` instead of legacy `form.tsx` | new shadcn registry deprecated the form wrapper; `FormDialog` uses RHF `FormProvider` directly | M01 |
 | Repository pattern over Active Record / direct ORM in services | data access isolated from business logic; swappable/testable (mock repos in unit tests); single place to enforce soft-delete + tenant scoping | M01 (owner decision) |
@@ -153,4 +158,7 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M02:** dev `.env` points `DATABASE_URL` at Neon while docker-compose still ships a local postgres — align when deployment story firms up (M30).
 - **M03:** audit fallback `newValues` is the redacted request body — services that mutate meaningful state must call `AuditContextService.set()` for real entity diffs (RolesService/AuthService are the reference implementations).
 - **M03:** user role assignment has API only (`GET/PUT /users/:id/roles`); the UI slot lives in the Module 07 user detail page.
-- **M03:** `audit_logs` monthly partitioning + retention deferred to M30; `roles.school_id`/`users.school_id` FKs to `schools` still deferred to M04.
+- **M03:** `audit_logs` monthly partitioning + retention deferred to M30. ~~users/roles FKs deferred~~ — added in M04.
+- **M03→04:** `PermissionsCacheService` still owns its own Redis client — fold into the generic `RedisCacheService` during a quiet module.
+- **M04:** gateway configs have no persisted `verified_at` state (test endpoints report pass/fail only); revisit with M16/M17.
+- **M04:** in-browser logo-upload click-through pending (API/resize/signed-URL layers individually verified).

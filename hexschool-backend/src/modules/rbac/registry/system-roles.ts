@@ -42,19 +42,21 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'permission.view',
       'user.role.view',
       'audit.view',
+      'settings.view',
+      'grading.view',
     ],
   },
   {
     name: 'Vice Principal',
     slug: 'vice-principal',
     description: 'Deputy head — academic oversight.',
-    corePermissions: ['role.view', 'user.role.view'],
+    corePermissions: ['role.view', 'user.role.view', 'grading.view'],
   },
   {
     name: 'Teacher',
     slug: 'teacher',
     description: 'Teaching staff. Permissions arrive with Modules 08/12–15.',
-    corePermissions: [],
+    corePermissions: ['grading.view'],
   },
   {
     name: 'Accountant',

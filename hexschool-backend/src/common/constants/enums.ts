@@ -4,4 +4,12 @@
  * re-exported here so app code has one canonical import path that
  * mirrors the frontend copy (`src/lib/constants/enums.ts`).
  */
-export { UserType, UserStatus, OtpPurpose, LoginEvent } from '@prisma/client';
+export {
+  UserType,
+  UserStatus,
+  OtpPurpose,
+  LoginEvent,
+  SchoolType,
+  SchoolStatus,
+  SettingsGroup,
+} from '@prisma/client';

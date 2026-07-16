@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Can } from "@/components/shared/can";
 import { UserMenu } from "@/components/shared/user-menu";
+import { schoolApi } from "@/lib/api/school";
 import { ADMIN_MENU } from "@/lib/config/admin-menu";
+import { useAuth } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
 
 /**
@@ -19,12 +22,28 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { status } = useAuth();
+  // School identity for the header (M04); logoUrl is a signed S3 URL.
+  const school = useQuery({
+    queryKey: ["school"],
+    queryFn: schoolApi.get,
+    enabled: status === "authenticated",
+    staleTime: 5 * 60 * 1000,
+  });
 
   return (
     <div className="flex min-h-svh">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-card sm:flex">
-        <div className="flex h-14 items-center border-b px-4 font-semibold">
-          HexSchool
+        <div className="flex h-14 items-center gap-2 border-b px-4 font-semibold">
+          {school.data?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={school.data.logoUrl}
+              alt=""
+              className="size-7 rounded object-contain"
+            />
+          ) : null}
+          <span className="truncate">{school.data?.name ?? "HexSchool"}</span>
         </div>
         <nav className="flex-1 space-y-1 p-2">
           {ADMIN_MENU.map((item) => {

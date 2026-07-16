@@ -40,7 +40,22 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['user.role.assign', 'Assign or remove roles from a user'],
   ]),
   ...define('audit', [['audit.view', 'Read the audit log']]),
-  // Modules 04+ append their codes here (school.*, session.*, student.*, …).
+
+  // ── Module 04: School Setup & Settings ──────────────────────────────
+  // (GET /school is identity data — auth-only, no code needed.)
+  ...define('school', [['school.update', 'Edit the school profile and logo']]),
+  ...define('settings', [
+    ['settings.view', 'Read system settings (secrets stay masked)'],
+    ['settings.update', 'Change system settings'],
+    ['settings.test', 'Send test SMS/email with the saved gateway config'],
+  ]),
+  ...define('grading', [
+    ['grading.view', 'View grading systems and grade scales'],
+    ['grading.create', 'Create grading systems'],
+    ['grading.update', 'Edit grading systems and set the default'],
+    ['grading.delete', 'Delete grading systems'],
+  ]),
+  // Modules 05+ append their codes here (session.*, student.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

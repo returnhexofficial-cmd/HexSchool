@@ -73,7 +73,24 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['event.update', 'Edit calendar events'],
     ['event.delete', 'Remove calendar events'],
   ]),
-  // Modules 06+ append their codes here (class.*, student.*, …).
+  // ── Module 06: Academic Structure ───────────────────────────────────
+  // One `<entity>.manage` code covers create/update/delete per master —
+  // no real-world role splits who may create vs delete a shift.
+  ...define('structure', [
+    [
+      'structure.view',
+      'View classes, sections, subjects, departments, shifts, groups',
+    ],
+    ['department.manage', 'Create/edit/delete departments'],
+    ['shift.manage', 'Create/edit/delete shifts'],
+    ['class.manage', 'Create/edit/delete classes'],
+    ['group.manage', 'Create/edit/delete groups'],
+    ['section.manage', 'Create/edit/delete sections'],
+    ['subject.manage', 'Create/edit/delete subjects'],
+    ['class.subject.assign', "Change a class's subject mapping for a session"],
+    ['structure.clone', 'Clone sections + subject mappings to a new session'],
+  ]),
+  // Modules 07+ append their codes here (staff.*, student.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

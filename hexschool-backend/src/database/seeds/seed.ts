@@ -9,6 +9,7 @@ import {
   syncPermissionRegistry,
 } from '../../modules/rbac/seed/rbac.seeder';
 import { seedNctbGradingSystem } from '../../modules/school/seed/school.seeder';
+import { seedStandardGroups } from '../../modules/academic/seed/structure.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -87,6 +88,14 @@ const seeders: Seeder[] = [
     name: 'nctb-grading-system (M04)',
     run: async (prisma) => {
       const created = await seedNctbGradingSystem(prisma, DEFAULT_SCHOOL_ID);
+      process.stdout.write(created ? 'created; ' : 'already present; ');
+    },
+  },
+  {
+    // Module 06: the five standard BD academic groups (from class 9).
+    name: 'standard-groups (M06)',
+    run: async (prisma) => {
+      const created = await seedStandardGroups(prisma, DEFAULT_SCHOOL_ID);
       process.stdout.write(created ? 'created; ' : 'already present; ');
     },
   },

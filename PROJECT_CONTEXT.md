@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-16 (Module 05 complete — academic sessions + calendar live; global session-switcher convention established)
+> **Last updated:** 2026-07-17 (Module 06 complete — full academic structure live; MasterCrud frontend generic; serial e2e)
 
 ---
 
@@ -59,6 +59,8 @@
 | `SessionsService` (exported by `AcademicModule`) | current-session resolution + session rules for session-scoped modules | M05 |
 | `parseDate` (`academic/calendar/date.util.ts`) | strict YYYY-MM-DD parsing (regex shape ≠ valid date — always parse through this) | M05 |
 | `buildIcs` (`academic/calendar/ics.util.ts`) | dependency-free RFC 5545 writer (all-day events) | M05 |
+| `SectionsRepository` (exported by `AcademicModule`) | roster-side section queries for enrollment (M11) | M06 |
+| `StructureCloneService` | yearly rollover: additive/idempotent clone of sections + curriculum maps with preview | M06 |
 | `getSectionStudents()` / `getStudentCurrentEnrollment()` | canonical roster queries | M11 |
 | Clearance service | aggregated dues/library/hostel clearance | M16→27 |
 | `PaymentGatewayService` + adapters (SSLCommerz/bKash/Nagad) | init/verify/reconcile | M16 |
@@ -67,7 +69,7 @@
 
 ## 6. Shared Components (frontend)
 
-UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/components/ui`). Shared app components built on it: `DataTable` (server pagination/sort/filter/export), `FormDialog`, `ConfirmDialog`, `PageHeader`, `StatCard`, `EmptyState`, `ErrorState`, `Can` (permission gate), `SessionSwitcher` (M05), `JsonDiff` (M03), skeletons. Forms = React Hook Form + Zod (schemas in `src/lib/validations`, mirroring backend DTOs).
+UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/components/ui`). Shared app components built on it: `DataTable` (server pagination/sort/filter/export), `FormDialog`, `ConfirmDialog`, `PageHeader`, `StatCard`, `EmptyState`, `ErrorState`, `Can` (permission gate), `SessionSwitcher` (M05), `JsonDiff` (M03), **`MasterCrud`** (M06 — config-driven DataTable+FormDialog CRUD page; use it for every future master entity), skeletons. Forms = React Hook Form + Zod (schemas in `src/lib/validations`, mirroring backend DTOs).
 
 **Session-switcher convention (live since M05):** the admin header hosts `SessionSwitcher`; selection lives in the `academicSession` Redux slice, persisted per user in localStorage (`hs_academic_session:{userId}`), defaulting to the school's `is_current` session. Every session-scoped page/query (M06 sections, M11 enrollment, M12 attendance, …) MUST read `useAcademicSession().selected` — never fetch "current" independently.
 
@@ -79,7 +81,7 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 8. Entity Relationship Spine
 
-`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). `class_subjects` defines curriculum per session. Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
+`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). **Live since M06:** `classes`/`subjects`/`departments`/`shifts`/`groups` are session-independent masters; `sections` = class × session (identity unique incl. NULL-safe shift via COALESCE index; `class_teacher_id` FK deferred to M08); `class_subjects` defines curriculum per class × session (× optional group). Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
 
 ## 9. Authentication Flow
 
@@ -143,6 +145,10 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | Holidays hard-deleted, events soft-deleted | per roadmap spec — cancelling a holiday removes it (audit trail keeps history); events keep the standard business-entity lifecycle | M05 |
 | Weekly off-days = M04 setting, not holiday rows | one source of truth, per-school configurable; `isHoliday` merges setting + ranges | M05 |
 | `src/modules/academic/` namespace shared by M05+M06 | sessions/calendar and classes/sections/subjects are one domain; avoids `academic-*` module sprawl | M05 |
+| COALESCE unique indexes for nullable identity columns | Postgres treats NULLs as distinct — `uq_sections_identity`/`uq_class_subjects_identity` map NULL shift/group to the nil UUID inside the index | M06 |
+| `<entity>.manage` permission granularity for structure masters | no real-world role splits create vs delete for a shift/department; reads share one `structure.view` | M06 |
+| Prisma model `SchoolClass` for table `classes` | `class` is a TS keyword in generated client code | M06 |
+| e2e suites run serially (`maxWorkers: 1` in jest-e2e.json) | six suites share ONE dev DB/Redis/Mailpit — parallel workers caused cross-suite flakes | M06 |
 | Grading snapshot copied into results | grade-system edits never mutate published results | M04/M15 |
 | Attendance/marks/fees keyed on `enrollment_id` | correct history across transfers/promotions | M11 |
 | Gateway SUCCESS only after server-side validate | redirect params are forgeable | M16 |
@@ -171,3 +177,6 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M03→04:** `PermissionsCacheService` still owns its own Redis client — fold into the generic `RedisCacheService` during a quiet module.
 - **M04:** gateway configs have no persisted `verified_at` state (test endpoints report pass/fail only); revisit with M16/M17.
 - **M04:** in-browser logo-upload click-through pending (API/resize/signed-URL layers individually verified).
+- **M06:** `sections.class_teacher_id` is a bare UUID column — M08 must add the `teachers` FK.
+- **M06:** "subject removal blocked once marks exist" guard slot in ClassSubjectsService awaits the M15 marks table.
+- **M06:** one e2e suite leaves an open handle at teardown (`--forceExit` in use); chase with `--detectOpenHandles`.

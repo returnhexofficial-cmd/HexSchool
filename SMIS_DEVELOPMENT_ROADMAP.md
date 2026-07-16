@@ -81,7 +81,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 03 | Authorization, Roles & Audit Logging | ☑ |
 | 04 | School Setup & Settings | ☑ |
 | 05 | Academic Session & Calendar | ☑ |
-| 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☐ |
+| 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☑ |
 | 07 | Staff & User Management | ☐ |
 | 08 | Teacher Management | ☐ |
 | 09 | Student & Guardian Management | ☐ |
@@ -488,9 +488,9 @@ Classes, sections, groups (Science/Commerce/Arts), shifts (Morning/Day), subject
 - `class_subjects`: `id`, `class_id FK`, `subject_id FK`, `session_id FK`, `group_id NULL`, `is_optional BOOL` (4th subject), `full_marks_default INT`, `display_order`. `uq(class_id, subject_id, session_id, group_id)`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] CRUD for all six entities + class-subject mapping endpoints (bulk assign subjects to class).
-- [ ] "Clone structure to new session" service: copies sections & class-subject maps from a previous session (used yearly).
-- [ ] Guard deletes: class/section/subject with dependent enrollments/marks → block with explanatory 409.
+- [x] CRUD for all six entities + class-subject mapping endpoints (bulk assign subjects to class).
+- [x] "Clone structure to new session" service: copies sections & class-subject maps from a previous session (used yearly; additive/idempotent, preview dry-run, class teachers not copied).
+- [x] Guard deletes: class/section/subject with dependent enrollments/marks → block with explanatory 409 (holidays/sections/mappings guarded now; enrollment/marks guards extend in M11/M15).
 ### APIs
 ```
 CRUD /api/v1/departments | shifts | classes | groups | sections | subjects
@@ -499,9 +499,9 @@ POST    /api/v1/academic-structure/clone   {from_session, to_session}
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Management pages for each entity (DataTable + FormDialog pattern).
-- [ ] Class detail page: tabs — Sections, Subjects (drag-order, optional flag), per selected session.
-- [ ] Clone-to-session wizard with preview diff.
+- [x] Management pages for each entity (DataTable + FormDialog pattern — via the new reusable `MasterCrud` generic).
+- [x] Class detail page: tabs — Sections, Subjects (order via up/down arrows, optional flag), per selected session (session switcher).
+- [x] Clone-to-session wizard with preview diff (count-level preview).
 
 ## 6. Business Rules
 - Sections are session-scoped (Class 6-A of 2026 ≠ 2027). Classes and subjects are session-independent masters.
@@ -518,15 +518,15 @@ POST    /api/v1/academic-structure/clone   {from_session, to_session}
 - Mid-session new section (admission surge) → allowed; routine/exam seat plans must be regenerated manually (warn in UI).
 
 ## 9. Testing Checklist
-- [ ] Unit: clone service, delete guards.
-- [ ] e2e: CRUD matrix + uniqueness violations → 409.
-- [ ] Frontend: class-subject ordering persists.
+- [x] Unit: clone service, delete guards.
+- [x] e2e: CRUD matrix + uniqueness violations → 409 (+ ordering persistence, clone preview/idempotency).
+- [x] Frontend: class-subject ordering persists (verified via e2e re-PUT; editor state keyed to server mapping).
 
 ## 10. Completion Checklist
-- [ ] All entities + mapping
-- [ ] Clone wizard
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/06-academic-structure.md`
+- [x] All entities + mapping
+- [x] Clone wizard
+- [x] Tests passing (138 backend unit + 67 e2e / 60 frontend)
+- [x] Docs: `docs/modules/06-academic-structure.md`
 
 ---
 

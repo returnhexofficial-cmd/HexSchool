@@ -97,6 +97,14 @@ enum SettingsGroup {
   @@map("settings_group_enum")
 }
 
+enum SubjectType {
+  THEORY
+  PRACTICAL
+  BOTH
+
+  @@map("subject_type_enum")
+}
+
 enum SessionStatus {
   UPCOMING
   ACTIVE
@@ -246,6 +254,13 @@ model School {
   settings         SchoolSetting[]
   gradingSystems   GradingSystem[]
   academicSessions AcademicSession[]
+  departments      Department[]
+  shifts           Shift[]
+  classes          SchoolClass[]
+  groups           Group[]
+  sections         Section[]
+  subjects         Subject[]
+  classSubjects    ClassSubject[]
 
   @@map("schools")
 }
@@ -335,6 +350,8 @@ model AcademicSession {
 
   holidays       Holiday[]
   calendarEvents CalendarEvent[]
+  sections       Section[]
+  classSubjects  ClassSubject[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -388,6 +405,184 @@ model CalendarEvent {
   @@index([schoolId, startDate, endDate], map: "idx_calendar_events_range")
   @@index([sessionId], map: "idx_calendar_events_session")
   @@map("calendar_events")
+}
+
+// ── Module 06: Academic Structure ─────────────────────────────────────
+
+/// Organizational unit for staff (M07) and subjects.
+model Department {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_departments_school")
+  name     String @db.VarChar(100)
+  code     String @db.VarChar(20)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  subjects Subject[]
+
+  @@index([schoolId], map: "idx_departments_school")
+  @@map("departments")
+}
+
+/// School shift (Morning/Day). Rarely churns — hard-deleted (spec:
+/// audit only), delete guarded while sections reference it.
+model Shift {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], map: "fk_shifts_school")
+  name      String   @db.VarChar(50)
+  startTime DateTime @map("start_time") @db.Time(0)
+  endTime   DateTime @map("end_time") @db.Time(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  sections Section[]
+
+  @@index([schoolId], map: "idx_shifts_school")
+  @@map("shifts")
+}
+
+/// Session-independent class master ("Class 6"). numeric_level drives
+/// ordering and the group-applicability rule; free-form names support
+/// Madrasa/Vocational naming (M06 §8). Model named SchoolClass because
+/// `class` collides with the TS keyword in generated code.
+model SchoolClass {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String  @map("school_id") @db.Uuid
+  school       School  @relation(fields: [schoolId], references: [id], map: "fk_classes_school")
+  name         String  @db.VarChar(100)
+  nameBn       String? @map("name_bn") @db.VarChar(100)
+  numericLevel Int     @map("numeric_level")
+  displayOrder Int     @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  sections      Section[]
+  classSubjects ClassSubject[]
+
+  @@index([schoolId], map: "idx_classes_school")
+  @@map("classes")
+}
+
+/// Academic stream (Science/Commerce/Arts/…). Applies only from a class
+/// level (BD default: class 9) — enforced when a section/mapping uses it.
+model Group {
+  id                  String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId            String @map("school_id") @db.Uuid
+  school              School @relation(fields: [schoolId], references: [id], map: "fk_groups_school")
+  name                String @db.VarChar(50)
+  applicableFromLevel Int    @default(9) @map("applicable_from_level")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  sections      Section[]
+  classSubjects ClassSubject[]
+
+  @@index([schoolId], map: "idx_groups_school")
+  @@map("groups")
+}
+
+/// Where a student sits: session-scoped (Class 6-A of 2026 ≠ 2027).
+/// Identity uniqueness (school, session, class, name, shift) is a
+/// hand-written COALESCE index (NULL shift must not evade it).
+/// class_teacher_id has NO FK until Module 08 creates `teachers`.
+model Section {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String          @map("school_id") @db.Uuid
+  school         School          @relation(fields: [schoolId], references: [id], map: "fk_sections_school")
+  classId        String          @map("class_id") @db.Uuid
+  class          SchoolClass     @relation(fields: [classId], references: [id], map: "fk_sections_class")
+  sessionId      String          @map("session_id") @db.Uuid
+  session        AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_sections_session")
+  name           String          @db.VarChar(5)
+  shiftId        String?         @map("shift_id") @db.Uuid
+  shift          Shift?          @relation(fields: [shiftId], references: [id], map: "fk_sections_shift")
+  groupId        String?         @map("group_id") @db.Uuid
+  group          Group?          @relation(fields: [groupId], references: [id], map: "fk_sections_group")
+  /// Advisory at creation; enforced at enrollment (M11) with override.
+  capacity       Int?
+  classTeacherId String?         @map("class_teacher_id") @db.Uuid
+  roomNo         String?         @map("room_no") @db.VarChar(20)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, sessionId], map: "idx_sections_school_session")
+  @@index([classId], map: "idx_sections_class")
+  @@map("sections")
+}
+
+/// Session-independent subject master. THEORY/PRACTICAL split marks are
+/// handled by `type` + exam mark distribution (M14), never duplicates.
+model Subject {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String      @map("school_id") @db.Uuid
+  school       School      @relation(fields: [schoolId], references: [id], map: "fk_subjects_school")
+  name         String      @db.VarChar(100)
+  nameBn       String?     @map("name_bn") @db.VarChar(100)
+  code         String      @db.VarChar(20)
+  departmentId String?     @map("department_id") @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id], map: "fk_subjects_department")
+  type         SubjectType @default(THEORY)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  classSubjects ClassSubject[]
+
+  @@index([schoolId], map: "idx_subjects_school")
+  @@map("subjects")
+}
+
+/// Curriculum mapping: what a class studies in a session (optionally per
+/// group; is_optional marks the BD "4th subject"). Rows are replaced by
+/// the bulk assign endpoint; removal is blocked once marks exist (M15
+/// extends the guard). Identity uniqueness is a COALESCE index (NULL
+/// group must not evade it).
+model ClassSubject {
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String          @map("school_id") @db.Uuid
+  school           School          @relation(fields: [schoolId], references: [id], map: "fk_class_subjects_school")
+  classId          String          @map("class_id") @db.Uuid
+  class            SchoolClass     @relation(fields: [classId], references: [id], map: "fk_class_subjects_class")
+  subjectId        String          @map("subject_id") @db.Uuid
+  subject          Subject         @relation(fields: [subjectId], references: [id], map: "fk_class_subjects_subject")
+  sessionId        String          @map("session_id") @db.Uuid
+  session          AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_class_subjects_session")
+  groupId          String?         @map("group_id") @db.Uuid
+  group            Group?          @relation(fields: [groupId], references: [id], map: "fk_class_subjects_group")
+  isOptional       Boolean         @default(false) @map("is_optional")
+  fullMarksDefault Int             @default(100) @map("full_marks_default")
+  displayOrder     Int             @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([classId, sessionId], map: "idx_class_subjects_class_session")
+  @@index([subjectId], map: "idx_class_subjects_subject")
+  @@map("class_subjects")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

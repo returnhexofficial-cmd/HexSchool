@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CalendarRange,
   LayoutDashboard,
+  Network,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -36,6 +37,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/calendar",
     icon: CalendarDays,
     permission: "calendar.view",
+  },
+  {
+    label: "Academic Structure",
+    href: "/admin/structure",
+    icon: Network,
+    permission: "structure.view",
   },
   {
     label: "Roles & Permissions",

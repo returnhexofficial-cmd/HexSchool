@@ -105,6 +105,59 @@ enum SubjectType {
   @@map("subject_type_enum")
 }
 
+enum StaffDesignation {
+  PRINCIPAL
+  VICE_PRINCIPAL
+  ACCOUNTANT
+  ADMISSION_OFFICER
+  LIBRARIAN
+  OFFICE_STAFF
+  LAB_ASSISTANT
+  SECURITY
+  CLEANER
+  OTHER
+
+  @@map("staff_designation_enum")
+}
+
+/// Shared by staff (M07), teachers (M08), students (M09).
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+
+  @@map("gender_enum")
+}
+
+enum EmploymentType {
+  PERMANENT
+  CONTRACT
+  PART_TIME
+
+  @@map("employment_type_enum")
+}
+
+enum StaffStatus {
+  ACTIVE
+  ON_LEAVE
+  RESIGNED
+  TERMINATED
+  RETIRED
+
+  @@map("staff_status_enum")
+}
+
+enum StaffDocumentType {
+  NID
+  CERTIFICATE
+  CV
+  PHOTO
+  CONTRACT
+  OTHER
+
+  @@map("staff_document_type_enum")
+}
+
 enum SessionStatus {
   UPCOMING
   ACTIVE
@@ -174,6 +227,7 @@ model User {
   otpCodes        OtpCode[]
   loginActivities LoginActivity[]
   userRoles       UserRole[]
+  staffProfile    StaffProfile?
 
   @@map("users")
 }
@@ -261,6 +315,8 @@ model School {
   sections         Section[]
   subjects         Subject[]
   classSubjects    ClassSubject[]
+  staffProfiles    StaffProfile[]
+  staffDocuments   StaffDocument[]
 
   @@map("schools")
 }
@@ -423,7 +479,8 @@ model Department {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  subjects Subject[]
+  subjects      Subject[]
+  staffProfiles StaffProfile[]
 
   @@index([schoolId], map: "idx_departments_school")
   @@map("departments")
@@ -446,6 +503,10 @@ model Shift {
 
   sections Section[]
 
+  // Hand-written in the M06 migration; declared here too so drift
+  // detection doesn't try to drop it (it's a plain unique index, which
+  // Prisma CAN express — unlike the partial ones).
+  @@unique([schoolId, name], map: "uq_shifts_name")
   @@index([schoolId], map: "idx_shifts_school")
   @@map("shifts")
 }
@@ -583,6 +644,93 @@ model ClassSubject {
   @@index([classId, sessionId], map: "idx_class_subjects_class_session")
   @@index([subjectId], map: "idx_class_subjects_subject")
   @@map("class_subjects")
+}
+
+// ── Module 07: Staff & User Management ────────────────────────────────
+
+/// Non-teaching staff record, 1:1 with a User account (created
+/// transactionally with a temp password). employee_id comes from the
+/// gap-free per-school sequence service and is NEVER reused — the
+/// employee-id unique index is deliberately NOT soft-delete-scoped.
+model StaffProfile {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String           @map("school_id") @db.Uuid
+  school         School           @relation(fields: [schoolId], references: [id], map: "fk_staff_profiles_school")
+  userId         String           @unique(map: "uq_staff_profiles_user") @map("user_id") @db.Uuid
+  user           User             @relation(fields: [userId], references: [id], map: "fk_staff_profiles_user")
+  employeeId     String           @map("employee_id") @db.VarChar(30)
+  firstName      String           @map("first_name") @db.VarChar(100)
+  lastName       String           @map("last_name") @db.VarChar(100)
+  nameBn         String?          @map("name_bn") @db.VarChar(200)
+  designation    StaffDesignation
+  departmentId   String?          @map("department_id") @db.Uuid
+  department     Department?      @relation(fields: [departmentId], references: [id], map: "fk_staff_profiles_department")
+  gender         Gender
+  dob            DateTime         @db.Date
+  bloodGroup     String?          @map("blood_group") @db.VarChar(5)
+  /// BD NID: 10/13/17 digits. Soft-checked for duplicates (data quality
+  /// varies) — deliberately NOT unique.
+  nidNumber      String?          @map("nid_number") @db.VarChar(17)
+  /// S3 object key; signed URL minted on read.
+  photoUrl       String?          @map("photo_url") @db.VarChar(500)
+  /// { present: string, permanent: string }
+  address        Json             @default("{}")
+  joiningDate    DateTime         @map("joining_date") @db.Date
+  employmentType EmploymentType   @default(PERMANENT) @map("employment_type")
+  status         StaffStatus      @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  documents StaffDocument[]
+
+  @@index([schoolId, status], map: "idx_staff_profiles_school_status")
+  @@index([departmentId], map: "idx_staff_profiles_department")
+  @@map("staff_profiles")
+}
+
+/// Uploaded staff paperwork (NID scan, certificates, CV…). Hard-deleted
+/// (delete removes the S3 object too); the audit trail keeps history —
+/// same treatment as M05 holidays.
+model StaffDocument {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String            @map("school_id") @db.Uuid
+  school     School            @relation(fields: [schoolId], references: [id], map: "fk_staff_documents_school")
+  staffId    String            @map("staff_id") @db.Uuid
+  staff      StaffProfile      @relation(fields: [staffId], references: [id], onDelete: Cascade, map: "fk_staff_documents_staff")
+  title      String            @db.VarChar(200)
+  type       StaffDocumentType @default(OTHER)
+  /// S3 object key; signed URL minted on read.
+  fileUrl    String            @map("file_url") @db.VarChar(500)
+  mimeType   String            @map("mime_type") @db.VarChar(100)
+  sizeBytes  Int               @map("size_bytes")
+  uploadedBy String?           @map("uploaded_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([staffId], map: "idx_staff_documents_staff")
+  @@map("staff_documents")
+}
+
+/// Gap-free per-school document-number sequences (PROJECT_CONTEXT §3):
+/// one row per (school, prefix), bumped with SELECT … FOR UPDATE inside
+/// the caller's transaction. Employee IDs first (M07); student UIDs,
+/// application/invoice/voucher numbers reuse it (M09/M10/M16/M20).
+model DocumentSequence {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  prefix    String @db.VarChar(30)
+  nextValue Int    @default(1) @map("next_value")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, prefix], map: "uq_document_sequences_prefix")
+  @@map("document_sequences")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

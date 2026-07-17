@@ -90,7 +90,22 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['class.subject.assign', "Change a class's subject mapping for a session"],
     ['structure.clone', 'Clone sections + subject mappings to a new session'],
   ]),
-  // Modules 07+ append their codes here (staff.*, student.*, …).
+  // ── Module 07: Staff & User Management ──────────────────────────────
+  ...define('staff', [
+    ['staff.view', 'View staff profiles and documents'],
+    ['staff.create', 'Register staff (creates their user account)'],
+    ['staff.update', 'Edit staff profiles, contacts, and photos'],
+    ['staff.delete', 'Delete staff records'],
+    ['staff.status', 'Change staff employment status (with reason)'],
+    ['staff.document.manage', 'Upload/delete staff documents'],
+  ]),
+  ...define('users', [
+    ['user.view', 'Browse all user accounts'],
+    ['user.status', 'Activate/deactivate/suspend user accounts'],
+    ['user.password.reset', "Reset a user's password (temp password issued)"],
+  ]),
+
+  // Modules 08+ append their codes here (teacher.*, student.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

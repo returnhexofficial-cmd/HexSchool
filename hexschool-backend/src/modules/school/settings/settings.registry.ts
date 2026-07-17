@@ -50,6 +50,13 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
     ['general.timezone', 'string', 'Display timezone', 'Asia/Dhaka'],
     ['general.language', 'string', 'Default language', 'en'],
     ['general.weekly_holidays', 'json', 'Weekly holidays', ['FRIDAY']],
+    // M07 — consumed by SequenceService when staff records are created.
+    [
+      'general.employee_id_pattern',
+      'string',
+      'Employee ID pattern',
+      '{SCHOOL_CODE}-S-{YY}{SEQ4}',
+    ],
   ]),
   ...g(SettingsGroup.academic, [
     ['academic.session_start_month', 'number', 'Session start month (1–12)', 1],

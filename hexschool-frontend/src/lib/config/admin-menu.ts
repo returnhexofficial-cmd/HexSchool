@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BriefcaseBusiness,
   CalendarDays,
   CalendarRange,
   LayoutDashboard,
@@ -7,6 +8,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  Users,
 } from "lucide-react";
 
 /**
@@ -43,6 +45,18 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/structure",
     icon: Network,
     permission: "structure.view",
+  },
+  {
+    label: "Staff",
+    href: "/admin/staff",
+    icon: BriefcaseBusiness,
+    permission: "staff.view",
+  },
+  {
+    label: "Users",
+    href: "/admin/users",
+    icon: Users,
+    permission: "user.view",
   },
   {
     label: "Roles & Permissions",

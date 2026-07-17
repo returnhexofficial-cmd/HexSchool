@@ -21,6 +21,8 @@ import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { HealthModule } from './modules/health/health.module';
 import { SchoolModule } from './modules/school/school.module';
+import { SequenceModule } from './modules/sequence/sequence.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { VersionModule } from './modules/version/version.module';
 import { QueuesModule } from './queues/queues.module';
@@ -94,6 +96,8 @@ import { QueuesModule } from './queues/queues.module';
     AuthModule,
     SchoolModule,
     AcademicModule,
+    SequenceModule,
+    StaffModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

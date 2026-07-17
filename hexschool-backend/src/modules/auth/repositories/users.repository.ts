@@ -1,7 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, User } from '@prisma/client';
 import { BaseRepository } from '../../../common/database/base.repository';
+import {
+  buildPaginationMeta,
+  PaginatedResult,
+} from '../../../common/dto/paginated.dto';
 import { PrismaService } from '../../../database/prisma/prisma.service';
+
+const ADMIN_LIST_INCLUDE = {
+  userRoles: {
+    select: { role: { select: { id: true, name: true, slug: true } } },
+  },
+  staffProfile: {
+    select: { id: true, employeeId: true, firstName: true, lastName: true },
+  },
+} satisfies Prisma.UserInclude;
+
+export type UserWithAdminRelations = Prisma.UserGetPayload<{
+  include: typeof ADMIN_LIST_INCLUDE;
+}>;
+
+const ADMIN_SORTABLE = new Set([
+  'email',
+  'userType',
+  'status',
+  'lastLoginAt',
+  'createdAt',
+]);
 
 @Injectable()
 export class UsersRepository extends BaseRepository<
@@ -12,6 +37,97 @@ export class UsersRepository extends BaseRepository<
 > {
   constructor(prisma: PrismaService) {
     super(prisma, (client) => client.user, 'User');
+  }
+
+  /** User-admin list (M07): filters by type/status/role, searches
+   *  email/phone/linked staff name, includes roles + staff profile. */
+  async paginateAdminList(
+    query: {
+      page: number;
+      limit: number;
+      sort?: string;
+      search?: string;
+      userType?: User['userType'];
+      status?: User['status'];
+      roleId?: string;
+    },
+    schoolId: string,
+  ): Promise<PaginatedResult<UserWithAdminRelations>> {
+    const { page, limit } = query;
+
+    const where: Prisma.UserWhereInput = {
+      schoolId,
+      deletedAt: null,
+      ...(query.userType ? { userType: query.userType } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.roleId
+        ? { userRoles: { some: { roleId: query.roleId } } }
+        : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { email: { contains: query.search, mode: 'insensitive' } },
+              { phone: { contains: query.search } },
+              {
+                staffProfile: {
+                  is: {
+                    OR: [
+                      {
+                        firstName: {
+                          contains: query.search,
+                          mode: 'insensitive',
+                        },
+                      },
+                      {
+                        lastName: {
+                          contains: query.search,
+                          mode: 'insensitive',
+                        },
+                      },
+                      {
+                        employeeId: {
+                          contains: query.search,
+                          mode: 'insensitive',
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const [field, dir] = (query.sort ?? '').split(':');
+    const orderBy: Prisma.UserOrderByWithRelationInput =
+      field && ADMIN_SORTABLE.has(field)
+        ? { [field]: dir?.toLowerCase() === 'desc' ? 'desc' : 'asc' }
+        : { createdAt: 'desc' };
+
+    const [items, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        include: ADMIN_LIST_INCLUDE,
+        orderBy,
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { data: items, meta: buildPaginationMeta(page, limit, total) };
+  }
+
+  /** Other ACTIVE super admins (guard: never deactivate the last one). */
+  async countOtherActiveSuperAdmins(userId: string): Promise<number> {
+    return this.prisma.user.count({
+      where: {
+        userType: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+        deletedAt: null,
+        id: { not: userId },
+      },
+    });
   }
 
   /** Lookup by normalized login identifier (email OR BD phone). */
@@ -51,6 +167,17 @@ export class UsersRepository extends BaseRepository<
       passwordHash,
       passwordChangedAt: new Date(),
       mustChangePassword: false,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    });
+  }
+
+  /** Admin-issued temporary password — user must change it on login (M07). */
+  async setTempPassword(id: string, passwordHash: string): Promise<void> {
+    await this.update(id, {
+      passwordHash,
+      passwordChangedAt: new Date(),
+      mustChangePassword: true,
       failedLoginAttempts: 0,
       lockedUntil: null,
     });

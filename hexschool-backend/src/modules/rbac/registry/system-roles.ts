@@ -63,6 +63,12 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'subject.manage',
       'class.subject.assign',
       'structure.clone',
+      'staff.view',
+      'staff.create',
+      'staff.update',
+      'staff.status',
+      'staff.document.manage',
+      'user.view',
     ],
   },
   {
@@ -80,6 +86,8 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'structure.view',
       'section.manage',
       'class.subject.assign',
+      'staff.view',
+      'user.view',
     ],
   },
   {
@@ -126,8 +134,8 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
   {
     name: 'Office Staff',
     slug: 'office-staff',
-    description: 'General office staff. Permissions arrive with Module 07.',
-    corePermissions: [],
+    description: 'General office staff — directory access.',
+    corePermissions: ['staff.view'],
   },
 ];
 

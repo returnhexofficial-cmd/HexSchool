@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-17 (Module 06 complete — full academic structure live; MasterCrud frontend generic; serial e2e)
+> **Last updated:** 2026-07-17 (Module 07 complete — staff & user administration live; shared gap-free SequenceService)
 
 ---
 
@@ -54,7 +54,7 @@
 | `PasswordService` / `TokenService` / `OtpService` | argon2id + policy, JWT/reset/refresh tokens, hashed OTPs | M02 |
 | `notifications` BullMQ queue | email (SMTP) + SMS (log-only until M17) job contract | M02 |
 | `NotificationService.send()` | ALL SMS/email/in-app — no direct gateway calls anywhere | M17 |
-| Sequence/ID generator | gap-free document numbers | M07 |
+| `SequenceService` (exported by `SequenceModule`) | gap-free document numbers: per-(school, prefix) counters in `document_sequences`, claimed by an atomic row-locking upsert INSIDE the caller's transaction (rollback returns the number); token-pattern renderer `{SCHOOL_CODE} {YYYY} {YY} {MM} {SEQ<n>}`. Employee IDs (M07) use setting `general.employee_id_pattern` + counter `staff:{YY}`; student UIDs/applications/invoices/vouchers (M09/10/16/20) reuse it | M07 |
 | `CalendarService.isHoliday(schoolId, date, appliesTo?)` (exported by `AcademicModule`) | weekly off-days (M04 setting `general.weekly_holidays`) + holiday ranges → `{holiday, reason, title}`; consumed by Attendance (M12) / Payroll (M21) | M05 |
 | `SessionsService` (exported by `AcademicModule`) | current-session resolution + session rules for session-scoped modules | M05 |
 | `parseDate` (`academic/calendar/date.util.ts`) | strict YYYY-MM-DD parsing (regex shape ≠ valid date — always parse through this) | M05 |
@@ -81,7 +81,7 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 8. Entity Relationship Spine
 
-`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). **Live since M06:** `classes`/`subjects`/`departments`/`shifts`/`groups` are session-independent masters; `sections` = class × session (identity unique incl. NULL-safe shift via COALESCE index; `class_teacher_id` FK deferred to M08); `class_subjects` defines curriculum per class × session (× optional group). Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
+`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). **Live since M07:** `staff_profiles` (user_id unique FK, employee_id from SequenceService — its unique index deliberately IGNORES `deleted_at`, IDs never reused) + `staff_documents` (hard-deleted with their S3 object) + `document_sequences` (shared counters). Staff creation = one transaction (sequence + user + default role by designation + profile); RESIGNED/TERMINATED cascade deactivates the user via event listener (sessions revoked first). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). **Live since M06:** `classes`/`subjects`/`departments`/`shifts`/`groups` are session-independent masters; `sections` = class × session (identity unique incl. NULL-safe shift via COALESCE index; `class_teacher_id` FK deferred to M08); `class_subjects` defines curriculum per class × session (× optional group). Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
 
 ## 9. Authentication Flow
 
@@ -153,6 +153,10 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | Attendance/marks/fees keyed on `enrollment_id` | correct history across transfers/promotions | M11 |
 | Gateway SUCCESS only after server-side validate | redirect params are forgeable | M16 |
 | In-process events now, BullMQ for heavy work | simple first, queue-swap-ready | M01 |
+| Employee-ID unique index NOT soft-delete-scoped (unlike other business uniques) | "Employee IDs never reused, even after soft delete" (M07 §6) — the index must keep holding deleted rows' IDs | M07 |
+| Deleting staff soft-deletes the USER too (not just the profile) | the partial uniques on users free the email/phone for a future account; sessions revoked | M07 |
+| Credential notifications (welcome/reset) are fire-and-forget enqueues | BullMQ with Redis down buffers `await add()` forever; the admin holds the returned temp password either way — delivery must never block or fail the mutation | M07 |
+| Staff-status cascade: revoke sessions BEFORE flipping user status | status is the observable "cascade done" signal (e2e polls it); a session must never outlive an INACTIVE flip | M07 |
 
 ## 17. Assumptions
 
@@ -172,7 +176,7 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M02:** throttling disabled entirely under `NODE_ENV=test`; e2e never exercises rate limits.
 - **M02:** dev `.env` points `DATABASE_URL` at Neon while docker-compose still ships a local postgres — align when deployment story firms up (M30).
 - **M03:** audit fallback `newValues` is the redacted request body — services that mutate meaningful state must call `AuditContextService.set()` for real entity diffs (RolesService/AuthService are the reference implementations).
-- **M03:** user role assignment has API only (`GET/PUT /users/:id/roles`); the UI slot lives in the Module 07 user detail page.
+- ~~**M03:** user role assignment has API only~~ — UI shipped as the M07 staff-detail Roles tab.
 - **M03:** `audit_logs` monthly partitioning + retention deferred to M30. ~~users/roles FKs deferred~~ — added in M04.
 - **M03→04:** `PermissionsCacheService` still owns its own Redis client — fold into the generic `RedisCacheService` during a quiet module.
 - **M04:** gateway configs have no persisted `verified_at` state (test endpoints report pass/fail only); revisit with M16/M17.
@@ -180,3 +184,5 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M06:** `sections.class_teacher_id` is a bare UUID column — M08 must add the `teachers` FK.
 - **M06:** "subject removal blocked once marks exist" guard slot in ClassSubjectsService awaits the M15 marks table.
 - **M06:** one e2e suite leaves an open handle at teardown (`--forceExit` in use); chase with `--detectOpenHandles`.
+- **M07:** in-browser photo/document upload click-through against MinIO pending (validation + storage layers individually verified — same status as the M04 logo).
+- **M07:** temp password is returned in the reset API response (admin handover) — revisit once M17 makes SMS delivery real (config-gate the response field).

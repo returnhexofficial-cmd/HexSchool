@@ -16,4 +16,9 @@ export {
   HolidayType,
   HolidayAppliesTo,
   CalendarEventType,
+  StaffDesignation,
+  Gender,
+  EmploymentType,
+  StaffStatus,
+  StaffDocumentType,
 } from '@prisma/client';

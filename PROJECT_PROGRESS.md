@@ -1,25 +1,27 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-17 · **Overall completion: 19 % (6 / 32 modules)**
+> **Last updated:** 2026-07-17 · **Overall completion: 22 % (7 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04, 05, 06 |
-| **Current module** | **07 — Staff & User Management** |
-| Remaining | 26 |
+| Completed modules | 01, 02, 03, 04, 05, 06, 07 |
+| **Current module** | **08 — Teacher Management** |
+| Remaining | 25 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 07: `staff_profiles` / `staff_documents` Prisma models + migration; staff CRUD with **transactional user creation** (temp password, `must_change_password=true`, welcome via notifications queue).
-2. Module 07: **gap-free employee-ID generator** (`{SCHOOL_CODE}-S-{YY}{SEQ4}`, sequence table per school+prefix — becomes the shared document-number service, PROJECT_CONTEXT §3); photo/document uploads via StorageModule; status transitions with reason logging + RESIGNED/TERMINATED → auto-deactivate user (event listener revokes refresh tokens).
-3. Module 07: user admin endpoints (`GET /users`, status, admin reset-password) + role assignment UI slot (M03 API is live); frontend staff list/detail/multi-section form + users page behind `<Can>`.
-4. Housekeeping: push both repos to GitHub and confirm CI green (workflows are authored, unverified; backend CI now runs `prisma migrate deploy`).
+1. Module 08: `teachers` table (separate from staff_profiles, sharing the user — record the decision), `teacher_qualifications`, `teacher_subjects` expertise map, `teacher_section_subjects` assignments (`uq(session, section, subject)`), minimal `teacher_leaves`, `teacher_evaluations`; reuse the M07 transactional user-creation + SequenceService employee-ID pattern.
+2. Module 08: add the deferred `sections.class_teacher_id` FK → `teachers` (M06 debt); assignment service with timetable-conflict hook interface (no-op until M13); resign-with-assignments blocking check + bulk-transfer helper.
+3. Module 08: frontend teacher list/detail tabs (Profile/Qualifications/Assignments/Schedule/Leaves/Evaluations/Documents), assignment matrix page, leave approval inbox.
+4. Housekeeping: push both repos to GitHub and confirm CI green (workflows are authored, unverified; backend CI now runs `prisma migrate deploy`); chase the M06 e2e open handle; in-browser upload click-throughs (M04 logo, M07 photo/documents).
 
 ## Recently Completed
+
+- **Module 07 — Staff & User Management** (2026-07-17): staff registry live — **transactional creation** (gap-free employee ID + user with temp password/`must_change_password` + designation-mapped default system role + profile, one tx), welcome credentials via the notifications queue, photo (EXIF-normalized 512px PNG) & document (pdf/jpg/png ≤10 MB, hard-deleted with S3 object) uploads, status transitions with mandatory reason + **RESIGNED/TERMINATED → account-deactivation cascade** (sessions revoked first), NID duplicate soft-check (warn, never block), staff delete soft-deletes the user too (frees contact; employee ID stays burned — its unique ignores `deleted_at`). New shared **`SequenceService`** (`document_sequences`, row-lock upsert inside caller's tx — M09/10/16/20 reuse it; pattern from new `general.employee_id_pattern` setting). User admin surface: `GET /users` (type/status/role filters), status control (self-change blocked, last-active-Super-Admin protected, non-ACTIVE revokes sessions), admin reset-password (one-time temp password + queued SMS/email). 9 permission codes; Principal/Vice-Principal/Office-Staff core sets extended. Frontend: `/admin/staff` (list/new/detail with Profile/Documents/**Roles** (the M03 UI slot)/Activity tabs), `/admin/users` with quick actions behind `<Can>`. 162 backend unit + 81 e2e / 67 frontend tests green. See `docs/modules/07-staff-users.md`.
 
 - **Module 06 — Academic Structure** (2026-07-17): all six entities live (`departments`, `shifts`, `classes`, `groups`, `sections`, `subjects`) + `class_subjects` curriculum mapping — soft-delete-aware uniques, **COALESCE identity indexes** so NULL shift/group can't evade section/mapping uniqueness, group-applicability rule (streams from class 9), guarded deletes with explanatory 409s, `class_teacher_id` deferred-FK column for M08; **bulk subject assign** (order/optional/full-marks/per-group) and **clone-to-session** (additive, idempotent, preview dry-run, teachers not copied); 9 permission codes (`<entity>.manage` granularity); standard BD groups seeded. Frontend: `/admin/structure` tabbed area on a new reusable **`MasterCrud`** generic, class detail with session-scoped Sections/Subjects tabs (first consumers of the M05 switcher), clone wizard. e2e now runs serially (`maxWorkers: 1` — shared dev infra). 138 backend unit + 67 e2e / 60 frontend tests green. See `docs/modules/06-academic-structure.md`.
 
@@ -58,7 +60,7 @@
 | ~~04 School Setup~~ ✅ | 3 → **1** | 15 Marks/Results | 8 | 26 Hostel | 3 |
 | ~~05 Session~~ ✅ | 2 → **1** | 16 Fees/Payments | 8 | 27 Docs/Certs | 4 |
 | ~~06 Structure~~ ✅ | 3 → **1** | 17 Communication | 5 | 28 Cmp/Vis/Alumni | 4 |
-| 07 Staff/Users | 4 | 18 Portals | 6 | 29 Reports v2 | 5 |
+| ~~07 Staff/Users~~ ✅ | 4 → **1** | 18 Portals | 6 | 29 Reports v2 | 5 |
 | 08 Teachers | 4 | 19 Website CMS | 7 | 30 SysAdmin | 6 |
 | 09 Students | 6 | 20 Accounting | 6 | 31 Multi-School | 8 |
 | 10 Admission | 6 | 21 HR/Payroll | 7 | 32 Future track | per sub-project |
@@ -77,3 +79,4 @@
 | 04 | School Setup & Settings | 2026-07-16 | 2026-07-16 | 1 dev-day (est. 3) | `docs/modules/04-school-setup.md` |
 | 05 | Academic Session & Calendar | 2026-07-16 | 2026-07-16 | 1 dev-day (est. 2) | `docs/modules/05-academic-session.md` |
 | 06 | Academic Structure | 2026-07-16 | 2026-07-17 | 1 dev-day (est. 3) | `docs/modules/06-academic-structure.md` |
+| 07 | Staff & User Management (+ shared SequenceService) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/07-staff-users.md` |

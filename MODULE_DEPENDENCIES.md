@@ -13,6 +13,7 @@ graph TD
     M04 --> M05[05 Academic Session]
     M05 --> M06[06 Academic Structure]
     M03 --> M07[07 Staff & Users]
+    M04 --> M07
     M06 --> M07
     M07 --> M08[08 Teachers]
     M06 --> M08
@@ -79,7 +80,7 @@ graph TD
 | 04 School Setup | 03 | — |
 | 05 Academic Session | 04 | — |
 | 06 Academic Structure | 05 | — |
-| 07 Staff & Users | 03, 06 | — |
+| 07 Staff & Users | 03, 04, 06 | Provides shared SequenceService consumed by 09/10/16/20 |
 | 08 Teachers | 06, 07 | Timetable conflict hook (13); leave migrates to HR (21) |
 | 09 Students & Guardians | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land |
 | 10 Admission | 09, 11 | Online gateway wiring (16); publish merit to website (19) |

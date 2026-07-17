@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { PrismaClientLike } from '../../../common/database/base.repository';
 import { PrismaService } from '../../../database/prisma/prisma.service';
 
 /**
@@ -66,6 +67,19 @@ export class UserRolesRepository {
   async countOtherHolders(roleId: string, userId: string): Promise<number> {
     return this.prisma.userRole.count({
       where: { roleId, userId: { not: userId } },
+    });
+  }
+
+  /** Idempotent single grant — used by staff creation (M07) inside its
+   *  user+profile transaction. */
+  async assignRole(
+    userId: string,
+    roleId: string,
+    tx?: PrismaClientLike,
+  ): Promise<void> {
+    await (tx ?? this.prisma).userRole.createMany({
+      data: [{ userId, roleId }],
+      skipDuplicates: true,
     });
   }
 

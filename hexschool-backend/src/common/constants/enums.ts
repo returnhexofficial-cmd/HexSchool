@@ -21,4 +21,7 @@ export {
   EmploymentType,
   StaffStatus,
   StaffDocumentType,
+  TeacherDesignation,
+  LeaveType,
+  LeaveStatus,
 } from '@prisma/client';

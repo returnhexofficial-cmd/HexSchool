@@ -7,6 +7,8 @@ import { Section } from '@prisma/client';
 import { PaginatedResult } from '../../../common/dto/paginated.dto';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
+import { SettingsService } from '../../school/services/settings.service';
+import { TeachersRepository } from '../../teacher/repositories/teachers.repository';
 import {
   CreateSectionDto,
   SectionListQueryDto,
@@ -37,6 +39,8 @@ export class SectionsService {
     private readonly sessions: AcademicSessionsRepository,
     private readonly shifts: ShiftsRepository,
     private readonly groups: GroupsRepository,
+    private readonly teachers: TeachersRepository,
+    private readonly settings: SettingsService,
     private readonly auditContext: AuditContextService,
   ) {}
 
@@ -56,6 +60,13 @@ export class SectionsService {
     await this.sessions.findByIdOrFail(dto.sessionId, schoolId);
     if (dto.shiftId) await this.shifts.findByIdOrFail(dto.shiftId, schoolId);
     await this.assertGroupApplies(dto.groupId, klass.numericLevel, schoolId);
+    if (dto.classTeacherId) {
+      await this.assertClassTeacherAllowed(
+        dto.classTeacherId,
+        dto.sessionId,
+        schoolId,
+      );
+    }
 
     const duplicate = await this.sections.findByIdentity({
       schoolId,
@@ -101,6 +112,14 @@ export class SectionsService {
       klass.numericLevel,
       schoolId,
     );
+    if (dto.classTeacherId && dto.classTeacherId !== existing.classTeacherId) {
+      await this.assertClassTeacherAllowed(
+        dto.classTeacherId,
+        existing.sessionId,
+        schoolId,
+        id,
+      );
+    }
 
     const name = dto.name ?? existing.name;
     const duplicate = await this.sections.findByIdentity({
@@ -123,6 +142,9 @@ export class SectionsService {
       ...(dto.groupId !== undefined ? { groupId: dto.groupId } : {}),
       ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
       ...(dto.roomNo !== undefined ? { roomNo: dto.roomNo } : {}),
+      ...(dto.classTeacherId !== undefined
+        ? { classTeacherId: dto.classTeacherId }
+        : {}),
       updatedBy: actor.sub,
     });
     this.auditContext.set({
@@ -162,6 +184,36 @@ export class SectionsService {
     }
   }
 
+  /** Class-teacher cap (M08 §6): at most N sections per teacher per
+   *  session (setting `academic.max_class_teacher_sections`, default 1). */
+  private async assertClassTeacherAllowed(
+    teacherId: string,
+    sessionId: string,
+    schoolId: string,
+    excludeSectionId?: string,
+  ): Promise<void> {
+    const teacher = await this.teachers.findByIdOrFail(teacherId, schoolId);
+    if (teacher.status !== 'ACTIVE') {
+      throw new BadRequestException(
+        `Teacher is ${teacher.status} — only ACTIVE teachers can be class teachers`,
+      );
+    }
+    const max = await this.settings.getValue<number>(
+      schoolId,
+      'academic.max_class_teacher_sections',
+    );
+    const held = await this.teachers.countClassTeacherSections(
+      teacherId,
+      sessionId,
+      excludeSectionId,
+    );
+    if (held >= max) {
+      throw new ConflictException(
+        `This teacher is already class teacher of ${held} section(s) — the limit is ${max} per session`,
+      );
+    }
+  }
+
   private snapshot(section: Section) {
     return {
       name: section.name,
@@ -169,6 +221,7 @@ export class SectionsService {
       groupId: section.groupId,
       capacity: section.capacity,
       roomNo: section.roomNo,
+      classTeacherId: section.classTeacherId,
     };
   }
 }

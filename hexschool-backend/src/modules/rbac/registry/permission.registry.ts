@@ -105,7 +105,30 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['user.password.reset', "Reset a user's password (temp password issued)"],
   ]),
 
-  // Modules 08+ append their codes here (teacher.*, student.*, …).
+  // ── Module 08: Teacher Management ───────────────────────────────────
+  ...define('teachers', [
+    [
+      'teacher.view',
+      'View teachers, qualifications, assignments, leaves, evaluations',
+    ],
+    ['teacher.create', 'Register teachers (creates their user account)'],
+    ['teacher.update', 'Edit teacher profiles, contacts, and photos'],
+    ['teacher.delete', 'Delete teacher records'],
+    ['teacher.status', 'Change teacher employment status (with reason)'],
+    ['teacher.qualification.manage', 'Add/edit/delete qualifications'],
+    ['teacher.document.manage', 'Upload/delete teacher documents'],
+    ['teacher.subject.assign', "Change a teacher's subject expertise set"],
+    ['teacher.assign', 'Assign teachers to section subjects (+ transfers)'],
+    [
+      'teacher.assign.override',
+      'Assign a subject outside the teacher’s expertise set',
+    ],
+    ['teacher.leave.manage', 'Record/edit/delete leave requests'],
+    ['teacher.leave.approve', 'Approve or reject leave requests'],
+    ['teacher.evaluation.manage', 'Create/edit/delete evaluations'],
+  ]),
+
+  // Modules 09+ append their codes here (student.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

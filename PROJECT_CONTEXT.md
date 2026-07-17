@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT.md — SMIS Living Project Memory
 
 > Updated whenever a module changes the architecture or introduces reusable patterns.
-> **Last updated:** 2026-07-17 (Module 07 complete — staff & user administration live; shared gap-free SequenceService)
+> **Last updated:** 2026-07-17 (Module 08 complete — teachers, expertise/assignments, interim leaves; class-teacher FK live; timetable-hook DI slot for M13)
 
 ---
 
@@ -56,6 +56,8 @@
 | `NotificationService.send()` | ALL SMS/email/in-app — no direct gateway calls anywhere | M17 |
 | `SequenceService` (exported by `SequenceModule`) | gap-free document numbers: per-(school, prefix) counters in `document_sequences`, claimed by an atomic row-locking upsert INSIDE the caller's transaction (rollback returns the number); token-pattern renderer `{SCHOOL_CODE} {YYYY} {YY} {MM} {SEQ<n>}`. Employee IDs (M07) use setting `general.employee_id_pattern` + counter `staff:{YY}`; student UIDs/applications/invoices/vouchers (M09/10/16/20) reuse it | M07 |
 | `CalendarService.isHoliday(schoolId, date, appliesTo?)` (exported by `AcademicModule`) | weekly off-days (M04 setting `general.weekly_holidays`) + holiday ranges → `{holiday, reason, title}`; consumed by Attendance (M12) / Payroll (M21) | M05 |
+| `TIMETABLE_CONFLICT_CHECKER` (DI token, TeacherModule) | assignment-time conflict hook — bound to a no-op until M13 provides the real checker (swap the provider, keep the token) | M08 |
+| `teacher.leave.approved` event (`TEACHER_EVENTS.LEAVE_APPROVED`) | M12 attendance subscribes to mark Leave days | M08 |
 | `SessionsService` (exported by `AcademicModule`) | current-session resolution + session rules for session-scoped modules | M05 |
 | `parseDate` (`academic/calendar/date.util.ts`) | strict YYYY-MM-DD parsing (regex shape ≠ valid date — always parse through this) | M05 |
 | `buildIcs` (`academic/calendar/ics.util.ts`) | dependency-free RFC 5545 writer (all-day events) | M05 |
@@ -81,7 +83,7 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 ## 8. Entity Relationship Spine
 
-`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). **Live since M07:** `staff_profiles` (user_id unique FK, employee_id from SequenceService — its unique index deliberately IGNORES `deleted_at`, IDs never reused) + `staff_documents` (hard-deleted with their S3 object) + `document_sequences` (shared counters). Staff creation = one transaction (sequence + user + default role by designation + profile); RESIGNED/TERMINATED cascade deactivates the user via event listener (sessions revoked first). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). **Live since M06:** `classes`/`subjects`/`departments`/`shifts`/`groups` are session-independent masters; `sections` = class × session (identity unique incl. NULL-safe shift via COALESCE index; `class_teacher_id` FK deferred to M08); `class_subjects` defines curriculum per class × session (× optional group). Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
+`schools` ← everything. `users` ←1:1→ `staff_profiles|teachers|students|guardians` (role-specific profile tables). **Live since M07:** `staff_profiles` (user_id unique FK, employee_id from SequenceService — its unique index deliberately IGNORES `deleted_at`, IDs never reused) + `staff_documents` (hard-deleted with their S3 object) + `document_sequences` (shared counters). Staff creation = one transaction (sequence + user + default role by designation + profile); RESIGNED/TERMINATED cascade deactivates the user via event listener (sessions revoked first). **Live since M08:** `teachers` (SEPARATE table sharing the user — not a staff_profiles extension; personal columns duplicated + salary_grade/mpo_index_no/specialization; same never-reuse employee-ID rule) with `teacher_qualifications`, `teacher_subjects` (expertise), `teacher_section_subjects` (one teacher per session×section×subject slot — upsert replaces, audit keeps history), `teacher_leaves` (interim → M21), `teacher_evaluations`, `teacher_documents`; `sections.class_teacher_id` FK now real (cap per session via `academic.max_class_teacher_sections`). `students` —M:N→ `guardians`. `enrollments` = student × session × class/section (all attendance/marks/fees hang off `enrollment_id`, NOT `student_id`). **Live since M06:** `classes`/`subjects`/`departments`/`shifts`/`groups` are session-independent masters; `sections` = class × session (identity unique incl. NULL-safe shift via COALESCE index; `class_teacher_id` FK deferred to M08); `class_subjects` defines curriculum per class × session (× optional group). Exams → `exam_subjects` → `marks` → `results`. `invoices`→`payments`. Full graph grows per module; see each module §3.
 
 ## 9. Authentication Flow
 
@@ -157,6 +159,9 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 | Deleting staff soft-deletes the USER too (not just the profile) | the partial uniques on users free the email/phone for a future account; sessions revoked | M07 |
 | Credential notifications (welcome/reset) are fire-and-forget enqueues | BullMQ with Redis down buffers `await add()` forever; the admin holds the returned temp password either way — delivery must never block or fail the mutation | M07 |
 | Staff-status cascade: revoke sessions BEFORE flipping user status | status is the observable "cascade done" signal (e2e polls it); a session must never outlive an INACTIVE flip | M07 |
+| `teachers` = separate table sharing the user (NOT extending staff_profiles) | roadmap M08 §3 offered both; separate keeps teaching/non-teaching lifecycles independent (designations, MPO, expertise); M21 payroll unifies over both | M08 |
+| Assignment expertise-override is a runtime permission check in the service (not a route decorator) | same route serves both cases; only the `override:true` branch needs `teacher.assign.override` (PermissionsService lookup, Super Admin bypass) | M08 |
+| Resign guard counts CURRENT-session duties only | past sessions are history, future ones aren't scheduled yet; the transfer helper moves current-session assignments | M08 |
 
 ## 17. Assumptions
 
@@ -181,8 +186,11 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M03→04:** `PermissionsCacheService` still owns its own Redis client — fold into the generic `RedisCacheService` during a quiet module.
 - **M04:** gateway configs have no persisted `verified_at` state (test endpoints report pass/fail only); revisit with M16/M17.
 - **M04:** in-browser logo-upload click-through pending (API/resize/signed-URL layers individually verified).
-- **M06:** `sections.class_teacher_id` is a bare UUID column — M08 must add the `teachers` FK.
+- ~~**M06:** `sections.class_teacher_id` is a bare UUID column~~ — FK added in M08.
 - **M06:** "subject removal blocked once marks exist" guard slot in ClassSubjectsService awaits the M15 marks table.
 - **M06:** one e2e suite leaves an open handle at teardown (`--forceExit` in use); chase with `--detectOpenHandles`.
 - **M07:** in-browser photo/document upload click-through against MinIO pending (validation + storage layers individually verified — same status as the M04 logo).
 - **M07:** temp password is returned in the reset API response (admin handover) — revisit once M17 makes SMS delivery real (config-gate the response field).
+- **M08:** `TIMETABLE_CONFLICT_CHECKER` is a no-op — M13 MUST swap the provider; workload/schedule are assignment-count-based until then.
+- **M08:** `teacher_qualifications.document_url` reserved but unused (certificate scans go through teacher_documents).
+- **M08:** in-browser click-through pending: assignment matrix, leave inbox, teacher uploads (API layers e2e-tested).

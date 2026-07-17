@@ -43,6 +43,11 @@ export class CreateSectionDto {
   @IsString()
   @MaxLength(20)
   roomNo?: string;
+
+  /** Class teacher (M08): capped by academic.max_class_teacher_sections. */
+  @IsOptional()
+  @IsUUID()
+  classTeacherId?: string;
 }
 
 /** classId/sessionId are immutable — recreate to move a section. */
@@ -72,6 +77,11 @@ export class UpdateSectionDto {
   @IsString()
   @MaxLength(20)
   roomNo?: string;
+
+  /** Class teacher (M08): null clears; capped per teacher by setting. */
+  @IsOptional()
+  @IsUUID()
+  classTeacherId?: string | null;
 }
 
 export class SectionListQueryDto extends PaginationQueryDto {

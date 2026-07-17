@@ -57,6 +57,13 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Employee ID pattern',
       '{SCHOOL_CODE}-S-{YY}{SEQ4}',
     ],
+    // M08 — teacher variant of the same generator.
+    [
+      'general.teacher_id_pattern',
+      'string',
+      'Teacher ID pattern',
+      '{SCHOOL_CODE}-T-{YY}{SEQ4}',
+    ],
   ]),
   ...g(SettingsGroup.academic, [
     ['academic.session_start_month', 'number', 'Session start month (1–12)', 1],
@@ -65,6 +72,25 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'string',
       'Roll generation strategy',
       'admission',
+    ],
+    // M08 — class-teacher cap + evaluation form criteria.
+    [
+      'academic.max_class_teacher_sections',
+      'number',
+      'Max sections per class teacher',
+      1,
+    ],
+    [
+      'academic.teacher_evaluation_criteria',
+      'json',
+      'Teacher evaluation criteria',
+      [
+        'Subject knowledge',
+        'Class management',
+        'Punctuality',
+        'Lesson planning',
+        'Student engagement',
+      ],
     ],
   ]),
   ...g(SettingsGroup.sms, [

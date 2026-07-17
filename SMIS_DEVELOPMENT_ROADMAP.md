@@ -83,7 +83,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 05 | Academic Session & Calendar | ☑ |
 | 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☑ |
 | 07 | Staff & User Management | ☑ |
-| 08 | Teacher Management | ☐ |
+| 08 | Teacher Management | ☑ |
 | 09 | Student & Guardian Management | ☐ |
 | 10 | Admission Management | ☐ |
 | 11 | Enrollment & Promotion | ☐ |
@@ -607,10 +607,10 @@ Teacher profiles with qualifications, joining/salary-grade info, subject experti
 - Leave tables deferred to Module 21 (HR); interim `teacher_leaves` minimal: `id, teacher_id, from_date, to_date, type ENUM('CASUAL','SICK','MATERNITY','UNPAID','OTHER'), status ENUM('PENDING','APPROVED','REJECTED'), reason, approved_by` — designed to be migrated into HR leave later.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Teacher CRUD (+ user creation as Module 07 pattern), qualifications CRUD, expertise mapping.
-- [ ] Assignment service: assign teacher→section+subject; conflict check against timetable once Module 13 exists (hook interface now, no-op until then).
-- [ ] Leave request/approve endpoints + events (`leave.approved` → attendance module marks Leave).
-- [ ] Teacher workload report: periods/week per teacher (finalized after Module 13; interim = assignment counts).
+- [x] Teacher CRUD (+ user creation as Module 07 pattern incl. `teacher` system role), qualifications CRUD, expertise mapping.
+- [x] Assignment service: assign teacher→section+subject (replace semantics, expertise check + `teacher.assign.override`); conflict check hook interface (`TIMETABLE_CONFLICT_CHECKER`, no-op until M13). + bulk transfer helper, class-teacher FK/cap on sections.
+- [x] Leave request/approve endpoints + events (`teacher.leave.approved` → attendance module marks Leave).
+- [x] Teacher workload report: periods/week per teacher (finalized after Module 13; interim = assignment counts).
 ### APIs
 ```
 CRUD /api/v1/teachers
@@ -623,10 +623,10 @@ CRUD /api/v1/teachers/:id/evaluations
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Teacher list/detail (tabs: Profile, Qualifications, Assignments, Schedule, Leaves, Evaluations, Documents).
-- [ ] Assignment matrix page: pick section → grid of subjects × teacher dropdown (only expertise-matching teachers highlighted).
-- [ ] Leave approval inbox for principal/admin.
-- [ ] Evaluation form with configurable criteria (from settings JSON).
+- [x] Teacher list/detail (tabs: Profile, Qualifications, Subjects, Assignments — doubles as the interim Schedule view, Leaves, Evaluations, Documents).
+- [x] Assignment matrix page: pick section → grid of subjects × teacher dropdown (expertise-matching teachers ★-highlighted; override confirm).
+- [x] Leave approval inbox for principal/admin.
+- [x] Evaluation form with configurable criteria (from settings JSON `academic.teacher_evaluation_criteria`).
 
 ## 6. Business Rules
 - One teacher per (session, section, subject) — reassignment replaces, keeping history via audit log.
@@ -642,15 +642,15 @@ CRUD /api/v1/teachers/:id/evaluations
 - Part-time teacher across shifts → allowed; timetable module handles time conflicts.
 
 ## 9. Testing Checklist
-- [ ] Unit: assignment uniqueness, leave overlap.
-- [ ] e2e: teacher lifecycle, resign-with-assignments blocked.
-- [ ] Frontend: assignment matrix save; leave approve flow.
+- [x] Unit: assignment uniqueness, leave overlap.
+- [x] e2e: teacher lifecycle, resign-with-assignments blocked (+ transfer → resign → cascade).
+- [x] Frontend: assignment matrix save; leave approve flow (schema-tested; in-browser click-through pending — see completion doc TODOs).
 
 ## 10. Completion Checklist
-- [ ] Entities + APIs + UI
-- [ ] Assignment history auditable
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/08-teachers.md`
+- [x] Entities + APIs + UI
+- [x] Assignment history auditable
+- [x] Tests passing
+- [x] Docs: `docs/modules/08-teachers.md`
 
 ---
 

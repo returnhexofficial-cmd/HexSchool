@@ -13,6 +13,14 @@ export type SectionWithRelations = Prisma.SectionGetPayload<{
     class: { select: { id: true; name: true; numericLevel: true } };
     shift: { select: { id: true; name: true } };
     group: { select: { id: true; name: true } };
+    classTeacher: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        employeeId: true;
+      };
+    };
   };
 }>;
 
@@ -20,6 +28,10 @@ const RELATIONS = {
   class: { select: { id: true, name: true, numericLevel: true } },
   shift: { select: { id: true, name: true } },
   group: { select: { id: true, name: true } },
+  // M08: the deferred class-teacher FK is live — expose the name.
+  classTeacher: {
+    select: { id: true, firstName: true, lastName: true, employeeId: true },
+  },
 } as const;
 
 @Injectable()

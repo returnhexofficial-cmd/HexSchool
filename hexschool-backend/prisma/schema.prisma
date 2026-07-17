@@ -158,6 +158,36 @@ enum StaffDocumentType {
   @@map("staff_document_type_enum")
 }
 
+enum TeacherDesignation {
+  HEAD_TEACHER
+  ASSISTANT_HEAD
+  SENIOR_TEACHER
+  ASSISTANT_TEACHER
+  SUBJECT_TEACHER
+  PART_TIME
+
+  @@map("teacher_designation_enum")
+}
+
+/// Interim leave taxonomy (M08); migrates into the HR leave system (M21).
+enum LeaveType {
+  CASUAL
+  SICK
+  MATERNITY
+  UNPAID
+  OTHER
+
+  @@map("leave_type_enum")
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("leave_status_enum")
+}
+
 enum SessionStatus {
   UPCOMING
   ACTIVE
@@ -228,6 +258,7 @@ model User {
   loginActivities LoginActivity[]
   userRoles       UserRole[]
   staffProfile    StaffProfile?
+  teacher         Teacher?
 
   @@map("users")
 }
@@ -317,6 +348,11 @@ model School {
   classSubjects    ClassSubject[]
   staffProfiles    StaffProfile[]
   staffDocuments   StaffDocument[]
+  teachers               Teacher[]
+  teacherSectionSubjects TeacherSectionSubject[]
+  teacherLeaves          TeacherLeave[]
+  teacherEvaluations     TeacherEvaluation[]
+  teacherDocuments       TeacherDocument[]
 
   @@map("schools")
 }
@@ -404,10 +440,12 @@ model AcademicSession {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  holidays       Holiday[]
-  calendarEvents CalendarEvent[]
-  sections       Section[]
-  classSubjects  ClassSubject[]
+  holidays               Holiday[]
+  calendarEvents         CalendarEvent[]
+  sections               Section[]
+  classSubjects          ClassSubject[]
+  teacherSectionSubjects TeacherSectionSubject[]
+  teacherEvaluations     TeacherEvaluation[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -481,6 +519,7 @@ model Department {
 
   subjects      Subject[]
   staffProfiles StaffProfile[]
+  teachers      Teacher[]
 
   @@index([schoolId], map: "idx_departments_school")
   @@map("departments")
@@ -578,7 +617,9 @@ model Section {
   group          Group?          @relation(fields: [groupId], references: [id], map: "fk_sections_group")
   /// Advisory at creation; enforced at enrollment (M11) with override.
   capacity       Int?
+  /// FK added in M08 (deferred from M06 — teachers didn't exist yet).
   classTeacherId String?         @map("class_teacher_id") @db.Uuid
+  classTeacher   Teacher?        @relation(fields: [classTeacherId], references: [id], map: "fk_sections_class_teacher")
   roomNo         String?         @map("room_no") @db.VarChar(20)
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -586,6 +627,8 @@ model Section {
   createdBy String?   @map("created_by") @db.Uuid
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  teacherSectionSubjects TeacherSectionSubject[]
 
   @@index([schoolId, sessionId], map: "idx_sections_school_session")
   @@index([classId], map: "idx_sections_class")
@@ -611,7 +654,9 @@ model Subject {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  classSubjects ClassSubject[]
+  classSubjects          ClassSubject[]
+  teacherSubjects        TeacherSubject[]
+  teacherSectionSubjects TeacherSectionSubject[]
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -687,6 +732,10 @@ model StaffProfile {
 
   documents StaffDocument[]
 
+  // Deliberately NOT deleted_at-scoped: employee IDs are never reused
+  // (hand-written in the M07 migration; declared here so drift detection
+  // leaves it alone — it's a plain unique, which Prisma CAN express).
+  @@unique([schoolId, employeeId], map: "uq_staff_profiles_employee_id")
   @@index([schoolId, status], map: "idx_staff_profiles_school_status")
   @@index([departmentId], map: "idx_staff_profiles_department")
   @@map("staff_profiles")
@@ -714,6 +763,198 @@ model StaffDocument {
 
   @@index([staffId], map: "idx_staff_documents_staff")
   @@map("staff_documents")
+}
+
+// ── Module 08: Teacher Management ─────────────────────────────────────
+
+/// Teaching staff, 1:1 with a User (same transactional-creation pattern
+/// as staff_profiles). DECISION (roadmap M08 §3): a SEPARATE table
+/// sharing the user — not an extension of staff_profiles — duplicating
+/// the personal columns; teacher-specific fields (salary grade, MPO
+/// index, specialization) live here. Employee IDs come from the shared
+/// SequenceService; like staff, the unique index ignores deleted_at.
+model Teacher {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String             @map("school_id") @db.Uuid
+  school         School             @relation(fields: [schoolId], references: [id], map: "fk_teachers_school")
+  userId         String             @unique(map: "uq_teachers_user") @map("user_id") @db.Uuid
+  user           User               @relation(fields: [userId], references: [id], map: "fk_teachers_user")
+  employeeId     String             @map("employee_id") @db.VarChar(30)
+  firstName      String             @map("first_name") @db.VarChar(100)
+  lastName       String             @map("last_name") @db.VarChar(100)
+  nameBn         String?            @map("name_bn") @db.VarChar(200)
+  designation    TeacherDesignation
+  departmentId   String?            @map("department_id") @db.Uuid
+  department     Department?        @relation(fields: [departmentId], references: [id], map: "fk_teachers_department")
+  gender         Gender
+  dob            DateTime           @db.Date
+  bloodGroup     String?            @map("blood_group") @db.VarChar(5)
+  nidNumber      String?            @map("nid_number") @db.VarChar(17)
+  photoUrl       String?            @map("photo_url") @db.VarChar(500)
+  address        Json               @default("{}")
+  joiningDate    DateTime           @map("joining_date") @db.Date
+  salaryGrade    String?            @map("salary_grade") @db.VarChar(30)
+  /// BD Monthly Pay Order index (government-subsidized schools).
+  mpoIndexNo     String?            @map("mpo_index_no") @db.VarChar(30)
+  specialization String?            @db.VarChar(200)
+  status         StaffStatus        @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  qualifications  TeacherQualification[]
+  subjects        TeacherSubject[]
+  assignments     TeacherSectionSubject[]
+  leaves          TeacherLeave[]
+  evaluations     TeacherEvaluation[]
+  documents       TeacherDocument[]
+  classTeacherOf  Section[]
+
+  // Same rule as staff: NOT deleted_at-scoped — teacher IDs never reused.
+  @@unique([schoolId, employeeId], map: "uq_teachers_employee_id")
+  @@index([schoolId, status], map: "idx_teachers_school_status")
+  @@index([departmentId], map: "idx_teachers_department")
+  @@map("teachers")
+}
+
+/// Academic degrees (SSC → PhD). document_url reserved for a scanned
+/// certificate key; uploads go through teacher_documents for now.
+model TeacherQualification {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teacherId   String  @map("teacher_id") @db.Uuid
+  teacher     Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_qualifications_teacher")
+  degree      String  @db.VarChar(100)
+  institution String  @db.VarChar(200)
+  passingYear Int     @map("passing_year")
+  result      String? @db.VarChar(50)
+  documentUrl String? @map("document_url") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([teacherId], map: "idx_teacher_qualifications_teacher")
+  @@map("teacher_qualifications")
+}
+
+/// Subject expertise (join table — what a teacher CAN teach; the
+/// assignment table below is what they DO teach where).
+model TeacherSubject {
+  teacherId String  @map("teacher_id") @db.Uuid
+  teacher   Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_subjects_teacher")
+  subjectId String  @map("subject_id") @db.Uuid
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade, map: "fk_teacher_subjects_subject")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([teacherId, subjectId], map: "pk_teacher_subjects")
+  @@index([subjectId], map: "idx_teacher_subjects_subject")
+  @@map("teacher_subjects")
+}
+
+/// Who teaches what where: one teacher per (session, section, subject) —
+/// reassignment REPLACES the row (history lives in audit_logs). The
+/// timetable conflict check hooks in with M13.
+model TeacherSectionSubject {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String          @map("school_id") @db.Uuid
+  school    School          @relation(fields: [schoolId], references: [id], map: "fk_teacher_section_subjects_school")
+  sessionId String          @map("session_id") @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_teacher_section_subjects_session")
+  teacherId String          @map("teacher_id") @db.Uuid
+  teacher   Teacher         @relation(fields: [teacherId], references: [id], map: "fk_teacher_section_subjects_teacher")
+  sectionId String          @map("section_id") @db.Uuid
+  section   Section         @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "fk_teacher_section_subjects_section")
+  subjectId String          @map("subject_id") @db.Uuid
+  subject   Subject         @relation(fields: [subjectId], references: [id], map: "fk_teacher_section_subjects_subject")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([sessionId, sectionId, subjectId], map: "uq_teacher_assignments_slot")
+  @@index([teacherId, sessionId], map: "idx_teacher_assignments_teacher")
+  @@index([sectionId], map: "idx_teacher_assignments_section")
+  @@map("teacher_section_subjects")
+}
+
+/// Minimal leave records (roadmap M08 §3) — PENDING rows may be hard-
+/// deleted; APPROVED/REJECTED are kept. Designed to migrate into the HR
+/// leave system (M21). Overlap of APPROVED ranges is service-enforced.
+model TeacherLeave {
+  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String      @map("school_id") @db.Uuid
+  school     School      @relation(fields: [schoolId], references: [id], map: "fk_teacher_leaves_school")
+  teacherId  String      @map("teacher_id") @db.Uuid
+  teacher    Teacher     @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_leaves_teacher")
+  fromDate   DateTime    @map("from_date") @db.Date
+  toDate     DateTime    @map("to_date") @db.Date
+  type       LeaveType   @default(CASUAL)
+  status     LeaveStatus @default(PENDING)
+  reason     String?
+  approvedBy String?     @map("approved_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([teacherId, status], map: "idx_teacher_leaves_teacher_status")
+  @@index([schoolId, fromDate, toDate], map: "idx_teacher_leaves_range")
+  @@map("teacher_leaves")
+}
+
+/// Periodic evaluation: per-criterion scores in `criteria` (criterion →
+/// 0–100), overall `score` 0–100. Criteria names come from the
+/// `academic.teacher_evaluation_criteria` setting.
+model TeacherEvaluation {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String          @map("school_id") @db.Uuid
+  school      School          @relation(fields: [schoolId], references: [id], map: "fk_teacher_evaluations_school")
+  teacherId   String          @map("teacher_id") @db.Uuid
+  teacher     Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_evaluations_teacher")
+  sessionId   String          @map("session_id") @db.Uuid
+  session     AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_teacher_evaluations_session")
+  evaluatorId String          @map("evaluator_id") @db.Uuid
+  criteria    Json            @default("{}")
+  score       Decimal         @db.Decimal(5, 2)
+  remarks     String?
+  evaluatedAt DateTime        @map("evaluated_at") @db.Date
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([teacherId, sessionId], map: "idx_teacher_evaluations_teacher")
+  @@map("teacher_evaluations")
+}
+
+/// Teacher paperwork — mirrors staff_documents (hard-deleted with the
+/// S3 object; audit keeps history). Shares staff_document_type_enum.
+model TeacherDocument {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String            @map("school_id") @db.Uuid
+  school     School            @relation(fields: [schoolId], references: [id], map: "fk_teacher_documents_school")
+  teacherId  String            @map("teacher_id") @db.Uuid
+  teacher    Teacher           @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_documents_teacher")
+  title      String            @db.VarChar(200)
+  type       StaffDocumentType @default(OTHER)
+  fileUrl    String            @map("file_url") @db.VarChar(500)
+  mimeType   String            @map("mime_type") @db.VarChar(100)
+  sizeBytes  Int               @map("size_bytes")
+  uploadedBy String?           @map("uploaded_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([teacherId], map: "idx_teacher_documents_teacher")
+  @@map("teacher_documents")
 }
 
 /// Gap-free per-school document-number sequences (PROJECT_CONTEXT §3):

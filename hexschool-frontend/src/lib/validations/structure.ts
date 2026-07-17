@@ -70,6 +70,8 @@ export const sectionSchema = z.object({
     .regex(/^[A-Za-z0-9-]+$/, "Letters/digits/hyphen only"),
   shiftId: z.string().optional().or(z.literal("")),
   groupId: z.string().optional().or(z.literal("")),
+  /** M08: class teacher (capped per teacher by setting). */
+  classTeacherId: z.string().optional().or(z.literal("")),
   capacity: z
     .string()
     .trim()

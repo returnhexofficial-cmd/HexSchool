@@ -81,7 +81,7 @@ graph TD
 | 05 Academic Session | 04 | — |
 | 06 Academic Structure | 05 | — |
 | 07 Staff & Users | 03, 04, 06 | Provides shared SequenceService consumed by 09/10/16/20 |
-| 08 Teachers | 06, 07 | Timetable conflict hook (13); leave migrates to HR (21) |
+| 08 Teachers | 06, 07 | Timetable conflict hook (13 — swap the `TIMETABLE_CONFLICT_CHECKER` provider); `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
 | 09 Students & Guardians | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land |
 | 10 Admission | 09, 11 | Online gateway wiring (16); publish merit to website (19) |
 | 11 Enrollment & Promotion | 06, 09 | Promotion auto-decisions from results (15) |

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { structureApi, timeOf, type Section } from "@/lib/api/structure";
+import { teachersApi } from "@/lib/api/teachers";
 import { sectionSchema, type SectionValues } from "@/lib/validations/structure";
 import { FieldError } from "../../master-crud";
 
@@ -57,6 +58,11 @@ export function SectionsTab({
     queryFn: () => structureApi.groups.list({ limit: 100 }),
     staleTime: 60_000,
   });
+  const teachers = useQuery({
+    queryKey: ["teachers", "active-all"],
+    queryFn: () => teachersApi.list({ status: "ACTIVE", limit: 100 }),
+    staleTime: 60_000,
+  });
   const applicableGroups = (groups.data?.data ?? []).filter(
     (g) => g.applicableFromLevel <= classLevel,
   );
@@ -64,14 +70,22 @@ export function SectionsTab({
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: ["sections"] });
 
+  const emptyValues: SectionValues = {
+    name: "",
+    shiftId: "",
+    groupId: "",
+    classTeacherId: "",
+    capacity: "",
+    roomNo: "",
+  };
   const form = useForm<SectionValues>({
     resolver: zodResolver(sectionSchema),
-    defaultValues: { name: "", shiftId: "", groupId: "", capacity: "", roomNo: "" },
+    defaultValues: emptyValues,
   });
 
   const openCreate = () => {
     setEditing(null);
-    form.reset({ name: "", shiftId: "", groupId: "", capacity: "", roomNo: "" });
+    form.reset(emptyValues);
     setDialogOpen(true);
   };
   const openEdit = (section: Section) => {
@@ -80,6 +94,7 @@ export function SectionsTab({
       name: section.name,
       shiftId: section.shiftId ?? "",
       groupId: section.groupId ?? "",
+      classTeacherId: section.classTeacherId ?? "",
       capacity: section.capacity ? String(section.capacity) : "",
       roomNo: section.roomNo ?? "",
     });
@@ -98,6 +113,7 @@ export function SectionsTab({
             ...payload,
             shiftId: values.shiftId || null,
             groupId: values.groupId || null,
+            classTeacherId: values.classTeacherId || null,
           })
         : structureApi.sections.create({
             classId,
@@ -105,6 +121,7 @@ export function SectionsTab({
             ...payload,
             shiftId: values.shiftId || undefined,
             groupId: values.groupId || undefined,
+            classTeacherId: values.classTeacherId || undefined,
           });
     },
     onSuccess: () => {
@@ -160,6 +177,7 @@ export function SectionsTab({
                 <th className="px-3 py-2 font-medium">Section</th>
                 <th className="px-3 py-2 font-medium">Shift</th>
                 <th className="px-3 py-2 font-medium">Group</th>
+                <th className="px-3 py-2 font-medium">Class teacher</th>
                 <th className="px-3 py-2 font-medium">Capacity</th>
                 <th className="px-3 py-2 font-medium">Room</th>
                 <th className="px-3 py-2" />
@@ -171,6 +189,11 @@ export function SectionsTab({
                   <td className="px-3 py-2 font-medium">{s.name}</td>
                   <td className="px-3 py-2">{s.shift?.name ?? "—"}</td>
                   <td className="px-3 py-2">{s.group?.name ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    {s.classTeacher
+                      ? `${s.classTeacher.firstName} ${s.classTeacher.lastName}`
+                      : "—"}
+                  </td>
                   <td className="px-3 py-2">{s.capacity ?? "—"}</td>
                   <td className="px-3 py-2">{s.roomNo ?? "—"}</td>
                   <td className="px-3 py-2">
@@ -261,9 +284,35 @@ export function SectionsTab({
             </p>
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="section-room">Room (optional)</Label>
-          <Input id="section-room" placeholder="204" {...form.register("roomNo")} />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Class teacher (M08)</Label>
+            <Select
+              value={form.watch("classTeacherId") || NONE}
+              onValueChange={(v) =>
+                form.setValue("classTeacherId", v === NONE ? "" : v)
+              }
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>None</SelectItem>
+                {(teachers.data?.data ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.firstName} {t.lastName} ({t.employeeId})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Capped per teacher per session (default 1).
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="section-room">Room (optional)</Label>
+            <Input id="section-room" placeholder="204" {...form.register("roomNo")} />
+          </div>
         </div>
       </FormDialog>
 

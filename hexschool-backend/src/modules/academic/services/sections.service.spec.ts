@@ -18,6 +18,8 @@ describe('SectionsService', () => {
   let sessions: Record<string, jest.Mock>;
   let shifts: Record<string, jest.Mock>;
   let groups: Record<string, jest.Mock>;
+  let teachers: Record<string, jest.Mock>;
+  let settings: Record<string, jest.Mock>;
   let service: SectionsService;
 
   beforeEach(() => {
@@ -41,12 +43,21 @@ describe('SectionsService', () => {
     sessions = { findByIdOrFail: jest.fn().mockResolvedValue({ id: 'sess' }) };
     shifts = { findByIdOrFail: jest.fn() };
     groups = { findByIdOrFail: jest.fn().mockResolvedValue(science) };
+    teachers = {
+      findByIdOrFail: jest
+        .fn()
+        .mockResolvedValue({ id: 'teacher-1', status: 'ACTIVE' }),
+      countClassTeacherSections: jest.fn().mockResolvedValue(0),
+    };
+    settings = { getValue: jest.fn().mockResolvedValue(1) };
     service = new SectionsService(
       sections as never,
       classes as never,
       sessions as never,
       shifts as never,
       groups as never,
+      teachers as never,
+      settings as never,
       { set: jest.fn() } as never,
     );
   });
@@ -135,5 +146,48 @@ describe('SectionsService', () => {
     await expect(
       service.update('sec-1', { groupId: science.id }, actor),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  describe('class teacher (M08)', () => {
+    const base = {
+      id: 'sec-1',
+      classId: classNine.id,
+      sessionId: 'sess',
+      name: 'A',
+      shiftId: null,
+      groupId: null,
+      classTeacherId: null,
+    };
+
+    it('cap: a teacher already at the limit is rejected → 409', async () => {
+      sections.findByIdOrFail.mockResolvedValue(base);
+      sections.findByIdentity.mockResolvedValue(null);
+      teachers.countClassTeacherSections.mockResolvedValue(1); // limit is 1
+      await expect(
+        service.update('sec-1', { classTeacherId: 'teacher-1' }, actor),
+      ).rejects.toThrow('already class teacher');
+    });
+
+    it('inactive teachers cannot be class teachers → 400', async () => {
+      sections.findByIdOrFail.mockResolvedValue(base);
+      sections.findByIdentity.mockResolvedValue(null);
+      teachers.findByIdOrFail.mockResolvedValue({
+        id: 'teacher-1',
+        status: 'RESIGNED',
+      });
+      await expect(
+        service.update('sec-1', { classTeacherId: 'teacher-1' }, actor),
+      ).rejects.toThrow('only ACTIVE teachers');
+    });
+
+    it('under the cap the assignment persists', async () => {
+      sections.findByIdOrFail.mockResolvedValue(base);
+      sections.findByIdentity.mockResolvedValue(null);
+      await service.update('sec-1', { classTeacherId: 'teacher-1' }, actor);
+      expect(sections.update).toHaveBeenCalledWith(
+        'sec-1',
+        expect.objectContaining({ classTeacherId: 'teacher-1' }),
+      );
+    });
   });
 });

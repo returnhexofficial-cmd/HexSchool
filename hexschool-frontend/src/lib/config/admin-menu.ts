@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CalendarRange,
+  GraduationCap,
   LayoutDashboard,
   Network,
   ScrollText,
@@ -45,6 +46,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/structure",
     icon: Network,
     permission: "structure.view",
+  },
+  {
+    label: "Teachers",
+    href: "/admin/teachers",
+    icon: GraduationCap,
+    permission: "teacher.view",
   },
   {
     label: "Staff",

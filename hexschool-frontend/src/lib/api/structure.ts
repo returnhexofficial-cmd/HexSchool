@@ -50,9 +50,17 @@ export interface Section {
   groupId: string | null;
   capacity: number | null;
   roomNo: string | null;
+  /** M08: the deferred class-teacher FK is live. */
+  classTeacherId: string | null;
   class?: { id: string; name: string; numericLevel: number };
   shift?: { id: string; name: string } | null;
   group?: { id: string; name: string } | null;
+  classTeacher?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    employeeId: string;
+  } | null;
 }
 
 export interface ClassSubjectRow {
@@ -153,6 +161,7 @@ export const structureApi = {
       groupId?: string;
       capacity?: number;
       roomNo?: string;
+      classTeacherId?: string;
     },
     {
       name?: string;
@@ -160,6 +169,7 @@ export const structureApi = {
       groupId?: string | null;
       capacity?: number;
       roomNo?: string;
+      classTeacherId?: string | null;
     }
   >("/sections"),
 

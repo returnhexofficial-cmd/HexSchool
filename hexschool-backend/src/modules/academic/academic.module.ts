@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { SchoolModule } from '../school/school.module';
+import { TeachersRepository } from '../teacher/repositories/teachers.repository';
 import { CalendarController } from './controllers/calendar.controller';
 import { CalendarEventsController } from './controllers/calendar-events.controller';
 import { ClassesController } from './controllers/classes.controller';
@@ -74,6 +75,10 @@ import { StructureCloneService } from './services/structure-clone.service';
     SectionsRepository,
     SubjectsRepository,
     ClassSubjectsRepository,
+    // Stateless re-provision (M07 convention): SectionsService validates
+    // class teachers (M08) without importing TeacherModule — that module
+    // imports THIS one for SessionsService, so the graph stays acyclic.
+    TeachersRepository,
   ],
   exports: [SessionsService, CalendarService, SectionsRepository],
 })

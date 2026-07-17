@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  BookUser,
   BriefcaseBusiness,
   CalendarDays,
   CalendarRange,
@@ -10,6 +11,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  UsersRound,
 } from "lucide-react";
 
 /**
@@ -46,6 +48,18 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/structure",
     icon: Network,
     permission: "structure.view",
+  },
+  {
+    label: "Students",
+    href: "/admin/students",
+    icon: BookUser,
+    permission: "student.view",
+  },
+  {
+    label: "Guardians",
+    href: "/admin/guardians",
+    icon: UsersRound,
+    permission: "guardian.view",
   },
   {
     label: "Teachers",

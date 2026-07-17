@@ -1,25 +1,27 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-17 · **Overall completion: 25 % (8 / 32 modules)**
+> **Last updated:** 2026-07-18 · **Overall completion: 28 % (9 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08 |
-| **Current module** | **09 — Student & Guardian Management** |
-| Remaining | 24 |
+| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
+| **Current module** | **10 — Admission Management** |
+| Remaining | 23 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 09: `students` (permanent `student_uid` via SequenceService `{SCHOOL_CODE}-{YEAR}{SEQ5}`, lazy portal account, `qr_token`), `guardians` (+ lazy accounts), `student_guardians` (one primary per student — partial unique), `student_medical_info` (permission-gated `student.medical.view`), `student_documents`, `student_status_history`; note the M02-constraint adjustment from roadmap M09 §8 (user uniqueness at `(school_id, user_type, phone)` — guardians can be staff).
-2. Module 09: guardian dedup by phone (siblings share guardians), duplicate-student detector (name+dob+guardian phone — warn only), ID-card PDFs (single + batch per section, QR from `qr_token`, rotate endpoint), XLSX bulk import with row-level error report + template download.
-3. Module 09: frontend registration wizard (Personal→Guardians search-or-create→Address→Medical→Documents→Review), student list/detail tabs, guardian pages, import wizard, ID-card preview/batch dialog.
-4. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox).
+1. Module 10: `admission_cycles` (+ per-class seats/fee child table), `admission_applications` (public online application with `application_no ADM-{YY}-{SEQ6}`, OTP-verified phone, applicant/guardian snapshots), status/payment lifecycle, admission test + merit/waiting lists.
+2. Module 10: **approval → student conversion** (reuse `StudentsService.create`; the M09 dedup + UID path already supports it), offline payment recording now / gateway wiring stubbed until M16, admission reporting. `RECAPTCHA_*` env arrives here.
+3. Module 10: public application portal `(public)` + admin admission desk (cycles, applications board, test marks entry, merit publish).
+4. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card).
 
 ## Recently Completed
+
+- **Module 09 — Student & Guardian Management** (2026-07-18): student master record with permanent `student_uid` (SequenceService `{SCHOOL_CODE}-{YYYY}{SEQ5}`, never reused), one-call registration (inline/existing guardians deduped by phone + warn-only duplicate report, single transaction), **shared guardians** (phone dedup, one primary per student via partial unique + transactional promote/demote), status lifecycle with append-only `student_status_history` + portal-deactivation cascade (dues check soft until M16), permission-gated `student_medical_info`, documents, **lazy portal accounts** for students & guardians, **CR80 ID-card PDFs** (pdfkit+qrcode, single/batch, rotatable QR, incomplete-photo flag), **XLSX bulk import** (template + dry-run/commit row-level report, UTF-8 Bangla). **M02 constraint adjusted**: user contact uniqueness moved to `(school_id, user_type, contact)` so a guardian can also be staff — login now verifies against every candidate account. 14 permission codes. Frontend: `/admin/students` (list + page-batch ID cards), 6-step registration wizard, 7-tab detail, `/admin/students/import`, `/admin/guardians` (list + detail). New shared UI: `checkbox`, `textarea`. 230 backend unit + e2e all suites / 88 frontend tests green. See `docs/modules/09-students-guardians.md`.
 
 - **Module 08 — Teacher Management** (2026-07-17): `teachers` live as a **separate table sharing the user** (decision recorded; M07 transactional-creation pattern with `general.teacher_id_pattern` IDs + auto `teacher` role), qualifications (year 1950–current), **subject expertise** (`teacher_subjects`) and **assignments** (`teacher_section_subjects`, one teacher per session×section×subject — upsert replaces with audit history; expertise mismatch → 409 unless `override` + `teacher.assign.override`; `TIMETABLE_CONFLICT_CHECKER` DI hook no-op until M13), **bulk transfer** + resign guard (RESIGNED/TERMINATED/delete blocked while current-session duties exist), **class-teacher FK on sections** (M06 debt closed; cap via `academic.max_class_teacher_sections`), interim **leaves** (within current session, approved-overlap blocked, PENDING-only edits, `teacher.leave.approved` event for M12), **evaluations** (criteria from `academic.teacher_evaluation_criteria`), documents, interim workload/schedule endpoints. 13 permission codes. Frontend: `/admin/teachers` (list/new/7-tab detail), **assignment matrix** (★ expertise, override confirm, workload table), **leave inbox**, class-teacher picker in the M06 section dialog. 193 backend unit + 96 e2e / 73 frontend tests green. See `docs/modules/08-teachers.md`.
 
@@ -64,7 +66,7 @@
 | ~~06 Structure~~ ✅ | 3 → **1** | 17 Communication | 5 | 28 Cmp/Vis/Alumni | 4 |
 | ~~07 Staff/Users~~ ✅ | 4 → **1** | 18 Portals | 6 | 29 Reports v2 | 5 |
 | ~~08 Teachers~~ ✅ | 4 → **1** | 19 Website CMS | 7 | 30 SysAdmin | 6 |
-| 09 Students | 6 | 20 Accounting | 6 | 31 Multi-School | 8 |
+| ~~09 Students~~ ✅ | 6 → **1** | 20 Accounting | 6 | 31 Multi-School | 8 |
 | 10 Admission | 6 | 21 HR/Payroll | 7 | 32 Future track | per sub-project |
 | 11 Enrollment | 4 | 22 Assignments | 3 | | |
 
@@ -83,3 +85,4 @@
 | 06 | Academic Structure | 2026-07-16 | 2026-07-17 | 1 dev-day (est. 3) | `docs/modules/06-academic-structure.md` |
 | 07 | Staff & User Management (+ shared SequenceService) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/07-staff-users.md` |
 | 08 | Teacher Management (+ class-teacher FK, M13 conflict-hook slot) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/08-teachers.md` |
+| 09 | Student & Guardian Management (+ M02 per-type contact uniqueness) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/09-students-guardians.md` |

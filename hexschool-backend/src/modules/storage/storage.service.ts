@@ -93,4 +93,14 @@ export class StorageService {
       new DeleteObjectCommand({ Bucket: this.bucketFor(purpose), Key: key }),
     );
   }
+
+  /** Fetches an object's bytes (M09: embedding photos into ID-card PDFs). */
+  async download(key: string, purpose?: string): Promise<Buffer> {
+    const result = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucketFor(purpose), Key: key }),
+    );
+    const bytes = await result.Body?.transformToByteArray();
+    if (!bytes) throw new Error(`Object ${key} has no body`);
+    return Buffer.from(bytes);
+  }
 }

@@ -82,7 +82,7 @@ graph TD
 | 06 Academic Structure | 05 | — |
 | 07 Staff & Users | 03, 04, 06 | Provides shared SequenceService consumed by 09/10/16/20 |
 | 08 Teachers | 06, 07 | Timetable conflict hook (13 — swap the `TIMETABLE_CONFLICT_CHECKER` provider); `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
-| 09 Students & Guardians | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land |
+| 09 Students & Guardians ✅ | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land. Adjusted the M02 user-uniqueness constraint to `(school_id, user_type, contact)` so a guardian can also be staff — login now checks every candidate account. |
 | 10 Admission | 09, 11 | Online gateway wiring (16); publish merit to website (19) |
 | 11 Enrollment & Promotion | 06, 09 | Promotion auto-decisions from results (15) |
 | 12 Attendance | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 |

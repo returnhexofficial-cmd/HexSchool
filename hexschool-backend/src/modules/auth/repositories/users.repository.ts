@@ -130,14 +130,38 @@ export class UsersRepository extends BaseRepository<
     });
   }
 
-  /** Lookup by normalized login identifier (email OR BD phone). */
+  /**
+   * All candidates for a normalized login identifier. Since M09 the same
+   * phone/email may back one account PER user type (a guardian can also
+   * be staff — uq_users_* moved to (school_id, user_type, contact)), so
+   * login verifies the password against every candidate. Ordered by
+   * created_at so multi-match flows stay deterministic.
+   */
+  async findAllByIdentifier(identifier: {
+    email?: string;
+    phone?: string;
+  }): Promise<User[]> {
+    const where = identifier.email
+      ? { email: identifier.email }
+      : identifier.phone
+        ? { phone: identifier.phone }
+        : null;
+    if (!where) return [];
+    return this.prisma.user.findMany({
+      where: { ...where, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /** First candidate (oldest account) — OTP/reset flows, where a single
+   *  target is needed. Multi-account holders reset via the older account
+   *  (documented M09 limitation until usernames arrive). */
   async findByIdentifier(identifier: {
     email?: string;
     phone?: string;
   }): Promise<User | null> {
-    if (identifier.email) return this.findOne({ email: identifier.email });
-    if (identifier.phone) return this.findOne({ phone: identifier.phone });
-    return null;
+    const candidates = await this.findAllByIdentifier(identifier);
+    return candidates[0] ?? null;
   }
 
   /** Atomic failed-attempt bump; returns the new counter value. */

@@ -24,6 +24,7 @@ import { SchoolModule } from './modules/school/school.module';
 import { SequenceModule } from './modules/sequence/sequence.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { StudentModule } from './modules/student/student.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { VersionModule } from './modules/version/version.module';
 import { QueuesModule } from './queues/queues.module';
@@ -100,6 +101,7 @@ import { QueuesModule } from './queues/queues.module';
     SequenceModule,
     StaffModule,
     TeacherModule,
+    StudentModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

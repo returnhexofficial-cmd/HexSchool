@@ -81,18 +81,33 @@ export class AuthService {
     const invalid = new UnauthorizedException('Invalid credentials');
 
     const identifier = normalizeIdentifier(dto.identifier);
-    const user = await this.users.findByIdentifier(identifier);
-    if (!user) throw invalid;
+    // One contact may back one account per user type since M09 (guardian
+    // who is also staff) — verify the password against every candidate;
+    // the (unique) account it matches is the one logging in.
+    const candidates = await this.users.findAllByIdentifier(identifier);
+    if (candidates.length === 0) throw invalid;
 
-    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const unlocked = candidates.filter(
+      (c) => !(c.lockedUntil && c.lockedUntil.getTime() > Date.now()),
+    );
+    if (unlocked.length === 0) {
       throw new HttpException(
         'Account temporarily locked. Try again later.',
         HttpStatus.LOCKED,
       );
     }
 
-    if (!(await this.passwords.verify(user.passwordHash, dto.password))) {
-      await this.handleFailedLogin(user, ctx);
+    let user: (typeof candidates)[number] | null = null;
+    for (const candidate of unlocked) {
+      if (await this.passwords.verify(candidate.passwordHash, dto.password)) {
+        user = candidate;
+        break;
+      }
+    }
+    if (!user) {
+      // A failed attempt counts against every unlocked candidate — the
+      // attacker targeted the identifier, not one account.
+      await Promise.all(unlocked.map((c) => this.handleFailedLogin(c, ctx)));
       throw invalid;
     }
 

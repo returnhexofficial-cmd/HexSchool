@@ -84,7 +84,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 06 | Academic Structure (Class, Section, Group, Shift, Subject, Department) | ☑ |
 | 07 | Staff & User Management | ☑ |
 | 08 | Teacher Management | ☑ |
-| 09 | Student & Guardian Management | ☐ |
+| 09 | Student & Guardian Management | ☑ |
 | 10 | Admission Management | ☐ |
 | 11 | Enrollment & Promotion | ☐ |
 | 12 | Attendance Management | ☐ |
@@ -671,12 +671,12 @@ The student master record: registration, rich profile (guardian, medical, docume
 - `student_status_history`: `id`, `student_id`, `from_status`, `to_status`, `reason`, `changed_by`, `created_at`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Student CRUD (registration usually flows from Admission — Module 10 — but direct registration supported for migrations/walk-ins).
-- [ ] Guardian CRUD + linking (search-existing-guardian by phone to avoid duplicates — siblings share guardians).
-- [ ] Portal account provisioning: `POST /students/:id/create-account` and `POST /guardians/:id/create-account` (phone-based login, temp password by SMS).
-- [ ] ID card generation: PDF (single + batch per section) with photo, QR (`qr_token`), school branding; template configurable. QR rotate endpoint.
-- [ ] Bulk import (XLSX) with validation report (row-level errors downloadable) — critical for onboarding existing schools.
-- [ ] Aggregated history endpoints (attendance %, results summary — implemented as the source modules land; return empty gracefully until then).
+- [x] Student CRUD (registration usually flows from Admission — Module 10 — but direct registration supported for migrations/walk-ins).
+- [x] Guardian CRUD + linking (search-existing-guardian by phone to avoid duplicates — siblings share guardians).
+- [x] Portal account provisioning: `POST /students/:id/create-account` and `POST /guardians/:id/create-account` (phone-based login, temp password by SMS).
+- [x] ID card generation: PDF (single + batch per section) with photo, QR (`qr_token`), school branding; template configurable. QR rotate endpoint.
+- [x] Bulk import (XLSX) with validation report (row-level errors downloadable) — critical for onboarding existing schools.
+- [x] Aggregated history endpoints (attendance %, results summary — implemented as the source modules land; return empty gracefully until then).
 ### APIs
 ```
 CRUD /api/v1/students        GET /api/v1/students/:id/full   (profile+guardians+medical+docs)
@@ -691,12 +691,12 @@ POST /api/v1/students/:id/create-account
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Student list: filters (session, class, section, group, gender, status), quick search by name/UID/phone, bulk actions (ID cards, SMS), export.
-- [ ] Registration wizard: Personal → Guardians (search-or-create) → Address → Medical → Documents → Review.
-- [ ] Student detail: tabs Profile / Guardians / Medical (permission-gated) / Documents / Attendance / Results / Fees / Timeline (status history + audit).
-- [ ] Guardian list + detail (children listed).
-- [ ] Import wizard: upload → validation report table → confirm import.
-- [ ] ID card preview + batch print dialog.
+- [x] Student list: filters (session, class, section, group, gender, status), quick search by name/UID/phone, bulk actions (ID cards, SMS), export.
+- [x] Registration wizard: Personal → Guardians (search-or-create) → Address → Medical → Documents → Review.
+- [x] Student detail: tabs Profile / Guardians / Medical (permission-gated) / Documents / Attendance / Results / Fees / Timeline (status history + audit).
+- [x] Guardian list + detail (children listed).
+- [x] Import wizard: upload → validation report table → confirm import.
+- [x] ID card preview + batch print dialog.
 
 ## 6. Business Rules
 - `student_uid` is permanent and never changes across sessions/classes; roll numbers are enrollment-scoped (Module 11).
@@ -714,17 +714,17 @@ POST /api/v1/students/:id/create-account
 - Import with Bangla names → UTF-8 XLSX handled; template includes `name_bn` column.
 
 ## 9. Testing Checklist
-- [ ] Unit: UID generator, duplicate detector, primary-guardian invariant.
-- [ ] e2e: full registration, guardian linking, status transitions, import happy/invalid rows.
-- [ ] Frontend: wizard step validation, import error display.
-- [ ] Manual: batch ID card PDF prints correctly (CR80 layout).
+- [x] Unit: UID generator, duplicate detector, primary-guardian invariant.
+- [x] e2e: full registration, guardian linking, status transitions, import happy/invalid rows.
+- [x] Frontend: wizard step validation, import error display.
+- [x] Manual: batch ID card PDF prints correctly (CR80 layout).
 
 ## 10. Completion Checklist
-- [ ] Entities + APIs + UI
-- [ ] Import pipeline
-- [ ] ID card PDFs
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/09-students-guardians.md`
+- [x] Entities + APIs + UI
+- [x] Import pipeline
+- [x] ID card PDFs
+- [x] Tests passing (230 backend unit + e2e all suites / 88 frontend)
+- [x] Docs: `docs/modules/09-students-guardians.md`
 
 ---
 

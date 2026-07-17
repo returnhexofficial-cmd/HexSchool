@@ -128,7 +128,33 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['teacher.evaluation.manage', 'Create/edit/delete evaluations'],
   ]),
 
-  // Modules 09+ append their codes here (student.*, …).
+  // ── Module 09: Student & Guardian Management ────────────────────────
+  ...define('students', [
+    ['student.view', 'View students, their guardians, documents, and history'],
+    ['student.create', 'Register students (direct registration/migration)'],
+    ['student.update', 'Edit student profiles, photos, and QR tokens'],
+    ['student.delete', 'Delete student records'],
+    ['student.status', 'Change student status (with reason)'],
+    [
+      'student.medical.view',
+      'View student medical information (restricted — roadmap M09 §6)',
+    ],
+    ['student.medical.update', 'Edit student medical information'],
+    ['student.document.manage', 'Upload/delete student documents'],
+    ['student.guardian.manage', 'Link/unlink guardians and set the primary'],
+    [
+      'student.account.create',
+      'Provision student/guardian portal accounts (temp password issued)',
+    ],
+    ['student.idcard.generate', 'Generate student ID card PDFs (single/batch)'],
+    ['student.import', 'Bulk-import students from XLSX'],
+  ]),
+  ...define('guardians', [
+    ['guardian.view', 'View guardians and their children'],
+    ['guardian.manage', 'Create/edit/delete guardian records'],
+  ]),
+
+  // Modules 10+ append their codes here (admission.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

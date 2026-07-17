@@ -41,6 +41,7 @@ describe('AuthService', () => {
     events = { emit: jest.fn() };
     users = {
       findByIdentifier: jest.fn(),
+      findAllByIdentifier: jest.fn().mockResolvedValue([]),
       findById: jest.fn(),
       findByIdOrFail: jest.fn(),
       incrementFailedAttempts: jest.fn(),
@@ -78,7 +79,9 @@ describe('AuthService', () => {
 
   describe('login & lockout', () => {
     it('happy path: returns user + token pair, resets counters', async () => {
-      users.findByIdentifier.mockResolvedValue(await withPassword('Good1234'));
+      users.findAllByIdentifier.mockResolvedValue([
+        await withPassword('Good1234'),
+      ]);
 
       const result = await service.login(
         { identifier: 'user@test.local', password: 'Good1234' },
@@ -96,7 +99,9 @@ describe('AuthService', () => {
     });
 
     it('wrong password increments the counter and stays generic', async () => {
-      users.findByIdentifier.mockResolvedValue(await withPassword('Good1234'));
+      users.findAllByIdentifier.mockResolvedValue([
+        await withPassword('Good1234'),
+      ]);
       users.incrementFailedAttempts.mockResolvedValue(2);
 
       await expect(
@@ -110,7 +115,9 @@ describe('AuthService', () => {
     });
 
     it('5th failure locks for 15 minutes and emits user.locked', async () => {
-      users.findByIdentifier.mockResolvedValue(await withPassword('Good1234'));
+      users.findAllByIdentifier.mockResolvedValue([
+        await withPassword('Good1234'),
+      ]);
       users.incrementFailedAttempts.mockResolvedValue(5);
 
       await expect(
@@ -130,10 +137,12 @@ describe('AuthService', () => {
     });
 
     it('locked account → 423 even with the right password', async () => {
-      users.findByIdentifier.mockResolvedValue({
-        ...(await withPassword('Good1234')),
-        lockedUntil: new Date(Date.now() + 60_000),
-      });
+      users.findAllByIdentifier.mockResolvedValue([
+        {
+          ...(await withPassword('Good1234')),
+          lockedUntil: new Date(Date.now() + 60_000),
+        },
+      ]);
 
       await expect(
         service.login(
@@ -144,10 +153,12 @@ describe('AuthService', () => {
     });
 
     it('suspended user cannot log in even with correct password', async () => {
-      users.findByIdentifier.mockResolvedValue({
-        ...(await withPassword('Good1234')),
-        status: UserStatus.SUSPENDED,
-      });
+      users.findAllByIdentifier.mockResolvedValue([
+        {
+          ...(await withPassword('Good1234')),
+          status: UserStatus.SUSPENDED,
+        },
+      ]);
 
       await expect(
         service.login(

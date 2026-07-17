@@ -64,6 +64,13 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Teacher ID pattern',
       '{SCHOOL_CODE}-T-{YY}{SEQ4}',
     ],
+    // M09 — permanent student UID (never reused; roll numbers are M11).
+    [
+      'general.student_id_pattern',
+      'string',
+      'Student UID pattern',
+      '{SCHOOL_CODE}-{YYYY}{SEQ5}',
+    ],
   ]),
   ...g(SettingsGroup.academic, [
     ['academic.session_start_month', 'number', 'Session start month (1–12)', 1],

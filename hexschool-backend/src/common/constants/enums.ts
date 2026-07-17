@@ -24,4 +24,8 @@ export {
   TeacherDesignation,
   LeaveType,
   LeaveStatus,
+  Religion,
+  StudentStatus,
+  GuardianRelation,
+  StudentDocumentType,
 } from '@prisma/client';

@@ -94,6 +94,11 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'student.import',
       'guardian.view',
       'guardian.manage',
+      'admission.view',
+      'admission.cycle.manage',
+      'admission.merit.generate',
+      'admission.admit',
+      'admission.payment.waive',
     ],
   },
   {
@@ -146,7 +151,7 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
     name: 'Admission Officer',
     slug: 'admission-officer',
     description:
-      'Admissions desk — student registration now; application flows arrive with Module 10.',
+      'Admissions desk — student registration and the full application pipeline (Module 10).',
     corePermissions: [
       'structure.view',
       'session.view',
@@ -159,6 +164,13 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'student.import',
       'guardian.view',
       'guardian.manage',
+      'admission.view',
+      'admission.cycle.manage',
+      'admission.application.review',
+      'admission.payment.record',
+      'admission.test.manage',
+      'admission.merit.generate',
+      'admission.admit',
     ],
   },
   {

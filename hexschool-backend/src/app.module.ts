@@ -14,6 +14,7 @@ import { TransformResponseInterceptor } from './common/interceptors/transform-re
 import { PrismaModule } from './database/prisma/prisma.module';
 import { RedisModule } from './database/redis/redis.module';
 import { AcademicModule } from './modules/academic/academic.module';
+import { AdmissionModule } from './modules/admission/admission.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AuditModule } from './modules/audit/audit.module';
@@ -102,6 +103,7 @@ import { QueuesModule } from './queues/queues.module';
     StaffModule,
     TeacherModule,
     StudentModule,
+    AdmissionModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

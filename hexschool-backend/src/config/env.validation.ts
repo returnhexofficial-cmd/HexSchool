@@ -39,6 +39,10 @@ export const envValidationSchema = Joi.object({
   SMTP_PASS: Joi.string().allow('').default(''),
   SMTP_FROM: Joi.string().required(),
 
+  // Google reCAPTCHA (M10 public admission forms; empty = verification
+  // disabled — dev/test convenience, set both keys in production)
+  RECAPTCHA_SECRET_KEY: Joi.string().allow('').default(''),
+
   // Security
   CORS_ORIGINS: Joi.string().required(), // comma-separated whitelist
   SETTINGS_ENCRYPTION_KEY: Joi.string().length(32).required(), // AES-256 key (32 bytes)

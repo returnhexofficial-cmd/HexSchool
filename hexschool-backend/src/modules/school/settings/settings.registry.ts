@@ -71,6 +71,13 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Student UID pattern',
       '{SCHOOL_CODE}-{YYYY}{SEQ5}',
     ],
+    // M10 — admission application numbers (same generator).
+    [
+      'general.application_no_pattern',
+      'string',
+      'Admission application number pattern',
+      'ADM-{YY}-{SEQ6}',
+    ],
   ]),
   ...g(SettingsGroup.academic, [
     ['academic.session_start_month', 'number', 'Session start month (1–12)', 1],
@@ -98,6 +105,25 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
         'Lesson planning',
         'Student engagement',
       ],
+    ],
+    // M10 — admission pipeline knobs.
+    [
+      'academic.admission_selection_deadline_days',
+      'number',
+      'Admission deadline after selection (days)',
+      7,
+    ],
+    [
+      'academic.admission_age_tolerance_years',
+      'number',
+      'Applicant age tolerance around class level (years)',
+      3,
+    ],
+    [
+      'academic.admission_multi_class_applications',
+      'boolean',
+      'Allow one applicant to apply to multiple classes',
+      true,
     ],
   ]),
   ...g(SettingsGroup.sms, [

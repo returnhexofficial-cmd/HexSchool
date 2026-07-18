@@ -38,6 +38,9 @@ export default () => ({
     pass: process.env.SMTP_PASS ?? '',
     from: process.env.SMTP_FROM as string,
   },
+  recaptcha: {
+    secretKey: process.env.RECAPTCHA_SECRET_KEY ?? '',
+  },
   security: {
     settingsEncryptionKey: process.env.SETTINGS_ENCRYPTION_KEY as string,
     rateLimitTtlMs: parseInt(process.env.RATE_LIMIT_TTL_MS ?? '60000', 10),

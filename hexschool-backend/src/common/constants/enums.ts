@@ -28,4 +28,7 @@ export {
   StudentStatus,
   GuardianRelation,
   StudentDocumentType,
+  AdmissionCycleStatus,
+  AdmissionApplicationStatus,
+  AdmissionPaymentStatus,
 } from '@prisma/client';

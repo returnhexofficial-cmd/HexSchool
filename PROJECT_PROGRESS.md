@@ -1,25 +1,27 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-18 · **Overall completion: 28 % (9 / 32 modules)**
+> **Last updated:** 2026-07-18 · **Overall completion: 31 % (10 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09 |
-| **Current module** | **10 — Admission Management** |
-| Remaining | 23 |
+| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10 |
+| **Current module** | **11 — Enrollment & Promotion** |
+| Remaining | 22 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 10: `admission_cycles` (+ per-class seats/fee child table), `admission_applications` (public online application with `application_no ADM-{YY}-{SEQ6}`, OTP-verified phone, applicant/guardian snapshots), status/payment lifecycle, admission test + merit/waiting lists.
-2. Module 10: **approval → student conversion** (reuse `StudentsService.create`; the M09 dedup + UID path already supports it), offline payment recording now / gateway wiring stubbed until M16, admission reporting. `RECAPTCHA_*` env arrives here.
-3. Module 10: public application portal `(public)` + admin admission desk (cycles, applications board, test marks entry, merit publish).
-4. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card).
+1. Module 11: `enrollments` (student × session × class/section, `uq(student, session)`, roll unique per section), `enrollment_transfers`, `promotion_batches` + `promotion_items`; enroll single/bulk with roll strategies; section transfer with capacity enforcement (`enrollment.capacity.override`).
+2. Module 11: promotion wizard services (build/preview/execute/rollback; manual decisions until M15 results); canonical **`getSectionStudents()` / `getStudentCurrentEnrollment()`** exported for Attendance/Exams/Fees; extend M06 delete guards with enrollment checks.
+3. Module 11 follow-through for M09/M10: section-scoped batch ID cards (`POST /sections/:id/id-cards`), backfill enrollments for M10 ADMITTED students (roadmap: run M11 before the first real admission cycle).
+4. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card, M10 public wizard once SMS is real).
 
 ## Recently Completed
+
+- **Module 10 — Admission Management** (2026-07-18): full admission pipeline live — **admission cycles** (DRAFT→OPEN→CLOSED→COMPLETED, per-class seats/fees child table, close auto-cancels unpaid apps w/ SMS), **public online application** under `/public/admissions` (reCAPTCHA optional + **OTP phone verify** reusing M02 `OtpService` purpose `ADMISSION` → 30-min signed phone token; applicant/guardian **snapshots**; photo ≤1 MB; `application_no` from SequenceService `ADM-{YY}-{SEQ6}`; duplicate rule one live app per cycle+class+phone+dob via partial unique; **age hard-check** from settings), tracking + **admit-card PDF** by app-no+phone, offline **payment recording** (waive/refund behind `admission.payment.waive`; gateway wiring = M16), **test scheduling** (paid apps → TEST_SCHEDULED) + bulk marks (PASSED/FAILED), **merit engine** (marks desc → GPA desc → dob asc; SELECTED up to seats w/ deadline from settings, rest WAITLISTED; regeneration voids previous; ADMITTED keep seats), **waitlist promotion** (auto on cancel/expire + manual promote-N), hourly **expiry job**, **conversion** via `StudentsService.create` (idempotent; StudentModule now exports the service; enrollment backfilled by M11), status-change SMS listener (log-only until M17), funnel **reports**. 8 permission codes; `RECAPTCHA_SECRET_KEY` env (optional). Frontend: `/admission` + `/admission/apply` (4-step mobile wizard, localStorage draft) + `/admission/track` public pages, `/admin/admissions` cycle list + 4-tab detail (Applications/Tests/Merit/Reports). Also **recreated the missing `docs/modules/09-students-guardians.md`** (was referenced but never written). 261 backend unit (31 new) + 21 admission e2e / 101 frontend (13 new) tests green. See `docs/modules/10-admission.md`.
 
 - **Module 09 — Student & Guardian Management** (2026-07-18): student master record with permanent `student_uid` (SequenceService `{SCHOOL_CODE}-{YYYY}{SEQ5}`, never reused), one-call registration (inline/existing guardians deduped by phone + warn-only duplicate report, single transaction), **shared guardians** (phone dedup, one primary per student via partial unique + transactional promote/demote), status lifecycle with append-only `student_status_history` + portal-deactivation cascade (dues check soft until M16), permission-gated `student_medical_info`, documents, **lazy portal accounts** for students & guardians, **CR80 ID-card PDFs** (pdfkit+qrcode, single/batch, rotatable QR, incomplete-photo flag), **XLSX bulk import** (template + dry-run/commit row-level report, UTF-8 Bangla). **M02 constraint adjusted**: user contact uniqueness moved to `(school_id, user_type, contact)` so a guardian can also be staff — login now verifies against every candidate account. 14 permission codes. Frontend: `/admin/students` (list + page-batch ID cards), 6-step registration wizard, 7-tab detail, `/admin/students/import`, `/admin/guardians` (list + detail). New shared UI: `checkbox`, `textarea`. 230 backend unit + e2e all suites / 88 frontend tests green. See `docs/modules/09-students-guardians.md`.
 
@@ -67,7 +69,7 @@
 | ~~07 Staff/Users~~ ✅ | 4 → **1** | 18 Portals | 6 | 29 Reports v2 | 5 |
 | ~~08 Teachers~~ ✅ | 4 → **1** | 19 Website CMS | 7 | 30 SysAdmin | 6 |
 | ~~09 Students~~ ✅ | 6 → **1** | 20 Accounting | 6 | 31 Multi-School | 8 |
-| 10 Admission | 6 | 21 HR/Payroll | 7 | 32 Future track | per sub-project |
+| ~~10 Admission~~ ✅ | 6 → **1** | 21 HR/Payroll | 7 | 32 Future track | per sub-project |
 | 11 Enrollment | 4 | 22 Assignments | 3 | | |
 
 **Phase 1 ≈ 81 units · Phase 2 ≈ 47 units · Phase 3 (30–31) ≈ 14 units.**
@@ -86,3 +88,4 @@
 | 07 | Staff & User Management (+ shared SequenceService) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/07-staff-users.md` |
 | 08 | Teacher Management (+ class-teacher FK, M13 conflict-hook slot) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/08-teachers.md` |
 | 09 | Student & Guardian Management (+ M02 per-type contact uniqueness) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/09-students-guardians.md` |
+| 10 | Admission Management (+ OtpService/StudentsService exports, RECAPTCHA env) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/10-admission.md` |

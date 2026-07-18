@@ -40,6 +40,7 @@ import { TokenService } from './services/token.service';
     AuthListener,
     AuthCleanupJob,
   ],
-  exports: [UsersRepository, PasswordService, TokenService],
+  // OtpService exported since M10 (public admission phone verification).
+  exports: [UsersRepository, PasswordService, TokenService, OtpService],
 })
 export class AuthModule {}

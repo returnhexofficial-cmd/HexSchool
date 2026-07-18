@@ -270,6 +270,42 @@ enum StudentDocumentType {
   @@map("student_document_type_enum")
 }
 
+enum AdmissionCycleStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  COMPLETED
+
+  @@map("admission_cycle_status_enum")
+}
+
+enum AdmissionApplicationStatus {
+  DRAFT
+  SUBMITTED
+  PAYMENT_PENDING
+  UNDER_REVIEW
+  TEST_SCHEDULED
+  PASSED
+  FAILED
+  SELECTED
+  WAITLISTED
+  ADMITTED
+  REJECTED
+  CANCELLED
+  EXPIRED
+
+  @@map("admission_application_status_enum")
+}
+
+enum AdmissionPaymentStatus {
+  UNPAID
+  PAID
+  WAIVED
+  REFUNDED
+
+  @@map("admission_payment_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -404,6 +440,7 @@ model School {
   guardians              Guardian[]
   studentMedicalInfos    StudentMedicalInfo[]
   studentDocuments       StudentDocument[]
+  admissionCycles        AdmissionCycle[]
 
   @@map("schools")
 }
@@ -497,6 +534,7 @@ model AcademicSession {
   classSubjects          ClassSubject[]
   teacherSectionSubjects TeacherSectionSubject[]
   teacherEvaluations     TeacherEvaluation[]
+  admissionCycles        AdmissionCycle[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -623,6 +661,9 @@ model SchoolClass {
   sections      Section[]
   classSubjects ClassSubject[]
   admittedStudents Student[]
+  admissionCycleClasses AdmissionCycleClass[]
+  admissionApplications AdmissionApplication[]
+  admissionTests        AdmissionTest[]
 
   @@index([schoolId], map: "idx_classes_school")
   @@map("classes")
@@ -1057,6 +1098,7 @@ model Student {
   medicalInfo   StudentMedicalInfo?
   documents     StudentDocument[]
   statusHistory StudentStatusHistory[]
+  admissionApplications AdmissionApplication[]
 
   // Deliberately NOT deleted_at-scoped: student UIDs are never reused.
   @@unique([schoolId, studentUid], map: "uq_students_uid")
@@ -1183,6 +1225,149 @@ model StudentStatusHistory {
 
   @@index([studentId, createdAt], map: "idx_student_status_history_student")
   @@map("student_status_history")
+}
+
+// ── Module 10: Admission Management ───────────────────────────────────
+
+/// One admission campaign (session-scoped, e.g. "Admission 2027"). Which
+/// classes it admits — with per-class seats and application fee — lives
+/// in admission_cycle_classes. Name uniqueness is a partial unique index
+/// (school_id, name) WHERE deleted_at IS NULL — hand-written.
+model AdmissionCycle {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String               @map("school_id") @db.Uuid
+  school       School               @relation(fields: [schoolId], references: [id], map: "fk_admission_cycles_school")
+  sessionId    String               @map("session_id") @db.Uuid
+  session      AcademicSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_admission_cycles_session")
+  name         String               @db.VarChar(120)
+  startAt      DateTime             @map("start_at") @db.Timestamptz(6)
+  endAt        DateTime             @map("end_at") @db.Timestamptz(6)
+  testRequired Boolean              @default(false) @map("test_required")
+  status       AdmissionCycleStatus @default(DRAFT)
+  /// Shown on the public application portal (eligibility, documents…).
+  instructions String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  classes      AdmissionCycleClass[]
+  applications AdmissionApplication[]
+  tests        AdmissionTest[]
+
+  @@index([schoolId, status], map: "idx_admission_cycles_school_status")
+  @@index([sessionId], map: "idx_admission_cycles_session")
+  @@map("admission_cycles")
+}
+
+/// Per-class admission offer inside a cycle: seats + application fee
+/// (child table per roadmap M10 §3). Rows are replaced with their cycle
+/// config — no soft delete (join-style table).
+model AdmissionCycleClass {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cycleId        String         @map("cycle_id") @db.Uuid
+  cycle          AdmissionCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade, map: "fk_admission_cycle_classes_cycle")
+  classId        String         @map("class_id") @db.Uuid
+  class          SchoolClass    @relation(fields: [classId], references: [id], map: "fk_admission_cycle_classes_class")
+  seats          Int
+  applicationFee Decimal        @default(0) @map("application_fee") @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([cycleId, classId], map: "uq_admission_cycle_classes")
+  @@index([classId], map: "idx_admission_cycle_classes_class")
+  @@map("admission_cycle_classes")
+}
+
+/// An application to one class of one cycle. Applicant + guardian data
+/// are SNAPSHOTS (denormalized) — the student/guardian master rows are
+/// only created at conversion (POST /:id/admit), reusing the M09 dedup
+/// path. application_no comes from SequenceService and is never reused.
+/// Duplicate rule (M10 §6): one live application per (cycle, class,
+/// phone, dob) — partial unique index, hand-written (terminal statuses
+/// excluded so a CANCELLED applicant can reapply).
+model AdmissionApplication {
+  id            String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String                     @map("school_id") @db.Uuid
+  cycleId       String                     @map("cycle_id") @db.Uuid
+  cycle         AdmissionCycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade, map: "fk_admission_applications_cycle")
+  applicationNo String                     @map("application_no") @db.VarChar(30)
+  classId       String                     @map("class_id") @db.Uuid
+  class         SchoolClass                @relation(fields: [classId], references: [id], map: "fk_admission_applications_class")
+
+  // ── applicant snapshot ────────────────────────────────────────────
+  firstName        String   @map("first_name") @db.VarChar(100)
+  lastName         String   @map("last_name") @db.VarChar(100)
+  nameBn           String?  @map("name_bn") @db.VarChar(200)
+  gender           Gender
+  dob              DateTime @db.Date
+  religion         Religion @default(ISLAM)
+  /// S3 object key (uploaded pre-submit via the public photo endpoint).
+  photoUrl         String?  @map("photo_url") @db.VarChar(500)
+  presentAddress   Json     @default("{}") @map("present_address")
+  permanentAddress Json     @default("{}") @map("permanent_address")
+  previousSchool   String?  @map("previous_school") @db.VarChar(300)
+  /// Kept as a real column (not only JSONB) — merit tiebreak sorts on it.
+  previousGpa      Decimal? @map("previous_gpa") @db.Decimal(4, 2)
+  previousResult   Json     @default("{}") @map("previous_result")
+  /// Guardian snapshot: { name, nameBn?, relation, phone, email?, occupation? }
+  guardian         Json     @default("{}")
+  /// OTP-verified contact number (the SMS target for status updates).
+  phone            String   @db.VarChar(15)
+
+  // ── lifecycle ─────────────────────────────────────────────────────
+  status            AdmissionApplicationStatus @default(SUBMITTED)
+  paymentStatus     AdmissionPaymentStatus     @default(UNPAID) @map("payment_status")
+  paymentRef        String?                    @map("payment_ref") @db.VarChar(100)
+  paymentMethod     String?                    @map("payment_method") @db.VarChar(30)
+  paidAmount        Decimal?                   @map("paid_amount") @db.Decimal(12, 2)
+  paidAt            DateTime?                  @map("paid_at") @db.Timestamptz(6)
+  testMarks         Decimal?                   @map("test_marks") @db.Decimal(6, 2)
+  meritPosition     Int?                       @map("merit_position")
+  /// Set when SELECTED (now + academic.admission_selection_deadline_days);
+  /// the expiry job EXPIREs overdue selections and promotes the waitlist.
+  admissionDeadline DateTime?                  @map("admission_deadline") @db.Timestamptz(6)
+  /// Filled by conversion — the admitted student master record.
+  studentId         String?                    @map("student_id") @db.Uuid
+  student           Student?                   @relation(fields: [studentId], references: [id], map: "fk_admission_applications_student")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Like other generated numbers: NOT deleted_at-scoped, never reused.
+  @@unique([schoolId, applicationNo], map: "uq_admission_applications_no")
+  @@index([cycleId, classId, status], map: "idx_admission_applications_cycle_class")
+  @@index([schoolId, phone], map: "idx_admission_applications_phone")
+  @@index([status, admissionDeadline], map: "idx_admission_applications_deadline")
+  @@map("admission_applications")
+}
+
+/// Admission test slot per (cycle, class): date, venue, marks scheme.
+/// Upserted wholesale by the test-scheduling endpoint.
+model AdmissionTest {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cycleId    String         @map("cycle_id") @db.Uuid
+  cycle      AdmissionCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade, map: "fk_admission_tests_cycle")
+  classId    String         @map("class_id") @db.Uuid
+  class      SchoolClass    @relation(fields: [classId], references: [id], map: "fk_admission_tests_class")
+  testDate   DateTime       @map("test_date") @db.Date
+  venue      String?        @db.VarChar(200)
+  totalMarks Int            @map("total_marks")
+  passMarks  Int            @map("pass_marks")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([cycleId, classId], map: "uq_admission_tests_cycle_class")
+  @@map("admission_tests")
 }
 
 /// Gap-free per-school document-number sequences (PROJECT_CONTEXT §3):

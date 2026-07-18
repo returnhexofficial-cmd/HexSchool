@@ -154,7 +154,31 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['guardian.manage', 'Create/edit/delete guardian records'],
   ]),
 
-  // Modules 10+ append their codes here (admission.*, …).
+  // ── Module 10: Admission Management ─────────────────────────────────
+  ...define('admission', [
+    [
+      'admission.view',
+      'View admission cycles, applications, merit lists, and reports',
+    ],
+    ['admission.cycle.manage', 'Create/edit/open/close admission cycles'],
+    [
+      'admission.application.review',
+      'Move applications through the review pipeline (status changes)',
+    ],
+    ['admission.payment.record', 'Record offline application-fee payments'],
+    ['admission.payment.waive', 'Waive or refund application fees'],
+    ['admission.test.manage', 'Schedule admission tests and enter test marks'],
+    [
+      'admission.merit.generate',
+      'Generate/regenerate merit and waiting lists (+ promote waitlist)',
+    ],
+    [
+      'admission.admit',
+      'Convert selected applications into student records',
+    ],
+  ]),
+
+  // Modules 11+ append their codes here (enrollment.*, …).
 ];
 
 /** Fast membership checks for validators and the seeder. */

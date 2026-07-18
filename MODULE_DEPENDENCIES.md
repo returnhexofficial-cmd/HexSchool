@@ -22,7 +22,7 @@ graph TD
     M09 --> M10[10 Admission]
     M09 --> M11[11 Enrollment & Promotion]
     M06 --> M11
-    M11 --> M10
+    M11 -. soft: enrollment backfill for ADMITTED .-> M10
     M11 --> M12[12 Attendance]
     M08 --> M12
     M05 --> M12
@@ -83,7 +83,7 @@ graph TD
 | 07 Staff & Users | 03, 04, 06 | Provides shared SequenceService consumed by 09/10/16/20 |
 | 08 Teachers | 06, 07 | Timetable conflict hook (13 — swap the `TIMETABLE_CONFLICT_CHECKER` provider); `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
 | 09 Students & Guardians ✅ | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land. Adjusted the M02 user-uniqueness constraint to `(school_id, user_type, contact)` so a guardian can also be staff — login now checks every candidate account. |
-| 10 Admission | 09, 11 | Online gateway wiring (16); publish merit to website (19) |
+| 10 Admission ✅ | 06, 09 | Enrollment backfill for ADMITTED students (11 — roadmap: run 11 before the first REAL admission cycle); online gateway wiring (16); publish merit to website (19). Implementation confirmed 11 is NOT a hard dep: conversion completes at ADMITTED via the exported `StudentsService`. AuthModule newly exports `OtpService` (public phone verify). |
 | 11 Enrollment & Promotion | 06, 09 | Promotion auto-decisions from results (15) |
 | 12 Attendance | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 |
 | 13 Timetable | 06, 08, 11 | — |

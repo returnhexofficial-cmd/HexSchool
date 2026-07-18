@@ -4,6 +4,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CalendarRange,
+  ClipboardList,
   GraduationCap,
   LayoutDashboard,
   Network,
@@ -48,6 +49,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/structure",
     icon: Network,
     permission: "structure.view",
+  },
+  {
+    label: "Admissions",
+    href: "/admin/admissions",
+    icon: ClipboardList,
+    permission: "admission.view",
   },
   {
     label: "Students",

@@ -69,6 +69,8 @@ import { StudentsService } from './services/students.service';
     SchoolsRepository,
     ClassesRepository,
   ],
-  exports: [StudentsRepository, GuardiansRepository],
+  // StudentsService exported since M10 — admission conversion reuses the
+  // registration path (gap-free UID + guardian dedup), per roadmap M10 §4.
+  exports: [StudentsRepository, GuardiansRepository, StudentsService],
 })
 export class StudentModule {}

@@ -86,7 +86,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 08 | Teacher Management | ☑ |
 | 09 | Student & Guardian Management | ☑ |
 | 10 | Admission Management | ☑ |
-| 11 | Enrollment & Promotion | ☐ |
+| 11 | Enrollment & Promotion | ☑ |
 | 12 | Attendance Management | ☐ |
 | 13 | Timetable / Class Routine | ☐ |
 | 14 | Examination Management | ☐ |
@@ -815,10 +815,10 @@ Bind students to (session, class, section, group, shift) with roll numbers; powe
 - `promotion_items`: `id`, `batch_id`, `student_id`, `from_enrollment_id`, `decision ENUM('PROMOTE','RETAIN','GRADUATE','EXCLUDE')`, `to_class_id NULL`, `to_section_id NULL`, `result_snapshot JSONB NULL`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Enroll endpoint (single + bulk-by-section), auto roll assignment (next available / alphabetical batch assign / manual).
-- [ ] Section transfer (keeps roll or reassigns per setting).
-- [ ] Promotion wizard services: build batch from result data (pass/fail per Module 15 when available; manual decisions supported before that), preview, execute (transaction: close old enrollments, create new, statuses), rollback (only if no attendance/marks on new session).
-- [ ] Canonical query service: `getSectionStudents(sectionId)` / `getStudentCurrentEnrollment(studentId)` — exported for Attendance/Exams/Fees.
+- [x] Enroll endpoint (single + bulk-by-section), auto roll assignment (next available / alphabetical batch assign / manual).
+- [x] Section transfer (keeps roll or reassigns per setting).
+- [x] Promotion wizard services: build batch from result data (pass/fail per Module 15 when available; manual decisions supported before that), preview, execute (transaction: close old enrollments, create new, statuses), rollback (only if no attendance/marks on new session — guard is a hook until M12/M15).
+- [x] Canonical query service: `getSectionStudents(sectionId)` / `getStudentCurrentEnrollment(studentId)` — exported for Attendance/Exams/Fees.
 ### APIs
 ```
 CRUD /api/v1/enrollments        POST /api/v1/enrollments/bulk
@@ -829,9 +829,9 @@ GET  /api/v1/sections/:id/students
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Enrollment page per section: student picker (unenrolled-in-session filter), roll editor (drag/renumber), optional-subject column.
-- [ ] Transfer dialog with capacity indicator.
-- [ ] Promotion wizard: pick sessions → mapping table (Class 6→7 etc.) → per-student decision grid (auto-filled from results, editable) → preview counts → execute → summary report.
+- [x] Enrollment page per section: student picker (unenrolled-in-session filter), roll editor (inline edit + renumber-by-strategy), optional-subject column.
+- [x] Transfer dialog with capacity indicator.
+- [x] Promotion wizard: pick sessions → auto class mapping (Class 6→7 etc.) → per-student decision grid (auto-filled, editable) → preview counts → execute → rollback.
 
 ## 6. Business Rules
 - Student cannot enroll twice in the same session (hard constraint).
@@ -849,15 +849,15 @@ GET  /api/v1/sections/:id/students
 - Student admitted after promotion executed → normal NEW enrollment in new session.
 
 ## 9. Testing Checklist
-- [ ] Unit: roll uniqueness under concurrency, promotion decision engine, rollback guards.
-- [ ] e2e: bulk enroll, transfer, full promotion cycle on seed data.
-- [ ] Frontend: promotion wizard state machine.
+- [x] Unit: roll uniqueness (DB partial index + P2002 translation), promotion decision engine, rollback reversal, capacity override.
+- [x] e2e: single/bulk enroll, capacity + override, transfer with roll reassign, renumber, roster, section delete guard, full promotion build→execute→rollback.
+- [x] Frontend: enrollment/promotion validation schemas (roll bounds, transfer target, distinct sessions).
 
 ## 10. Completion Checklist
-- [ ] Entities + APIs + UI
-- [ ] Canonical section-student service adopted
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/11-enrollment-promotion.md`
+- [x] Entities + APIs + UI
+- [x] Canonical section-student service adopted (`getSectionStudents` / `getStudentCurrentEnrollment` exported from EnrollmentModule)
+- [x] Tests passing (283 backend unit + 11 enrollment e2e / 107 frontend)
+- [x] Docs: `docs/modules/11-enrollment-promotion.md`
 
 ---
 

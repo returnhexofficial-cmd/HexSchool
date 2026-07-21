@@ -71,6 +71,15 @@ import { StudentsService } from './services/students.service';
   ],
   // StudentsService exported since M10 — admission conversion reuses the
   // registration path (gap-free UID + guardian dedup), per roadmap M10 §4.
-  exports: [StudentsRepository, GuardiansRepository, StudentsService],
+  // StudentStatusHistoryRepository + IdCardService exported since M11 —
+  // promotion graduates students; section-scoped batch ID cards need the
+  // roster from the enrollment module.
+  exports: [
+    StudentsRepository,
+    GuardiansRepository,
+    StudentsService,
+    StudentStatusHistoryRepository,
+    IdCardService,
+  ],
 })
 export class StudentModule {}

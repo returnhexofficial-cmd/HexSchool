@@ -172,13 +172,29 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'admission.merit.generate',
       'Generate/regenerate merit and waiting lists (+ promote waitlist)',
     ],
-    [
-      'admission.admit',
-      'Convert selected applications into student records',
-    ],
+    ['admission.admit', 'Convert selected applications into student records'],
   ]),
 
-  // Modules 11+ append their codes here (enrollment.*, …).
+  // ── Module 11: Enrollment & Promotion ───────────────────────────────
+  ...define('enrollment', [
+    ['enrollment.view', 'View enrollments and section rosters'],
+    ['enrollment.create', 'Enroll students into a section (single/bulk)'],
+    ['enrollment.update', 'Edit an enrollment (roll, optional subject)'],
+    ['enrollment.delete', 'Cancel/remove an enrollment'],
+    ['enrollment.transfer', 'Transfer a student between sections'],
+    [
+      'enrollment.capacity.override',
+      'Enroll beyond a section’s configured capacity',
+    ],
+    ['enrollment.roll.assign', 'Batch-assign roll numbers for a section'],
+  ]),
+  ...define('promotions', [
+    ['promotion.view', 'View promotion batches and their decisions'],
+    ['promotion.manage', 'Build/edit/delete promotion batches'],
+    ['promotion.execute', 'Execute or roll back a promotion batch'],
+  ]),
+
+  // Modules 12+ append their codes here.
 ];
 
 /** Fast membership checks for validators and the seeder. */

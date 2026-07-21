@@ -1,9 +1,11 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  ArrowUpNarrowWide,
   BookUser,
   BriefcaseBusiness,
   CalendarDays,
   CalendarRange,
+  ClipboardCheck,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
@@ -67,6 +69,18 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/guardians",
     icon: UsersRound,
     permission: "guardian.view",
+  },
+  {
+    label: "Enrollment",
+    href: "/admin/enrollments",
+    icon: ClipboardCheck,
+    permission: "enrollment.view",
+  },
+  {
+    label: "Promotions",
+    href: "/admin/promotions",
+    icon: ArrowUpNarrowWide,
+    permission: "promotion.view",
   },
   {
     label: "Teachers",

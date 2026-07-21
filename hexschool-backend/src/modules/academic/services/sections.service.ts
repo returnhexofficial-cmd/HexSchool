@@ -7,6 +7,7 @@ import { Section } from '@prisma/client';
 import { PaginatedResult } from '../../../common/dto/paginated.dto';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
+import { EnrollmentsRepository } from '../../enrollment/repositories/enrollments.repository';
 import { SettingsService } from '../../school/services/settings.service';
 import { TeachersRepository } from '../../teacher/repositories/teachers.repository';
 import {
@@ -40,6 +41,7 @@ export class SectionsService {
     private readonly shifts: ShiftsRepository,
     private readonly groups: GroupsRepository,
     private readonly teachers: TeachersRepository,
+    private readonly enrollments: EnrollmentsRepository,
     private readonly settings: SettingsService,
     private readonly auditContext: AuditContextService,
   ) {}
@@ -158,7 +160,13 @@ export class SectionsService {
 
   async remove(id: string, actor: AccessTokenPayload): Promise<void> {
     const existing = await this.sections.findByIdOrFail(id, actor.schoolId);
-    // Enrollment/attendance delete guards join in M11/M12.
+    // M11 delete guard: block while the section has live enrollments
+    // (attendance guard joins in M12).
+    if (await this.enrollments.sectionHasEnrollments(id)) {
+      throw new ConflictException(
+        'Section has enrolled students — transfer or cancel their enrollments first',
+      );
+    }
     await this.sections.softDelete(id);
     this.auditContext.set({
       entityType: 'Section',

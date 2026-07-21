@@ -1,25 +1,26 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-18 · **Overall completion: 31 % (10 / 32 modules)**
+> **Last updated:** 2026-07-21 · **Overall completion: 34 % (11 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10 |
-| **Current module** | **11 — Enrollment & Promotion** |
-| Remaining | 22 |
+| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11 |
+| **Current module** | **12 — Attendance Management** |
+| Remaining | 21 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 11: `enrollments` (student × session × class/section, `uq(student, session)`, roll unique per section), `enrollment_transfers`, `promotion_batches` + `promotion_items`; enroll single/bulk with roll strategies; section transfer with capacity enforcement (`enrollment.capacity.override`).
-2. Module 11: promotion wizard services (build/preview/execute/rollback; manual decisions until M15 results); canonical **`getSectionStudents()` / `getStudentCurrentEnrollment()`** exported for Attendance/Exams/Fees; extend M06 delete guards with enrollment checks.
-3. Module 11 follow-through for M09/M10: section-scoped batch ID cards (`POST /sections/:id/id-cards`), backfill enrollments for M10 ADMITTED students (roadmap: run M11 before the first real admission cycle).
-4. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card, M10 public wizard once SMS is real).
+1. Module 12: `attendance` (per-section daily, optionally per-period), student + staff/teacher modes, manual + QR; keys on **`enrollment_id`** via the M11 canonical `getSectionStudents()` roster; holiday-aware via `CalendarService.isHoliday()`; late/leave handling; absence SMS (queued, real send in M17).
+2. Module 12: subscribe to the M08 `teacher.leave.approved` event to mark Leave days; wire the period mode after M13.
+3. Housekeeping: start enforcing the M11 promotion **rollback guard** once attendance/marks exist; push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card, M10 public wizard, M11 enroll picker + promotion wizard).
 
 ## Recently Completed
+
+- **Module 11 — Enrollment & Promotion** (2026-07-21): enrollment master live — `enrollments` binds a student to a (session, class, section, group, shift) with a roll number, **one live enrollment per session** and **roll-unique-per-section** enforced by hand-written partial unique indexes (`WHERE deleted_at IS NULL AND status <> 'CANCELLED'`, so a CANCELLED enrollment frees the slot + roll); single/**bulk** enroll (skip-and-report already-enrolled, `NEXT`/`ALPHABETICAL` roll strategies), **capacity gate** with `enrollment.capacity.override` (runtime permission check, Super Admin bypass), **section transfer** (same class+session, keep-or-reassign roll, append-only `enrollment_transfers` log), **renumber** (two-phase negative-temp update to dodge the partial index), cancel (→ CANCELLED). **Canonical roster** `getSectionStudents()` / `getStudentCurrentEnrollment()` exported for M12/M14/M16 (`GET /sections/:id/students`). **Promotion wizard** (`promotion_batches`/`promotion_items`): build DRAFT from a class→class mapping (auto decision: mapped→PROMOTE, mapped-to-nothing→GRADUATE, unmapped→EXCLUDE, editable), preview (counts + target distribution + warnings), transactional execute (create new enrollments, close old as PROMOTED/RETAINED/COMPLETED, graduate finals with status-history), rollback (delete new + reactivate old + revert graduations; guard is a hook until M12/M15). **Closed debts**: `POST /sections/:id/id-cards` (M09 section batch ID cards), M06 section delete-guard now 409s with live enrollments. 10 permission codes. Frontend: `/admin/enrollments` (class+section picker on the session switcher, roster with inline roll edit/transfer/cancel, enroll picker, renumber, ID cards) + `/admin/promotions` (list + auto-mapping new dialog) + `/admin/promotions/[id]` wizard (decision grid, preview, execute/rollback). 283 backend unit (22 new) + 11 enrollment e2e / 107 frontend (6 new) tests green. See `docs/modules/11-enrollment-promotion.md`.
 
 - **Module 10 — Admission Management** (2026-07-18): full admission pipeline live — **admission cycles** (DRAFT→OPEN→CLOSED→COMPLETED, per-class seats/fees child table, close auto-cancels unpaid apps w/ SMS), **public online application** under `/public/admissions` (reCAPTCHA optional + **OTP phone verify** reusing M02 `OtpService` purpose `ADMISSION` → 30-min signed phone token; applicant/guardian **snapshots**; photo ≤1 MB; `application_no` from SequenceService `ADM-{YY}-{SEQ6}`; duplicate rule one live app per cycle+class+phone+dob via partial unique; **age hard-check** from settings), tracking + **admit-card PDF** by app-no+phone, offline **payment recording** (waive/refund behind `admission.payment.waive`; gateway wiring = M16), **test scheduling** (paid apps → TEST_SCHEDULED) + bulk marks (PASSED/FAILED), **merit engine** (marks desc → GPA desc → dob asc; SELECTED up to seats w/ deadline from settings, rest WAITLISTED; regeneration voids previous; ADMITTED keep seats), **waitlist promotion** (auto on cancel/expire + manual promote-N), hourly **expiry job**, **conversion** via `StudentsService.create` (idempotent; StudentModule now exports the service; enrollment backfilled by M11), status-change SMS listener (log-only until M17), funnel **reports**. 8 permission codes; `RECAPTCHA_SECRET_KEY` env (optional). Frontend: `/admission` + `/admission/apply` (4-step mobile wizard, localStorage draft) + `/admission/track` public pages, `/admin/admissions` cycle list + 4-tab detail (Applications/Tests/Merit/Reports). Also **recreated the missing `docs/modules/09-students-guardians.md`** (was referenced but never written). 261 backend unit (31 new) + 21 admission e2e / 101 frontend (13 new) tests green. See `docs/modules/10-admission.md`.
 
@@ -70,7 +71,7 @@
 | ~~08 Teachers~~ ✅ | 4 → **1** | 19 Website CMS | 7 | 30 SysAdmin | 6 |
 | ~~09 Students~~ ✅ | 6 → **1** | 20 Accounting | 6 | 31 Multi-School | 8 |
 | ~~10 Admission~~ ✅ | 6 → **1** | 21 HR/Payroll | 7 | 32 Future track | per sub-project |
-| 11 Enrollment | 4 | 22 Assignments | 3 | | |
+| ~~11 Enrollment~~ ✅ | 4 → **1** | 22 Assignments | 3 | | |
 
 **Phase 1 ≈ 81 units · Phase 2 ≈ 47 units · Phase 3 (30–31) ≈ 14 units.**
 
@@ -89,3 +90,4 @@
 | 08 | Teacher Management (+ class-teacher FK, M13 conflict-hook slot) | 2026-07-17 | 2026-07-17 | 1 dev-day (est. 4) | `docs/modules/08-teachers.md` |
 | 09 | Student & Guardian Management (+ M02 per-type contact uniqueness) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/09-students-guardians.md` |
 | 10 | Admission Management (+ OtpService/StudentsService exports, RECAPTCHA env) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/10-admission.md` |
+| 11 | Enrollment & Promotion (+ canonical roster exports, M06 delete guard, M09 section ID cards) | 2026-07-21 | 2026-07-21 | 1 dev-day (est. 4) | `docs/modules/11-enrollment-promotion.md` |

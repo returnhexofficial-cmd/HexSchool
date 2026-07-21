@@ -16,6 +16,7 @@ import { RedisModule } from './database/redis/redis.module';
 import { AcademicModule } from './modules/academic/academic.module';
 import { AdmissionModule } from './modules/admission/admission.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { AuditModule } from './modules/audit/audit.module';
 import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
@@ -104,6 +105,7 @@ import { QueuesModule } from './queues/queues.module';
     TeacherModule,
     StudentModule,
     AdmissionModule,
+    EnrollmentModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

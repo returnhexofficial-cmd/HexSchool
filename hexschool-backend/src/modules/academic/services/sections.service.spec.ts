@@ -19,6 +19,7 @@ describe('SectionsService', () => {
   let shifts: Record<string, jest.Mock>;
   let groups: Record<string, jest.Mock>;
   let teachers: Record<string, jest.Mock>;
+  let enrollments: Record<string, jest.Mock>;
   let settings: Record<string, jest.Mock>;
   let service: SectionsService;
 
@@ -50,6 +51,7 @@ describe('SectionsService', () => {
       countClassTeacherSections: jest.fn().mockResolvedValue(0),
     };
     settings = { getValue: jest.fn().mockResolvedValue(1) };
+    enrollments = { sectionHasEnrollments: jest.fn().mockResolvedValue(false) };
     service = new SectionsService(
       sections as never,
       classes as never,
@@ -57,6 +59,7 @@ describe('SectionsService', () => {
       shifts as never,
       groups as never,
       teachers as never,
+      enrollments as never,
       settings as never,
       { set: jest.fn() } as never,
     );

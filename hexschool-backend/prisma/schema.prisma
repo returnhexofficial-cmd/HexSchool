@@ -306,6 +306,43 @@ enum AdmissionPaymentStatus {
   @@map("admission_payment_status_enum")
 }
 
+enum EnrollmentType {
+  NEW
+  PROMOTED
+  READMITTED
+  TRANSFERRED_IN
+
+  @@map("enrollment_type_enum")
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  TRANSFERRED_OUT
+  PROMOTED
+  RETAINED
+  COMPLETED
+  CANCELLED
+
+  @@map("enrollment_status_enum")
+}
+
+enum PromotionBatchStatus {
+  DRAFT
+  EXECUTED
+  ROLLED_BACK
+
+  @@map("promotion_batch_status_enum")
+}
+
+enum PromotionDecision {
+  PROMOTE
+  RETAIN
+  GRADUATE
+  EXCLUDE
+
+  @@map("promotion_decision_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -441,6 +478,8 @@ model School {
   studentMedicalInfos    StudentMedicalInfo[]
   studentDocuments       StudentDocument[]
   admissionCycles        AdmissionCycle[]
+  enrollments            Enrollment[]
+  promotionBatches       PromotionBatch[]
 
   @@map("schools")
 }
@@ -535,6 +574,9 @@ model AcademicSession {
   teacherSectionSubjects TeacherSectionSubject[]
   teacherEvaluations     TeacherEvaluation[]
   admissionCycles        AdmissionCycle[]
+  enrollments            Enrollment[]
+  promotionBatchesFrom   PromotionBatch[] @relation("PromotionBatchFrom")
+  promotionBatchesTo     PromotionBatch[] @relation("PromotionBatchTo")
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -629,7 +671,8 @@ model Shift {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
-  sections Section[]
+  sections    Section[]
+  enrollments Enrollment[]
 
   // Hand-written in the M06 migration; declared here too so drift
   // detection doesn't try to drop it (it's a plain unique index, which
@@ -664,6 +707,8 @@ model SchoolClass {
   admissionCycleClasses AdmissionCycleClass[]
   admissionApplications AdmissionApplication[]
   admissionTests        AdmissionTest[]
+  enrollments           Enrollment[]
+  promotionItemsTo      PromotionItem[]
 
   @@index([schoolId], map: "idx_classes_school")
   @@map("classes")
@@ -686,6 +731,7 @@ model Group {
 
   sections      Section[]
   classSubjects ClassSubject[]
+  enrollments   Enrollment[]
 
   @@index([schoolId], map: "idx_groups_school")
   @@map("groups")
@@ -722,6 +768,8 @@ model Section {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   teacherSectionSubjects TeacherSectionSubject[]
+  enrollments            Enrollment[]
+  promotionItemsTo       PromotionItem[]
 
   @@index([schoolId, sessionId], map: "idx_sections_school_session")
   @@index([classId], map: "idx_sections_class")
@@ -750,6 +798,7 @@ model Subject {
   classSubjects          ClassSubject[]
   teacherSubjects        TeacherSubject[]
   teacherSectionSubjects TeacherSectionSubject[]
+  optionalEnrollments    Enrollment[]           @relation("EnrollmentOptionalSubject")
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -1099,6 +1148,8 @@ model Student {
   documents     StudentDocument[]
   statusHistory StudentStatusHistory[]
   admissionApplications AdmissionApplication[]
+  enrollments   Enrollment[]
+  promotionItems PromotionItem[]
 
   // Deliberately NOT deleted_at-scoped: student UIDs are never reused.
   @@unique([schoolId, studentUid], map: "uq_students_uid")
@@ -1385,6 +1436,142 @@ model DocumentSequence {
 
   @@unique([schoolId, prefix], map: "uq_document_sequences_prefix")
   @@map("document_sequences")
+}
+
+// ── Module 11: Enrollment & Promotion ────────────────────────────────
+
+/// Binds a student to a (session, class, section, group, shift) with a
+/// roll number — the record every attendance/marks/fee row hangs off via
+/// enrollment_id (PROJECT_CONTEXT §16), NOT student_id, so history stays
+/// correct across transfers and promotions. One live enrollment per
+/// student per session, and roll unique within a section — both are
+/// hand-written PARTIAL unique indexes (WHERE deleted_at IS NULL AND
+/// status <> 'CANCELLED'), so a CANCELLED enrollment frees the slot and
+/// the roll for a re-enrollment. class_id is denormalized from the
+/// section for fast roster/promotion queries.
+model Enrollment {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String           @map("school_id") @db.Uuid
+  school            School           @relation(fields: [schoolId], references: [id], map: "fk_enrollments_school")
+  studentId         String           @map("student_id") @db.Uuid
+  student           Student          @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_enrollments_student")
+  sessionId         String           @map("session_id") @db.Uuid
+  session           AcademicSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_enrollments_session")
+  classId           String           @map("class_id") @db.Uuid
+  class             SchoolClass      @relation(fields: [classId], references: [id], map: "fk_enrollments_class")
+  sectionId         String           @map("section_id") @db.Uuid
+  section           Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "fk_enrollments_section")
+  groupId           String?          @map("group_id") @db.Uuid
+  group             Group?           @relation(fields: [groupId], references: [id], map: "fk_enrollments_group")
+  shiftId           String?          @map("shift_id") @db.Uuid
+  shift             Shift?           @relation(fields: [shiftId], references: [id], map: "fk_enrollments_shift")
+  rollNo            Int              @map("roll_no")
+  enrollmentDate    DateTime         @map("enrollment_date") @db.Date
+  type              EnrollmentType   @default(NEW)
+  status            EnrollmentStatus @default(ACTIVE)
+  /// The BD "4th subject" chosen at enrollment — validated against the
+  /// class's optional class_subjects for the session.
+  optionalSubjectId String?          @map("optional_subject_id") @db.Uuid
+  optionalSubject   Subject?         @relation("EnrollmentOptionalSubject", fields: [optionalSubjectId], references: [id], map: "fk_enrollments_optional_subject")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  transfers      EnrollmentTransfer[]
+  promotionItems PromotionItem[]
+
+  // uq(student, session) and uq(session, section, roll) are hand-written
+  // PARTIAL unique indexes in the migration (excluding soft-deleted +
+  // CANCELLED rows) — declared here only as plain indexes for lookups.
+  @@index([sessionId, sectionId, status], map: "idx_enrollments_section")
+  @@index([studentId], map: "idx_enrollments_student")
+  @@index([schoolId, sessionId], map: "idx_enrollments_school_session")
+  @@map("enrollments")
+}
+
+/// Append-only section-transfer log (no soft delete — history table like
+/// student_status_history). One row per transfer; the enrollment's
+/// section_id is mutated in place. school_id is a plain column (no
+/// relation), matching the audit/log-table pattern.
+model EnrollmentTransfer {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String     @map("school_id") @db.Uuid
+  enrollmentId  String     @map("enrollment_id") @db.Uuid
+  enrollment    Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_enrollment_transfers_enrollment")
+  fromSectionId String     @map("from_section_id") @db.Uuid
+  toSectionId   String     @map("to_section_id") @db.Uuid
+  fromRollNo    Int?       @map("from_roll_no")
+  toRollNo      Int?       @map("to_roll_no")
+  reason        String?
+  transferredBy String?    @map("transferred_by") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([enrollmentId], map: "idx_enrollment_transfers_enrollment")
+  @@map("enrollment_transfers")
+}
+
+/// A yearly class-promotion run (from_session → to_session). Built as a
+/// DRAFT (one PromotionItem per candidate student, decision editable),
+/// previewed, then EXECUTED transactionally (close old enrollments +
+/// create new ones + update graduating students' status). Rollback is
+/// allowed only while the new session has no dependent data (attendance/
+/// marks) — status then becomes ROLLED_BACK. `criteria` records the
+/// promotion inputs (pass mark, mapping) for the audit trail.
+model PromotionBatch {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String               @map("school_id") @db.Uuid
+  school        School               @relation(fields: [schoolId], references: [id], map: "fk_promotion_batches_school")
+  fromSessionId String               @map("from_session_id") @db.Uuid
+  fromSession   AcademicSession      @relation("PromotionBatchFrom", fields: [fromSessionId], references: [id], onDelete: Cascade, map: "fk_promotion_batches_from_session")
+  toSessionId   String               @map("to_session_id") @db.Uuid
+  toSession     AcademicSession      @relation("PromotionBatchTo", fields: [toSessionId], references: [id], onDelete: Cascade, map: "fk_promotion_batches_to_session")
+  status        PromotionBatchStatus @default(DRAFT)
+  criteria      Json                 @default("{}")
+  executedBy    String?              @map("executed_by") @db.Uuid
+  executedAt    DateTime?            @map("executed_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  items PromotionItem[]
+
+  @@index([schoolId, status], map: "idx_promotion_batches_school_status")
+  @@map("promotion_batches")
+}
+
+/// One student's decision inside a promotion batch. `to_enrollment_id`
+/// links the enrollment created at execution so rollback can delete
+/// exactly those rows. result_snapshot captures the pass/fail inputs
+/// (from Module 15 when available; manual before that).
+model PromotionItem {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  batchId          String            @map("batch_id") @db.Uuid
+  batch            PromotionBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade, map: "fk_promotion_items_batch")
+  studentId        String            @map("student_id") @db.Uuid
+  student          Student           @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_promotion_items_student")
+  fromEnrollmentId String?           @map("from_enrollment_id") @db.Uuid
+  fromEnrollment   Enrollment?       @relation(fields: [fromEnrollmentId], references: [id], onDelete: SetNull, map: "fk_promotion_items_from_enrollment")
+  decision         PromotionDecision @default(PROMOTE)
+  toClassId        String?           @map("to_class_id") @db.Uuid
+  toClass          SchoolClass?      @relation(fields: [toClassId], references: [id], map: "fk_promotion_items_to_class")
+  toSectionId      String?           @map("to_section_id") @db.Uuid
+  toSection        Section?          @relation(fields: [toSectionId], references: [id], map: "fk_promotion_items_to_section")
+  /// The enrollment created when the batch executed (for rollback).
+  toEnrollmentId   String?           @map("to_enrollment_id") @db.Uuid
+  resultSnapshot   Json?             @map("result_snapshot")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([batchId, studentId], map: "uq_promotion_items_student")
+  @@index([batchId], map: "idx_promotion_items_batch")
+  @@map("promotion_items")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

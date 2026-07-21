@@ -84,7 +84,7 @@ graph TD
 | 08 Teachers | 06, 07 | Timetable conflict hook (13 — swap the `TIMETABLE_CONFLICT_CHECKER` provider); `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
 | 09 Students & Guardians ✅ | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land. Adjusted the M02 user-uniqueness constraint to `(school_id, user_type, contact)` so a guardian can also be staff — login now checks every candidate account. |
 | 10 Admission ✅ | 06, 09 | Enrollment backfill for ADMITTED students (11 — roadmap: run 11 before the first REAL admission cycle); online gateway wiring (16); publish merit to website (19). Implementation confirmed 11 is NOT a hard dep: conversion completes at ADMITTED via the exported `StudentsService`. AuthModule newly exports `OtpService` (public phone verify). |
-| 11 Enrollment & Promotion | 06, 09 | Promotion auto-decisions from results (15) |
+| 11 Enrollment & Promotion ✅ | 06, 09 | Promotion auto-decisions from results (15); rollback guard starts blocking once attendance (12)/marks (15) exist. Exports the canonical roster service (`getSectionStudents`/`getStudentCurrentEnrollment`) consumed by 12/14/16. Closed the M06 section delete-guard and the M09 section-scoped batch ID-card debts. The M10 ADMITTED backfill is served by the normal enroll flow (no dedicated endpoint). |
 | 12 Attendance | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 |
 | 13 Timetable | 06, 08, 11 | — |
 | 14 Examination | 04, 05, 11, 13 | Admit-card dues block (16) |

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EnrollmentsRepository } from '../enrollment/repositories/enrollments.repository';
 import { SchoolModule } from '../school/school.module';
 import { TeachersRepository } from '../teacher/repositories/teachers.repository';
 import { CalendarController } from './controllers/calendar.controller';
@@ -79,6 +80,11 @@ import { StructureCloneService } from './services/structure-clone.service';
     // class teachers (M08) without importing TeacherModule — that module
     // imports THIS one for SessionsService, so the graph stays acyclic.
     TeachersRepository,
+    // M11 delete guard: SectionsService blocks deleting a section with
+    // live enrollments. EnrollmentsRepository is stateless (PrismaService
+    // only), so re-provide it here — importing EnrollmentModule would
+    // cycle (it imports AcademicModule).
+    EnrollmentsRepository,
   ],
   exports: [SessionsService, CalendarService, SectionsRepository],
 })

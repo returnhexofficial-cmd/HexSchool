@@ -18,6 +18,7 @@ describe('PromotionService', () => {
   let sessions: Record<string, jest.Mock>;
   let students: Record<string, jest.Mock>;
   let statusHistory: Record<string, jest.Mock>;
+  let attendances: Record<string, jest.Mock>;
   let service: PromotionService;
 
   beforeEach(() => {
@@ -65,6 +66,8 @@ describe('PromotionService', () => {
       update: jest.fn(),
     };
     statusHistory = { append: jest.fn() };
+    // M12 rollback guard: no attendance in the new session by default.
+    attendances = { findForEnrollments: jest.fn().mockResolvedValue([]) };
 
     service = new PromotionService(
       batches as never,
@@ -74,6 +77,7 @@ describe('PromotionService', () => {
       sessions as never,
       students as never,
       statusHistory as never,
+      attendances as never,
       { set: jest.fn() } as never,
     );
   });

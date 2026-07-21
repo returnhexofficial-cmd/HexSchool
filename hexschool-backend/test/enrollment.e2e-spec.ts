@@ -125,7 +125,11 @@ describe('Enrollment & Promotion (e2e)', () => {
     });
 
     const klass = await prisma.schoolClass.create({
-      data: { schoolId: DEFAULT_SCHOOL_ID, name: 'E2E EnClass', numericLevel: 17 },
+      data: {
+        schoolId: DEFAULT_SCHOOL_ID,
+        name: 'E2E EnClass',
+        numericLevel: 17,
+      },
     });
     classId = klass.id;
 
@@ -344,9 +348,9 @@ describe('Enrollment & Promotion (e2e)', () => {
       .get(`/api/v1/promotions/${batchId}/preview`)
       .set(auth(adminToken))
       .expect(200);
-    expect(dataOf<{ counts: { PROMOTE: number } }>(preview).counts.PROMOTE).toBe(
-      6,
-    );
+    expect(
+      dataOf<{ counts: { PROMOTE: number } }>(preview).counts.PROMOTE,
+    ).toBe(6);
 
     const exec = await server()
       .post(`/api/v1/promotions/${batchId}/execute`)

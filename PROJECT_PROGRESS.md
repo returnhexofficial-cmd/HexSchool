@@ -1,24 +1,26 @@
 # PROJECT_PROGRESS.md — SMIS Progress Tracker
 
-> **Last updated:** 2026-07-21 · **Overall completion: 34 % (11 / 32 modules)**
+> **Last updated:** 2026-07-22 · **Overall completion: 38 % (12 / 32 modules)**
 
 ## Status Summary
 
 | | |
 |---|---|
-| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11 |
-| **Current module** | **12 — Attendance Management** |
-| Remaining | 21 |
+| Completed modules | 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12 |
+| **Current module** | **13 — Timetable / Class Routine** |
+| Remaining | 20 |
 | Blockers | None |
 | Phase | Phase 1 (MVP) — Modules 01–18 |
 
 ## High-Priority Tasks (now)
 
-1. Module 12: `attendance` (per-section daily, optionally per-period), student + staff/teacher modes, manual + QR; keys on **`enrollment_id`** via the M11 canonical `getSectionStudents()` roster; holiday-aware via `CalendarService.isHoliday()`; late/leave handling; absence SMS (queued, real send in M17).
-2. Module 12: subscribe to the M08 `teacher.leave.approved` event to mark Leave days; wire the period mode after M13.
-3. Housekeeping: start enforcing the M11 promotion **rollback guard** once attendance/marks exist; push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card, M10 public wizard, M11 enroll picker + promotion wizard).
+1. Module 13: period definitions + `section timetables` (period × day → subject + teacher + room); **swap the M08 `TIMETABLE_CONFLICT_CHECKER` provider** for the real teacher-conflict checker (it is still a no-op); printable/portal routines; exam-routine foundation for M14.
+2. Module 13 → M12 follow-through: add the `period_id` FK to `student_attendances` and turn on period-mode marking (the column, the `attendance.mode` setting and the identity unique index already support it).
+3. Housekeeping: push both repos to GitHub and confirm CI green; chase the M06 e2e open handle; fix the flaky `school.e2e-spec` audit-diff race (poll for the row); in-browser click-throughs (M04 logo, M07/M08 uploads, M08 matrix + leave inbox, M09 photo/document/ID-card, M10 public wizard, M11 enroll picker + promotion wizard, **M12 QR scanner on a real camera + 100-student grid**).
 
 ## Recently Completed
+
+- **Module 12 — Attendance Management** (2026-07-22): daily student attendance live — `student_attendances` keyed on **`enrollment_id`** with `section_id` denormalized **at marking time** (a mid-year transfer must not retro-move history), identity unique as a partial index over `(enrollment_id, date, COALESCE(period_id, nil))` `WHERE deleted_at IS NULL`. Marking sheet + transactional upsert (re-mark in place) with the full guard stack: no future dates, no dates outside the session, **COMPLETED/ARCHIVED sessions read-only** (first enforcement of the M05 rule), holiday blocked unless `attendance.holiday.override`, re-mark needs `attendance.edit`, past the `edit_window_days` needs `attendance.edit.past` (runtime permission checks, M08 convention). **Approved leave beats a submitted ABSENT** both retroactively (approving converts recorded ABSENT/HALF_DAY across every enrollment the student held that session) and at marking time. **QR check-in** resolves `qr_token` → current enrollment and grades arrival against the section's shift start (PRESENT/LATE/HALF_DAY), idempotent inside the dedupe window. **Convert-a-date-to-HOLIDAY** admin tool for late government holidays. **Staff attendance** over the teachers+staff union (polymorphic `person_type`/`person_id`, no FK); the M08 `teacher.leave.approved` hook now marks LEAVE days. **Jobs**: auto-absent (only in sections someone started marking) and absent-guardian SMS (queued, deduped by `absent_notified_at`, daily cap). **Reports**: daily, monthly register, per-student (with a per-section split for transfers), staff monthly, session summary + trend, late analysis — each with XLSX (exceljs) and PDF (pdfkit) export. New shared **`CalendarService.workingDays()`** (M05 extension) is the percentage denominator; the maths lives in a dependency-free engine (`present + late + ½ half-day ÷ working days`, excluding holidays and pre-enrollment days). 12 permission codes, 12 new `attendance.*` settings. **Closed debts**: `GET /students/:id/attendance-history` returns real data (M09); the M11 promotion **rollback guard now 409s** once attendance exists. Frontend: `/admin/attendance` (marking grid, tap-to-cycle, sticky save bar), `/admin/attendance/scan` (BarcodeDetector + manual fallback), `/admin/attendance/staff`, `/admin/attendance/leaves`, `/admin/attendance/reports` (4 tabs + exports), plus a real Attendance tab on the student detail page. 344 backend unit (61 new) + 17 attendance e2e / 119 frontend (12 new) tests green. See `docs/modules/12-attendance.md`.
 
 - **Module 11 — Enrollment & Promotion** (2026-07-21): enrollment master live — `enrollments` binds a student to a (session, class, section, group, shift) with a roll number, **one live enrollment per session** and **roll-unique-per-section** enforced by hand-written partial unique indexes (`WHERE deleted_at IS NULL AND status <> 'CANCELLED'`, so a CANCELLED enrollment frees the slot + roll); single/**bulk** enroll (skip-and-report already-enrolled, `NEXT`/`ALPHABETICAL` roll strategies), **capacity gate** with `enrollment.capacity.override` (runtime permission check, Super Admin bypass), **section transfer** (same class+session, keep-or-reassign roll, append-only `enrollment_transfers` log), **renumber** (two-phase negative-temp update to dodge the partial index), cancel (→ CANCELLED). **Canonical roster** `getSectionStudents()` / `getStudentCurrentEnrollment()` exported for M12/M14/M16 (`GET /sections/:id/students`). **Promotion wizard** (`promotion_batches`/`promotion_items`): build DRAFT from a class→class mapping (auto decision: mapped→PROMOTE, mapped-to-nothing→GRADUATE, unmapped→EXCLUDE, editable), preview (counts + target distribution + warnings), transactional execute (create new enrollments, close old as PROMOTED/RETAINED/COMPLETED, graduate finals with status-history), rollback (delete new + reactivate old + revert graduations; guard is a hook until M12/M15). **Closed debts**: `POST /sections/:id/id-cards` (M09 section batch ID cards), M06 section delete-guard now 409s with live enrollments. 10 permission codes. Frontend: `/admin/enrollments` (class+section picker on the session switcher, roster with inline roll edit/transfer/cancel, enroll picker, renumber, ID cards) + `/admin/promotions` (list + auto-mapping new dialog) + `/admin/promotions/[id]` wizard (decision grid, preview, execute/rollback). 283 backend unit (22 new) + 11 enrollment e2e / 107 frontend (6 new) tests green. See `docs/modules/11-enrollment-promotion.md`.
 
@@ -61,7 +63,7 @@
 
 | Module | Est. | Module | Est. | Module | Est. |
 |---|---|---|---|---|---|
-| ~~01 Setup~~ ✅ | 4 → **1** | 12 Attendance | 5 | 23 Library | 4 |
+| ~~01 Setup~~ ✅ | 4 → **1** | ~~12 Attendance~~ ✅ | 5 → **1** | 23 Library | 4 |
 | ~~02 Auth~~ ✅ | 5 → **1** | 13 Timetable | 4 | 24 Inventory | 4 |
 | ~~03 RBAC+Audit~~ ✅ | 4 → **1** | 14 Examination | 5 | 25 Transport | 3 |
 | ~~04 School Setup~~ ✅ | 3 → **1** | 15 Marks/Results | 8 | 26 Hostel | 3 |
@@ -91,3 +93,4 @@
 | 09 | Student & Guardian Management (+ M02 per-type contact uniqueness) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/09-students-guardians.md` |
 | 10 | Admission Management (+ OtpService/StudentsService exports, RECAPTCHA env) | 2026-07-18 | 2026-07-18 | 1 dev-day (est. 6) | `docs/modules/10-admission.md` |
 | 11 | Enrollment & Promotion (+ canonical roster exports, M06 delete guard, M09 section ID cards) | 2026-07-21 | 2026-07-21 | 1 dev-day (est. 4) | `docs/modules/11-enrollment-promotion.md` |
+| 12 | Attendance Management (+ `CalendarService.workingDays`, M09 attendance history, M11 rollback guard live) | 2026-07-21 | 2026-07-22 | 1 dev-day (est. 5) | `docs/modules/12-attendance.md` |

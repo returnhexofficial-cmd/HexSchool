@@ -194,7 +194,34 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['promotion.execute', 'Execute or roll back a promotion batch'],
   ]),
 
-  // Modules 12+ append their codes here.
+  // ── Module 12: Attendance Management ────────────────────────────────
+  ...define('attendance', [
+    ['attendance.view', 'View attendance sheets and marked days'],
+    ['attendance.mark', 'Mark student attendance for a section and date'],
+    ['attendance.edit', 'Re-mark a day that was already marked'],
+    [
+      'attendance.edit.past',
+      'Edit attendance older than the configured edit window',
+    ],
+    [
+      'attendance.holiday.override',
+      'Mark attendance on a holiday / convert a marked date to HOLIDAY',
+    ],
+    ['attendance.qr.checkin', 'Run the QR check-in scanner'],
+    ['attendance.staff.view', 'View staff and teacher attendance'],
+    ['attendance.staff.mark', 'Mark staff and teacher attendance'],
+    ['attendance.report', 'Run and export attendance reports'],
+  ]),
+  ...define('student-leaves', [
+    ['student.leave.view', 'View student leave applications'],
+    ['student.leave.manage', 'Create/edit/delete student leave applications'],
+    [
+      'student.leave.approve',
+      'Approve or reject student leave (retro-marks LEAVE days)',
+    ],
+  ]),
+
+  // Modules 13+ append their codes here.
 ];
 
 /** Fast membership checks for validators and the seeder. */

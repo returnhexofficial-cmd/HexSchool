@@ -106,4 +106,34 @@ export class SectionsRepository extends BaseRepository<
       where: { schoolId, sessionId, deletedAt: null },
     });
   }
+
+  /** One section with class/shift/group names — the M12 attendance-sheet
+   *  and report headers (single fetch instead of N lookups). */
+  async findDetail(
+    id: string,
+    schoolId: string,
+  ): Promise<SectionWithRelations | null> {
+    return this.prisma.section.findFirst({
+      where: { id, schoolId, deletedAt: null },
+      include: RELATIONS,
+    });
+  }
+
+  /** Live sections of a session with their class names (report rollups). */
+  async findForSessionWithRelations(
+    schoolId: string,
+    sessionId: string,
+    classId?: string,
+  ): Promise<SectionWithRelations[]> {
+    return this.prisma.section.findMany({
+      where: {
+        schoolId,
+        sessionId,
+        deletedAt: null,
+        ...(classId ? { classId } : {}),
+      },
+      include: RELATIONS,
+      orderBy: [{ class: { numericLevel: 'asc' } }, { name: 'asc' }],
+    });
+  }
 }

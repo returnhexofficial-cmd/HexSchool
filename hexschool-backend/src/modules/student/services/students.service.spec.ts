@@ -116,6 +116,9 @@ describe('StudentsService', () => {
       medical as never,
       statusHistory as never,
       classes as never,
+      // M11/M12 history tabs (re-provisioned repos).
+      { findAll: jest.fn().mockResolvedValue([]) } as never, // enrollments
+      { findForEnrollments: jest.fn().mockResolvedValue([]) } as never, // attendances
       users as never,
       refreshTokens as never,
       {

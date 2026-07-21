@@ -35,4 +35,8 @@ export {
   EnrollmentStatus,
   PromotionBatchStatus,
   PromotionDecision,
+  AttendanceStatus,
+  AttendanceMethod,
+  AttendancePersonType,
+  StudentLeaveAppliedBy,
 } from '@prisma/client';

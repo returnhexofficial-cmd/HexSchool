@@ -343,6 +343,43 @@ enum PromotionDecision {
   @@map("promotion_decision_enum")
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  LEAVE
+  HALF_DAY
+  HOLIDAY
+
+  @@map("attendance_status_enum")
+}
+
+enum AttendanceMethod {
+  MANUAL
+  QR
+  IMPORT
+  AUTO
+
+  @@map("attendance_method_enum")
+}
+
+/// staff_attendances is polymorphic over the two employee tables
+/// (teachers / staff_profiles) — person_type says which one person_id
+/// points at (no FK, like the audit tables).
+enum AttendancePersonType {
+  TEACHER
+  STAFF
+
+  @@map("attendance_person_type_enum")
+}
+
+enum StudentLeaveAppliedBy {
+  GUARDIAN
+  ADMIN
+
+  @@map("student_leave_applied_by_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -454,32 +491,35 @@ model School {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  users            User[]
-  roles            Role[]
-  settings         SchoolSetting[]
-  gradingSystems   GradingSystem[]
-  academicSessions AcademicSession[]
-  departments      Department[]
-  shifts           Shift[]
-  classes          SchoolClass[]
-  groups           Group[]
-  sections         Section[]
-  subjects         Subject[]
-  classSubjects    ClassSubject[]
-  staffProfiles    StaffProfile[]
-  staffDocuments   StaffDocument[]
-  teachers               Teacher[]
-  teacherSectionSubjects TeacherSectionSubject[]
-  teacherLeaves          TeacherLeave[]
-  teacherEvaluations     TeacherEvaluation[]
-  teacherDocuments       TeacherDocument[]
-  students               Student[]
-  guardians              Guardian[]
-  studentMedicalInfos    StudentMedicalInfo[]
-  studentDocuments       StudentDocument[]
-  admissionCycles        AdmissionCycle[]
-  enrollments            Enrollment[]
-  promotionBatches       PromotionBatch[]
+  users                    User[]
+  roles                    Role[]
+  settings                 SchoolSetting[]
+  gradingSystems           GradingSystem[]
+  academicSessions         AcademicSession[]
+  departments              Department[]
+  shifts                   Shift[]
+  classes                  SchoolClass[]
+  groups                   Group[]
+  sections                 Section[]
+  subjects                 Subject[]
+  classSubjects            ClassSubject[]
+  staffProfiles            StaffProfile[]
+  staffDocuments           StaffDocument[]
+  teachers                 Teacher[]
+  teacherSectionSubjects   TeacherSectionSubject[]
+  teacherLeaves            TeacherLeave[]
+  teacherEvaluations       TeacherEvaluation[]
+  teacherDocuments         TeacherDocument[]
+  students                 Student[]
+  guardians                Guardian[]
+  studentMedicalInfos      StudentMedicalInfo[]
+  studentDocuments         StudentDocument[]
+  admissionCycles          AdmissionCycle[]
+  enrollments              Enrollment[]
+  promotionBatches         PromotionBatch[]
+  studentAttendances       StudentAttendance[]
+  staffAttendances         StaffAttendance[]
+  studentLeaveApplications StudentLeaveApplication[]
 
   @@map("schools")
 }
@@ -567,16 +607,17 @@ model AcademicSession {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  holidays               Holiday[]
-  calendarEvents         CalendarEvent[]
-  sections               Section[]
-  classSubjects          ClassSubject[]
-  teacherSectionSubjects TeacherSectionSubject[]
-  teacherEvaluations     TeacherEvaluation[]
-  admissionCycles        AdmissionCycle[]
-  enrollments            Enrollment[]
-  promotionBatchesFrom   PromotionBatch[] @relation("PromotionBatchFrom")
-  promotionBatchesTo     PromotionBatch[] @relation("PromotionBatchTo")
+  holidays                 Holiday[]
+  calendarEvents           CalendarEvent[]
+  sections                 Section[]
+  classSubjects            ClassSubject[]
+  teacherSectionSubjects   TeacherSectionSubject[]
+  teacherEvaluations       TeacherEvaluation[]
+  admissionCycles          AdmissionCycle[]
+  enrollments              Enrollment[]
+  promotionBatchesFrom     PromotionBatch[]          @relation("PromotionBatchFrom")
+  promotionBatchesTo       PromotionBatch[]          @relation("PromotionBatchTo")
+  studentLeaveApplications StudentLeaveApplication[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -701,9 +742,9 @@ model SchoolClass {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  sections      Section[]
-  classSubjects ClassSubject[]
-  admittedStudents Student[]
+  sections              Section[]
+  classSubjects         ClassSubject[]
+  admittedStudents      Student[]
   admissionCycleClasses AdmissionCycleClass[]
   admissionApplications AdmissionApplication[]
   admissionTests        AdmissionTest[]
@@ -770,6 +811,7 @@ model Section {
   teacherSectionSubjects TeacherSectionSubject[]
   enrollments            Enrollment[]
   promotionItemsTo       PromotionItem[]
+  studentAttendances     StudentAttendance[]
 
   @@index([schoolId, sessionId], map: "idx_sections_school_session")
   @@index([classId], map: "idx_sections_class")
@@ -798,7 +840,7 @@ model Subject {
   classSubjects          ClassSubject[]
   teacherSubjects        TeacherSubject[]
   teacherSectionSubjects TeacherSectionSubject[]
-  optionalEnrollments    Enrollment[]           @relation("EnrollmentOptionalSubject")
+  optionalEnrollments    Enrollment[]            @relation("EnrollmentOptionalSubject")
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -947,13 +989,13 @@ model Teacher {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  qualifications  TeacherQualification[]
-  subjects        TeacherSubject[]
-  assignments     TeacherSectionSubject[]
-  leaves          TeacherLeave[]
-  evaluations     TeacherEvaluation[]
-  documents       TeacherDocument[]
-  classTeacherOf  Section[]
+  qualifications TeacherQualification[]
+  subjects       TeacherSubject[]
+  assignments    TeacherSectionSubject[]
+  leaves         TeacherLeave[]
+  evaluations    TeacherEvaluation[]
+  documents      TeacherDocument[]
+  classTeacherOf Section[]
 
   // Same rule as staff: NOT deleted_at-scoped — teacher IDs never reused.
   @@unique([schoolId, employeeId], map: "uq_teachers_employee_id")
@@ -1143,13 +1185,14 @@ model Student {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  guardians     StudentGuardian[]
-  medicalInfo   StudentMedicalInfo?
-  documents     StudentDocument[]
-  statusHistory StudentStatusHistory[]
+  guardians             StudentGuardian[]
+  medicalInfo           StudentMedicalInfo?
+  documents             StudentDocument[]
+  statusHistory         StudentStatusHistory[]
   admissionApplications AdmissionApplication[]
-  enrollments   Enrollment[]
-  promotionItems PromotionItem[]
+  enrollments           Enrollment[]
+  promotionItems        PromotionItem[]
+  leaveApplications     StudentLeaveApplication[]
 
   // Deliberately NOT deleted_at-scoped: student UIDs are never reused.
   @@unique([schoolId, studentUid], map: "uq_students_uid")
@@ -1219,11 +1262,11 @@ model StudentGuardian {
 /// `student.medical.view` / `student.medical.update` permissions and
 /// NEVER included in exports by default (roadmap M09 §6).
 model StudentMedicalInfo {
-  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId          String  @map("school_id") @db.Uuid
-  school            School  @relation(fields: [schoolId], references: [id], map: "fk_student_medical_info_school")
-  studentId         String  @unique(map: "uq_student_medical_info_student") @map("student_id") @db.Uuid
-  student           Student @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_medical_info_student")
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  school            School   @relation(fields: [schoolId], references: [id], map: "fk_student_medical_info_school")
+  studentId         String   @unique(map: "uq_student_medical_info_student") @map("student_id") @db.Uuid
+  student           Student  @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_medical_info_student")
   heightCm          Decimal? @map("height_cm") @db.Decimal(5, 2)
   weightKg          Decimal? @map("weight_kg") @db.Decimal(5, 2)
   allergies         String?
@@ -1341,13 +1384,13 @@ model AdmissionCycleClass {
 /// phone, dob) — partial unique index, hand-written (terminal statuses
 /// excluded so a CANCELLED applicant can reapply).
 model AdmissionApplication {
-  id            String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId      String                     @map("school_id") @db.Uuid
-  cycleId       String                     @map("cycle_id") @db.Uuid
-  cycle         AdmissionCycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade, map: "fk_admission_applications_cycle")
-  applicationNo String                     @map("application_no") @db.VarChar(30)
-  classId       String                     @map("class_id") @db.Uuid
-  class         SchoolClass                @relation(fields: [classId], references: [id], map: "fk_admission_applications_class")
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String         @map("school_id") @db.Uuid
+  cycleId       String         @map("cycle_id") @db.Uuid
+  cycle         AdmissionCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade, map: "fk_admission_applications_cycle")
+  applicationNo String         @map("application_no") @db.VarChar(30)
+  classId       String         @map("class_id") @db.Uuid
+  class         SchoolClass    @relation(fields: [classId], references: [id], map: "fk_admission_applications_class")
 
   // ── applicant snapshot ────────────────────────────────────────────
   firstName        String   @map("first_name") @db.VarChar(100)
@@ -1482,6 +1525,7 @@ model Enrollment {
 
   transfers      EnrollmentTransfer[]
   promotionItems PromotionItem[]
+  attendances    StudentAttendance[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -1572,6 +1616,114 @@ model PromotionItem {
   @@unique([batchId, studentId], map: "uq_promotion_items_student")
   @@index([batchId], map: "idx_promotion_items_batch")
   @@map("promotion_items")
+}
+
+// ── Module 12: Attendance Management ─────────────────────────────────
+
+/// One student's attendance for one date (and one period once M13 lands;
+/// period_id NULL = daily mode). Keyed on enrollment_id — never
+/// student_id — so history stays correct across transfers and promotions
+/// (PROJECT_CONTEXT §16). `section_id` is denormalized from the
+/// enrollment AT MARKING TIME on purpose: a mid-year section transfer
+/// mutates enrollments.section_id in place, and monthly registers must
+/// keep showing each day under the section the student actually sat in.
+/// The identity unique is a hand-written partial index over
+/// (enrollment_id, date, COALESCE(period_id, nil uuid)) WHERE deleted_at
+/// IS NULL — NULL periods would otherwise all be distinct.
+model StudentAttendance {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String           @map("school_id") @db.Uuid
+  school           School           @relation(fields: [schoolId], references: [id], map: "fk_student_attendances_school")
+  enrollmentId     String           @map("enrollment_id") @db.Uuid
+  enrollment       Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_student_attendances_enrollment")
+  sectionId        String           @map("section_id") @db.Uuid
+  section          Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "fk_student_attendances_section")
+  date             DateTime         @db.Date
+  /// Timetable period (M13). Plain UUID column until periods exist — the
+  /// FK is added by that module; NULL means daily-mode attendance.
+  periodId         String?          @map("period_id") @db.Uuid
+  status           AttendanceStatus
+  checkInTime      DateTime?        @map("check_in_time") @db.Timestamptz(6)
+  method           AttendanceMethod @default(MANUAL)
+  remarks          String?
+  markedBy         String?          @map("marked_by") @db.Uuid
+  /// Set when the absent-SMS job notified this student's guardian —
+  /// the per-student-per-day dedupe (roadmap M12 §8, SMS cost control).
+  absentNotifiedAt DateTime?        @map("absent_notified_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([sectionId, date], map: "idx_student_attendances_section_date")
+  @@index([enrollmentId, date], map: "idx_student_attendances_enrollment_date")
+  @@index([schoolId, date, status], map: "idx_student_attendances_school_date")
+  @@map("student_attendances")
+}
+
+/// Daily attendance for employees. Polymorphic over teachers /
+/// staff_profiles (person_type + person_id, no FK — the two lifecycles
+/// stay independent, M08 decision). Identity unique
+/// (person_type, person_id, date) is a partial index excluding
+/// soft-deleted rows.
+model StaffAttendance {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String               @map("school_id") @db.Uuid
+  school       School               @relation(fields: [schoolId], references: [id], map: "fk_staff_attendances_school")
+  personType   AttendancePersonType @map("person_type")
+  personId     String               @map("person_id") @db.Uuid
+  date         DateTime             @db.Date
+  status       AttendanceStatus
+  checkInTime  DateTime?            @map("check_in_time") @db.Timestamptz(6)
+  checkOutTime DateTime?            @map("check_out_time") @db.Timestamptz(6)
+  method       AttendanceMethod     @default(MANUAL)
+  remarks      String?
+  markedBy     String?              @map("marked_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, date], map: "idx_staff_attendances_school_date")
+  @@index([personType, personId, date], map: "idx_staff_attendances_person")
+  @@map("staff_attendances")
+}
+
+/// A student's leave request (raised by an admin, or by a guardian from
+/// the portal in M18). Approving one retro-marks the covered dates as
+/// LEAVE so an already-recorded ABSENT is corrected (roadmap M12 §6).
+/// Keyed on the student (not the enrollment) — leaves are a person-level
+/// fact; `session_id` scopes reporting.
+model StudentLeaveApplication {
+  id           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String                @map("school_id") @db.Uuid
+  school       School                @relation(fields: [schoolId], references: [id], map: "fk_student_leave_applications_school")
+  studentId    String                @map("student_id") @db.Uuid
+  student      Student               @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_leave_applications_student")
+  sessionId    String                @map("session_id") @db.Uuid
+  session      AcademicSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_student_leave_applications_session")
+  fromDate     DateTime              @map("from_date") @db.Date
+  toDate       DateTime              @map("to_date") @db.Date
+  reason       String
+  appliedBy    StudentLeaveAppliedBy @default(ADMIN) @map("applied_by")
+  status       LeaveStatus           @default(PENDING)
+  approvedBy   String?               @map("approved_by") @db.Uuid
+  approvedAt   DateTime?             @map("approved_at") @db.Timestamptz(6)
+  decisionNote String?               @map("decision_note")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status], map: "idx_student_leave_applications_school_status")
+  @@index([studentId, fromDate], map: "idx_student_leave_applications_student")
+  @@map("student_leave_applications")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

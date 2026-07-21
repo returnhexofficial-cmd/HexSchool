@@ -25,7 +25,9 @@ graph TD
     M11 -. soft: enrollment backfill for ADMITTED .-> M10
     M11 --> M12[12 Attendance]
     M08 --> M12
+    M09 --> M12
     M05 --> M12
+    M13 -. soft: period mode + period_id FK .-> M12
     M11 --> M13[13 Timetable]
     M08 --> M13
     M13 --> M14[14 Examination]
@@ -85,7 +87,7 @@ graph TD
 | 09 Students & Guardians ✅ | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land. Adjusted the M02 user-uniqueness constraint to `(school_id, user_type, contact)` so a guardian can also be staff — login now checks every candidate account. |
 | 10 Admission ✅ | 06, 09 | Enrollment backfill for ADMITTED students (11 — roadmap: run 11 before the first REAL admission cycle); online gateway wiring (16); publish merit to website (19). Implementation confirmed 11 is NOT a hard dep: conversion completes at ADMITTED via the exported `StudentsService`. AuthModule newly exports `OtpService` (public phone verify). |
 | 11 Enrollment & Promotion ✅ | 06, 09 | Promotion auto-decisions from results (15); rollback guard starts blocking once attendance (12)/marks (15) exist. Exports the canonical roster service (`getSectionStudents`/`getStudentCurrentEnrollment`) consumed by 12/14/16. Closed the M06 section delete-guard and the M09 section-scoped batch ID-card debts. The M10 ADMITTED backfill is served by the normal enroll flow (no dedicated endpoint). |
-| 12 Attendance | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 |
+| 12 Attendance ✅ | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 (add the `period_id` FK then). Consumed the M08 `teacher.leave.approved` hook. Added `CalendarService.workingDays()` to M05 and exports `AttendanceReportsService` + the attendance repositories for 18/21. Closed the M09 `attendance-history` debt and armed the M11 promotion rollback guard (M15 must extend it to marks). |
 | 13 Timetable | 06, 08, 11 | — |
 | 14 Examination | 04, 05, 11, 13 | Admit-card dues block (16) |
 | 15 Marks & Results | 14 | Result SMS (17); public search UI (19) |

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CalendarEvent, Holiday, HolidayAppliesTo } from '@prisma/client';
 import { SettingsService } from '../../school/services/settings.service';
 import { buildIcs } from '../calendar/ics.util';
+import { workingDaysBetween } from '../calendar/working-days.util';
 import { CalendarQueryDto } from '../dto';
 import { AcademicSessionsRepository } from '../repositories/academic-sessions.repository';
 import { CalendarEventsRepository } from '../repositories/calendar-events.repository';
@@ -66,6 +67,30 @@ export class CalendarService {
       return { holiday: true, reason: 'RANGE', title: row.title };
     }
     return { holiday: false };
+  }
+
+  /**
+   * Working days in [from, to] as YYYY-MM-DD strings (added in M12): the
+   * denominator of every attendance percentage. One holidays query + one
+   * settings read for the whole range, unlike per-date `isHoliday`.
+   */
+  async workingDays(
+    schoolId: string,
+    from: Date,
+    to: Date,
+    appliesTo?: HolidayAppliesTo,
+  ): Promise<string[]> {
+    const [weekly, holidays] = await Promise.all([
+      this.weeklyHolidays(schoolId),
+      this.holidays.findInRange(schoolId, from, to),
+    ]);
+    const scoped = appliesTo
+      ? holidays.filter(
+          (h) =>
+            h.appliesTo === appliesTo || h.appliesTo === HolidayAppliesTo.ALL,
+        )
+      : holidays;
+    return workingDaysBetween(from, to, weekly, scoped);
   }
 
   /** `GET /calendar?month=YYYY-MM&sessionId=` — month grid payload. */

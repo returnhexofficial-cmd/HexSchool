@@ -8,11 +8,21 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, Student, StudentMedicalInfo } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import sharp from 'sharp';
-import { StudentStatus, UserStatus } from '../../../common/constants';
+import {
+  AttendanceStatus,
+  StudentStatus,
+  UserStatus,
+} from '../../../common/constants';
 import { PaginatedResult } from '../../../common/dto/paginated.dto';
 import { parseDate } from '../../academic/calendar/date.util';
 import { ClassesRepository } from '../../academic/repositories/classes.repository';
+import {
+  countByStatus,
+  presentEquivalent,
+} from '../../attendance/calc/percentage.util';
+import { StudentAttendancesRepository } from '../../attendance/repositories/student-attendances.repository';
 import { AuditContextService } from '../../audit/services/audit-context.service';
+import { EnrollmentsRepository } from '../../enrollment/repositories/enrollments.repository';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { RefreshTokensRepository } from '../../auth/repositories/refresh-tokens.repository';
 import { UsersRepository } from '../../auth/repositories/users.repository';
@@ -94,6 +104,11 @@ export class StudentsService {
     private readonly medical: StudentMedicalRepository,
     private readonly statusHistory: StudentStatusHistoryRepository,
     private readonly classes: ClassesRepository,
+    // Re-provisioned stateless repositories (M07 convention) — the
+    // student history tabs read enrollment/attendance without importing
+    // those modules (both import StudentModule).
+    private readonly enrollments: EnrollmentsRepository,
+    private readonly attendances: StudentAttendancesRepository,
     private readonly users: UsersRepository,
     private readonly refreshTokens: RefreshTokensRepository,
     private readonly schools: SchoolsRepository,
@@ -540,12 +555,40 @@ export class StudentsService {
 
   // ── aggregated history (fills as M12/M15 land — empty gracefully) ──
 
+  /**
+   * Attendance rollup for the student detail tab. Live since M12: counts
+   * come from `student_attendances` via the re-provisioned repository and
+   * the percentage from the shared pure engine — no AttendanceModule
+   * import, which would close a cycle (attendance imports StudentModule).
+   */
   async attendanceHistory(studentId: string, schoolId: string) {
     await this.students.findByIdOrFail(studentId, schoolId);
+    const enrollments = await this.enrollments.findAll({ studentId }, schoolId);
+    const rows = await this.attendances.findForEnrollments(
+      enrollments.map((e) => e.id),
+      new Date(Date.UTC(1970, 0, 1)),
+      new Date(Date.UTC(2999, 11, 31)),
+    );
+
+    const counts = countByStatus(rows);
+    const marked = rows.length - counts[AttendanceStatus.HOLIDAY];
     return {
-      available: false,
-      reason: 'Attendance arrives with Module 12',
-      items: [] as unknown[],
+      available: true,
+      /** Percentage over MARKED days — the full working-day denominator
+       *  lives on `GET /attendance/reports/student/:id`. */
+      counts,
+      markedDays: marked,
+      presentEquivalent: presentEquivalent(counts),
+      percentage:
+        marked === 0
+          ? 0
+          : Math.round((presentEquivalent(counts) / marked) * 10000) / 100,
+      items: rows.map((row) => ({
+        date: row.date,
+        status: row.status,
+        sectionId: row.sectionId,
+        remarks: row.remarks,
+      })),
     };
   }
 

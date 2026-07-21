@@ -157,13 +157,70 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
     ['payment.nagad_merchant_id', 'string', 'Nagad merchant ID', ''],
     ['payment.nagad_private_key', 'string', 'Nagad private key', '', true],
   ]),
+  // M12 — every knob the attendance module reads (mode, timing, jobs,
+  // edit window, SMS cost control).
   ...g(SettingsGroup.attendance, [
+    ['attendance.mode', 'string', 'Attendance mode (daily|period)', 'daily'],
+    [
+      'attendance.default_start_time',
+      'string',
+      'Default class start time (HH:mm) — used when a section has no shift',
+      '08:00',
+    ],
     ['attendance.late_after_minutes', 'number', 'Late after (minutes)', 15],
+    [
+      'attendance.half_day_after_minutes',
+      'number',
+      'Half day after (minutes)',
+      120,
+    ],
+    [
+      'attendance.edit_window_days',
+      'number',
+      'Days a marked day stays editable without elevated permission',
+      7,
+    ],
+    [
+      'attendance.late_alert_threshold',
+      'number',
+      'Late days per month flagged in the late analysis report',
+      3,
+    ],
+    [
+      'attendance.qr_duplicate_window_minutes',
+      'number',
+      'QR re-scan window treated as already marked (minutes)',
+      5,
+    ],
+    [
+      'attendance.auto_absent_enabled',
+      'boolean',
+      'Auto-mark unmarked students ABSENT at the cutoff',
+      false,
+    ],
+    [
+      'attendance.auto_absent_time',
+      'string',
+      'Auto-absent cutoff (HH:mm, Asia/Dhaka)',
+      '11:00',
+    ],
     [
       'attendance.absent_sms_enabled',
       'boolean',
       'Absent SMS to guardians',
       false,
+    ],
+    [
+      'attendance.absent_sms_time',
+      'string',
+      'Absent SMS dispatch time (HH:mm, Asia/Dhaka)',
+      '12:00',
+    ],
+    [
+      'attendance.absent_sms_daily_cap',
+      'number',
+      'Maximum absent SMS per day (cost control)',
+      500,
     ],
   ]),
   ...g(SettingsGroup.exam, [

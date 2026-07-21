@@ -255,6 +255,22 @@ export interface ImportRowResult {
   warnings: string[];
 }
 
+/** `GET /students/:id/attendance-history` — live since M12. */
+export interface StudentAttendanceHistory {
+  available: boolean;
+  reason?: string;
+  counts: Record<string, number>;
+  markedDays: number;
+  presentEquivalent: number;
+  percentage: number;
+  items: Array<{
+    date: string;
+    status: string;
+    sectionId: string;
+    remarks: string | null;
+  }>;
+}
+
 export interface ImportReport {
   total: number;
   valid: number;
@@ -514,12 +530,12 @@ export const studentsApi = {
     return res.data.data;
   },
 
-  async attendanceHistory(
-    id: string,
-  ): Promise<{ available: boolean; reason?: string; items: unknown[] }> {
-    const res = await api.get<
-      ApiEnvelope<{ available: boolean; reason?: string; items: unknown[] }>
-    >(`/students/${id}/attendance-history`);
+  /** Live since M12 — `counts`/`percentage` are over MARKED days; the
+   *  working-day denominator lives on the attendance report endpoint. */
+  async attendanceHistory(id: string): Promise<StudentAttendanceHistory> {
+    const res = await api.get<ApiEnvelope<StudentAttendanceHistory>>(
+      `/students/${id}/attendance-history`,
+    );
     return res.data.data;
   },
 

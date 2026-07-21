@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { QueuesModule } from '../../queues/queues.module';
 import { AcademicModule } from '../academic/academic.module';
 import { ClassesRepository } from '../academic/repositories/classes.repository';
+import { StudentAttendancesRepository } from '../attendance/repositories/student-attendances.repository';
 import { AuthModule } from '../auth/auth.module';
+import { EnrollmentsRepository } from '../enrollment/repositories/enrollments.repository';
 import { RefreshTokensRepository } from '../auth/repositories/refresh-tokens.repository';
 import { UsersRepository } from '../auth/repositories/users.repository';
 import { RbacModule } from '../rbac/rbac.module';
@@ -68,6 +70,10 @@ import { StudentsService } from './services/students.service';
     UserRolesRepository,
     SchoolsRepository,
     ClassesRepository,
+    // M11/M12 history tabs — repos only, so the module graph stays acyclic
+    // (EnrollmentModule and AttendanceModule both import StudentModule).
+    EnrollmentsRepository,
+    StudentAttendancesRepository,
   ],
   // StudentsService exported since M10 — admission conversion reuses the
   // registration path (gap-free UID + guardian dedup), per roadmap M10 §4.

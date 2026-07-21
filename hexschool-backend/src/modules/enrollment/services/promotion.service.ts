@@ -16,6 +16,7 @@ import { PrismaClientLike } from '../../../common/database/base.repository';
 import { PaginatedResult } from '../../../common/dto/paginated.dto';
 import { AcademicSessionsRepository } from '../../academic/repositories/academic-sessions.repository';
 import { SectionsRepository } from '../../academic/repositories/sections.repository';
+import { StudentAttendancesRepository } from '../../attendance/repositories/student-attendances.repository';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { StudentStatusHistoryRepository } from '../../student/repositories/student-status-history.repository';
@@ -75,6 +76,9 @@ export class PromotionService {
     private readonly sessions: AcademicSessionsRepository,
     private readonly students: StudentsRepository,
     private readonly statusHistory: StudentStatusHistoryRepository,
+    /** Re-provisioned stateless repo — the M12 rollback guard (see
+     *  `rollback`); importing AttendanceModule would close a cycle. */
+    private readonly attendances: StudentAttendancesRepository,
     private readonly auditContext: AuditContextService,
   ) {}
 
@@ -418,10 +422,24 @@ export class PromotionService {
       );
     }
 
-    // Rollback guard (roadmap M11 §8): blocked once the new session has
-    // dependent data. Attendance (M12) / marks (M15) land later — this is
-    // the extension point; until then a rollback is always safe.
     const items = await this.items.findForBatch(id);
+
+    // Rollback guard (roadmap M11 §8): blocked once the new session has
+    // dependent data. Live since M12 for attendance; marks (M15) extend
+    // the same check when that table lands.
+    const createdEnrollmentIds = items
+      .map((item) => item.toEnrollmentId)
+      .filter((value): value is string => value !== null);
+    const attendanceRows = await this.attendances.findForEnrollments(
+      createdEnrollmentIds,
+      new Date(Date.UTC(1970, 0, 1)),
+      new Date(Date.UTC(2999, 11, 31)),
+    );
+    if (attendanceRows.length > 0) {
+      throw new ConflictException(
+        `Cannot roll back: ${attendanceRows.length} attendance record(s) already exist in ${batch.toSession.name}. Correct the affected enrollments individually instead.`,
+      );
+    }
 
     await this.batches.withTransaction(async (tx) => {
       for (const item of items) {

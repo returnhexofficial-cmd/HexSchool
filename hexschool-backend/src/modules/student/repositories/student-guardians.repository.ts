@@ -44,6 +44,25 @@ export class StudentGuardiansRepository {
     });
   }
 
+  /**
+   * Primary guardian (with phone) for many students in one query — the
+   * SMS target for bulk notifications (absent alerts, M12). Students
+   * without a primary simply have no row in the result.
+   */
+  async findPrimaryForStudents(studentIds: string[]): Promise<
+    Array<
+      StudentGuardian & {
+        guardian: { id: string; name: string; phone: string };
+      }
+    >
+  > {
+    if (studentIds.length === 0) return [];
+    return this.prisma.studentGuardian.findMany({
+      where: { studentId: { in: studentIds }, isPrimary: true },
+      include: { guardian: { select: { id: true, name: true, phone: true } } },
+    });
+  }
+
   async link(
     data: {
       studentId: string;

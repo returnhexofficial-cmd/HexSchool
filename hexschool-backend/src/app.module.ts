@@ -15,6 +15,7 @@ import { PrismaModule } from './database/prisma/prisma.module';
 import { RedisModule } from './database/redis/redis.module';
 import { AcademicModule } from './modules/academic/academic.module';
 import { AdmissionModule } from './modules/admission/admission.module';
+import { AttendanceModule } from './modules/attendance/attendance.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -106,6 +107,7 @@ import { QueuesModule } from './queues/queues.module';
     StudentModule,
     AdmissionModule,
     EnrollmentModule,
+    AttendanceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

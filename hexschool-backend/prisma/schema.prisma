@@ -445,6 +445,44 @@ enum SeatPlanStrategy {
   @@map("seat_plan_strategy_enum")
 }
 
+/// A mark's place in the four-eyes lifecycle (roadmap M15 §3). The
+/// subject teacher enters and SUBMITs, a controller/head VERIFIes, and
+/// LOCKED is the point of no return — a locked mark changes only through
+/// the correction flow (`marks.correction` + a reason, logged).
+enum MarkStatus {
+  DRAFT
+  SUBMITTED
+  VERIFIED
+  LOCKED
+
+  @@map("mark_status_enum")
+}
+
+/// The verdict on a student's whole exam. INCOMPLETE is the honest
+/// answer for someone whose papers are not all marked (a mid-exam
+/// transfer, or a processing run forced with `override`); WITHHELD is a
+/// deliberate administrative act that hides the result everywhere.
+enum ResultStatus {
+  PASSED
+  FAILED
+  INCOMPLETE
+  WITHHELD
+
+  @@map("result_status_enum")
+}
+
+/// Lifecycle of one processing run. Durable in Postgres rather than in
+/// BullMQ so `GET /process/status` keeps answering after a Redis restart
+/// and so the run history survives the queue's retention window.
+enum ResultRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+
+  @@map("result_run_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -593,6 +631,12 @@ model School {
   examSubjects             ExamSubject[]
   seatPlans                SeatPlan[]
   seatPlanEntries          SeatPlanEntry[]
+  marks                    Mark[]
+  markCorrections          MarkCorrection[]
+  results                  Result[]
+  resultPublications       ResultPublication[]
+  resultRuns               ResultRun[]
+  combinedResults          CombinedResult[]
 
   @@map("schools")
 }
@@ -694,6 +738,7 @@ model AcademicSession {
   studentLeaveApplications StudentLeaveApplication[]
   timetables               Timetable[]
   exams                    Exam[]
+  combinedResults          CombinedResult[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -1611,6 +1656,9 @@ model Enrollment {
   promotionItems  PromotionItem[]
   attendances     StudentAttendance[]
   seatPlanEntries SeatPlanEntry[]
+  marks           Mark[]
+  results         Result[]
+  combinedResults CombinedResult[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -1974,6 +2022,10 @@ model Exam {
   examClasses  ExamClass[]
   examSubjects ExamSubject[]
   seatPlans    SeatPlan[]
+  marks        Mark[]
+  results      Result[]
+  publications ResultPublication[]
+  resultRuns   ResultRun[]
 
   @@index([schoolId, sessionId, status], map: "idx_exams_school_session_status")
   @@index([examTypeId], map: "idx_exams_type")
@@ -2046,6 +2098,8 @@ model ExamSubject {
   createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
 
+  marks Mark[]
+
   @@unique([examId, classId, subjectId], map: "uq_exam_subjects_paper")
   @@index([examId, examDate], map: "idx_exam_subjects_exam_date")
   @@index([subjectId], map: "idx_exam_subjects_subject")
@@ -2104,6 +2158,244 @@ model SeatPlanEntry {
   @@unique([seatPlanId, enrollmentId], map: "uq_seat_plan_entries_candidate")
   @@index([enrollmentId], map: "idx_seat_plan_entries_enrollment")
   @@map("seat_plan_entries")
+}
+
+// ── Module 15: Marks & Result Processing ──────────────────────────────
+
+/// One candidate's marks for one paper. Keyed on `enrollment_id` (the
+/// M11 canonical handle), never `student_id`, so a mid-year transfer
+/// cannot re-point a mark at a different section's tabulation sheet.
+///
+/// `total` is stored rather than derived: it is what the report card,
+/// the merit list and every export read, and for a flat paper it is the
+/// only number that was ever entered. For a split paper the service
+/// keeps it equal to the sum of the components (a DB CHECK cannot see
+/// the paper's distribution, which lives on `exam_subjects`).
+///
+/// `grade`/`grade_point` are NULL until a processing run computes them
+/// against the exam's frozen grade scale — a mark by itself has no grade,
+/// because the scale it is read through is a property of the run.
+model Mark {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String      @map("school_id") @db.Uuid
+  school        School      @relation(fields: [schoolId], references: [id], map: "fk_marks_school")
+  examId        String      @map("exam_id") @db.Uuid
+  exam          Exam        @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_marks_exam")
+  examSubjectId String      @map("exam_subject_id") @db.Uuid
+  examSubject   ExamSubject @relation(fields: [examSubjectId], references: [id], onDelete: Cascade, map: "fk_marks_exam_subject")
+  enrollmentId  String      @map("enrollment_id") @db.Uuid
+  enrollment    Enrollment  @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_marks_enrollment")
+
+  /// Component marks — NULL on a flat paper, and on every component the
+  /// paper does not allocate. Absent candidates carry all-NULL.
+  cq        Decimal? @db.Decimal(6, 2)
+  mcq       Decimal? @db.Decimal(6, 2)
+  practical Decimal? @db.Decimal(6, 2)
+  ca        Decimal? @db.Decimal(6, 2)
+
+  total    Decimal @default(0) @db.Decimal(6, 2)
+  isAbsent Boolean @default(false) @map("is_absent")
+
+  /// Grace marks the processing run added to lift a near-miss over the
+  /// pass mark (roadmap setting `exam.grace_marks`). Kept separate from
+  /// `total` so the entered mark is never silently rewritten.
+  graceApplied Decimal @default(0) @map("grace_applied") @db.Decimal(6, 2)
+
+  grade      String?  @db.VarChar(5)
+  gradePoint Decimal? @map("grade_point") @db.Decimal(3, 2)
+
+  status      MarkStatus @default(DRAFT)
+  enteredBy   String?    @map("entered_by") @db.Uuid
+  submittedAt DateTime?  @map("submitted_at") @db.Timestamptz(6)
+  verifiedBy  String?    @map("verified_by") @db.Uuid
+  verifiedAt  DateTime?  @map("verified_at") @db.Timestamptz(6)
+  lockedAt    DateTime?  @map("locked_at") @db.Timestamptz(6)
+  remarks     String?    @db.VarChar(200)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  corrections MarkCorrection[]
+
+  @@unique([examSubjectId, enrollmentId], map: "uq_marks_paper_candidate")
+  @@index([examId, status], map: "idx_marks_exam_status")
+  @@index([enrollmentId], map: "idx_marks_enrollment")
+  @@map("marks")
+}
+
+/// Append-only log of every change to a LOCKED mark (roadmap M15 §4
+/// re-check/correction flow). No soft delete and no updates — the whole
+/// point is that a published number's history is unerasable.
+model MarkCorrection {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_mark_corrections_school")
+  markId   String @map("mark_id") @db.Uuid
+  mark     Mark   @relation(fields: [markId], references: [id], onDelete: Cascade, map: "fk_mark_corrections_mark")
+
+  oldValues Json   @map("old_values")
+  newValues Json   @map("new_values")
+  reason    String @db.VarChar(500)
+
+  correctedBy String   @map("corrected_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([markId], map: "idx_mark_corrections_mark")
+  @@map("mark_corrections")
+}
+
+/// One candidate's whole-exam verdict, produced by a processing run.
+///
+/// `grading_snapshot` is the scale this row was graded through, copied
+/// onto the row itself: editing a grade band afterwards can never
+/// restate a result that has already gone home with a student (roadmap
+/// M15 §8). The exam-level copy on `exams.grading_snapshot` is the same
+/// blob; the per-row copy is what makes a single result self-describing
+/// in an export or a re-print years later.
+model Result {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_results_school")
+  examId       String     @map("exam_id") @db.Uuid
+  exam         Exam       @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_results_exam")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_results_enrollment")
+
+  totalMarks    Decimal @map("total_marks") @db.Decimal(8, 2)
+  obtainedMarks Decimal @map("obtained_marks") @db.Decimal(8, 2)
+
+  /// NCTB GPA including the 4th-subject bonus; `gpa_without_optional` is
+  /// the same average with the optional subject left out entirely, which
+  /// is the number boards print alongside it.
+  gpa                Decimal @db.Decimal(4, 2)
+  gpaWithoutOptional Decimal @map("gpa_without_optional") @db.Decimal(4, 2)
+  grade              String  @db.VarChar(5)
+
+  subjectsCount  Int          @default(0) @map("subjects_count")
+  failedSubjects Int          @default(0) @map("failed_subjects")
+  status         ResultStatus
+
+  /// Competition ranking (1, 2, 2, 4) among PASSED candidates only.
+  meritPositionSection Int? @map("merit_position_section")
+  meritPositionClass   Int? @map("merit_position_class")
+
+  gradingSnapshot Json      @map("grading_snapshot")
+  withheldReason  String?   @map("withheld_reason") @db.VarChar(500)
+  processedAt     DateTime  @default(now()) @map("processed_at") @db.Timestamptz(6)
+  publishedAt     DateTime? @map("published_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([examId, enrollmentId], map: "uq_results_exam_candidate")
+  @@index([examId, status], map: "idx_results_exam_status")
+  @@index([enrollmentId], map: "idx_results_enrollment")
+  @@map("results")
+}
+
+/// A publication event. Versioned and append-only-ish: unpublishing
+/// flips `is_active` rather than deleting, and republishing after a
+/// correction writes version N+1 with its own changelog note. Portal and
+/// public visibility read the ACTIVE publication, never `exams.status` —
+/// the exam status machine deliberately cannot rewind past PUBLISHED
+/// (M14), so visibility needed its own switch.
+model ResultPublication {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_result_publications_school")
+  examId   String @map("exam_id") @db.Uuid
+  exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_result_publications_exam")
+
+  version     Int
+  /// { portal: bool, website: bool, sms: bool } — what this version fed.
+  channels    Json
+  isActive    Boolean   @default(true) @map("is_active")
+  note        String?   @db.VarChar(500)
+  publishedBy String    @map("published_by") @db.Uuid
+  publishedAt DateTime  @default(now()) @map("published_at") @db.Timestamptz(6)
+  revokedBy   String?   @map("revoked_by") @db.Uuid
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  @@unique([examId, version], map: "uq_result_publications_version")
+  @@index([examId, isActive], map: "idx_result_publications_exam_active")
+  @@map("result_publications")
+}
+
+/// One processing run. Progress lives here rather than only in BullMQ so
+/// the status endpoint keeps answering across a Redis restart, and so a
+/// run that failed halfway leaves an explainable record.
+model ResultRun {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_result_runs_school")
+  examId   String @map("exam_id") @db.Uuid
+  exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_result_runs_exam")
+
+  status    ResultRunStatus @default(QUEUED)
+  total     Int             @default(0)
+  processed Int             @default(0)
+  /// Per-candidate problems ("12 students missing Math marks") — the
+  /// list the processing page renders under the progress bar.
+  issues    Json?
+  error     String?
+  /// Ran despite unlocked papers (needs `result.process.override`).
+  override  Boolean         @default(false)
+  /// Re-processing a single candidate after a correction, not the exam.
+  scopeEnrollmentId String? @map("scope_enrollment_id") @db.Uuid
+
+  triggeredBy String    @map("triggered_by") @db.Uuid
+  startedAt   DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt  DateTime? @map("finished_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([examId, createdAt], map: "idx_result_runs_exam")
+  @@map("result_runs")
+}
+
+/// A weighted merge of several exams' results ("Annual = 30 % Half-Yearly
+/// + 70 % Annual"). Mirrors `results` and carries the weight set it was
+/// generated from, so a later change to an exam type's weight cannot
+/// restate an issued final result — the same freezing argument as the
+/// grading snapshot.
+model CombinedResult {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String          @map("school_id") @db.Uuid
+  school       School          @relation(fields: [schoolId], references: [id], map: "fk_combined_results_school")
+  sessionId    String          @map("session_id") @db.Uuid
+  session      AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_combined_results_session")
+  enrollmentId String          @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_combined_results_enrollment")
+
+  /// Names the merge ("Final Result 2026") — the handle a report card asks for.
+  name String @db.VarChar(150)
+  /// [{ examId, examName, weight, gpa, obtainedMarks }] frozen at generation.
+  components Json
+  /// { examId: weight } — the weight set, summing to 100.
+  weights    Json
+
+  totalMarks    Decimal      @map("total_marks") @db.Decimal(8, 2)
+  obtainedMarks Decimal      @map("obtained_marks") @db.Decimal(8, 2)
+  gpa           Decimal      @db.Decimal(4, 2)
+  grade         String       @db.VarChar(5)
+  status        ResultStatus
+
+  meritPositionSection Int? @map("merit_position_section")
+  meritPositionClass   Int? @map("merit_position_class")
+
+  generatedAt DateTime @default(now()) @map("generated_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?  @map("created_by") @db.Uuid
+  updatedBy   String?  @map("updated_by") @db.Uuid
+
+  @@unique([sessionId, name, enrollmentId], map: "uq_combined_results_candidate")
+  @@index([sessionId, name], map: "idx_combined_results_batch")
+  @@index([enrollmentId], map: "idx_combined_results_enrollment")
+  @@map("combined_results")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

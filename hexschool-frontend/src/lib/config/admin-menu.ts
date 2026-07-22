@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowUpNarrowWide,
+  Award,
   BookUser,
   BriefcaseBusiness,
   CalendarCheck,
@@ -116,6 +117,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/exams",
     icon: FileSpreadsheet,
     permission: "exam.view",
+  },
+  {
+    label: "Final Results",
+    href: "/admin/results/combined",
+    icon: Award,
+    permission: "result.view",
   },
   {
     label: "Teachers",

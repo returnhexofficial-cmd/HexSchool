@@ -17,6 +17,7 @@ import { PaginatedResult } from '../../../common/dto/paginated.dto';
 import { AcademicSessionsRepository } from '../../academic/repositories/academic-sessions.repository';
 import { SectionsRepository } from '../../academic/repositories/sections.repository';
 import { StudentAttendancesRepository } from '../../attendance/repositories/student-attendances.repository';
+import { MarksRepository } from '../../result/repositories/marks.repository';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { StudentStatusHistoryRepository } from '../../student/repositories/student-status-history.repository';
@@ -79,6 +80,7 @@ export class PromotionService {
     /** Re-provisioned stateless repo — the M12 rollback guard (see
      *  `rollback`); importing AttendanceModule would close a cycle. */
     private readonly attendances: StudentAttendancesRepository,
+    private readonly marks: MarksRepository,
     private readonly auditContext: AuditContextService,
   ) {}
 
@@ -425,8 +427,9 @@ export class PromotionService {
     const items = await this.items.findForBatch(id);
 
     // Rollback guard (roadmap M11 §8): blocked once the new session has
-    // dependent data. Live since M12 for attendance; marks (M15) extend
-    // the same check when that table lands.
+    // dependent data. Live since M12 for attendance and since M15 for
+    // marks — rolling back hard-deletes the created enrollments, which
+    // would cascade both away.
     const createdEnrollmentIds = items
       .map((item) => item.toEnrollmentId)
       .filter((value): value is string => value !== null);
@@ -438,6 +441,12 @@ export class PromotionService {
     if (attendanceRows.length > 0) {
       throw new ConflictException(
         `Cannot roll back: ${attendanceRows.length} attendance record(s) already exist in ${batch.toSession.name}. Correct the affected enrollments individually instead.`,
+      );
+    }
+    const markCount = await this.marks.countForEnrollments(createdEnrollmentIds);
+    if (markCount > 0) {
+      throw new ConflictException(
+        `Cannot roll back: ${markCount} exam mark(s) have already been entered in ${batch.toSession.name}. Correct the affected enrollments individually instead.`,
       );
     }
 

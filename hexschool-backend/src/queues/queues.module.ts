@@ -1,7 +1,11 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { NOTIFICATIONS_QUEUE, SYSTEM_QUEUE } from './queues.constants';
+import {
+  NOTIFICATIONS_QUEUE,
+  RESULTS_QUEUE,
+  SYSTEM_QUEUE,
+} from './queues.constants';
 import { NotificationsProcessor } from './notifications.processor';
 import { SystemProcessor } from './system.processor';
 
@@ -37,6 +41,10 @@ import { SystemProcessor } from './system.processor';
     BullModule.registerQueue(
       { name: SYSTEM_QUEUE },
       { name: NOTIFICATIONS_QUEUE },
+      // M15 result processing. The worker lives in ResultModule (it needs
+      // the processing service); this registration exists so Bull Board
+      // shows the queue and the root wiring stays in one place.
+      { name: RESULTS_QUEUE },
     ),
   ],
   providers: [SystemProcessor, NotificationsProcessor],

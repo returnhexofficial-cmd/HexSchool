@@ -17,6 +17,7 @@ import { AcademicModule } from './modules/academic/academic.module';
 import { AdmissionModule } from './modules/admission/admission.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
 import { ExamModule } from './modules/exam/exam.module';
+import { ResultModule } from './modules/result/result.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { EnrollmentModule } from './modules/enrollment/enrollment.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
@@ -114,6 +115,9 @@ import { QueuesModule } from './queues/queues.module';
     TimetableModule,
     AttendanceModule,
     ExamModule,
+    // ResultModule after ExamModule: it consumes the exam aggregate, and
+    // ExamModule is where its EXAM_RESULT_GATE provider is bound.
+    ResultModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

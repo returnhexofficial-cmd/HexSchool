@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { EnrollmentsRepository } from '../enrollment/repositories/enrollments.repository';
+import { MarksRepository } from '../result/repositories/marks.repository';
 import { SchoolModule } from '../school/school.module';
 import { TeachersRepository } from '../teacher/repositories/teachers.repository';
 import { CalendarController } from './controllers/calendar.controller';
@@ -85,6 +86,10 @@ import { StructureCloneService } from './services/structure-clone.service';
     // only), so re-provide it here — importing EnrollmentModule would
     // cycle (it imports AcademicModule).
     EnrollmentsRepository,
+    // Same trick for M15: the curriculum's "subject removal blocked once
+    // marks exist" guard needs a mark count, and ResultModule imports
+    // AcademicModule.
+    MarksRepository,
   ],
   exports: [SessionsService, CalendarService, SectionsRepository],
 })

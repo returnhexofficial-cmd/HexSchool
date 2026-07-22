@@ -31,6 +31,7 @@ import {
   ExamsRepository,
   type ExamWithRelations,
 } from '../repositories/exams.repository';
+import { MarksRepository } from '../../result/repositories/marks.repository';
 import { ExamClashService, isScheduled } from './exam-clash.service';
 import { ExamSettingsService } from './exam-settings.service';
 import { ExamsService } from './exams.service';
@@ -81,6 +82,7 @@ export class ExamSubjectsService {
     private readonly clashes: ExamClashService,
     private readonly config: ExamSettingsService,
     private readonly auditContext: AuditContextService,
+    private readonly marks: MarksRepository,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
@@ -311,6 +313,7 @@ export class ExamSubjectsService {
     if (!paper || paper.examId !== examId) {
       throw new NotFoundException(`Exam paper ${subjectId} not found`);
     }
+    await this.assertNoMarks([subjectId]);
 
     await this.examSubjects.deleteMany([subjectId]);
     this.auditContext.set({
@@ -471,6 +474,7 @@ export class ExamSubjectsService {
     removeIds: string[],
     actor: AccessTokenPayload,
   ): Promise<{ saved: number; removed: number }> {
+    await this.assertNoMarks(removeIds);
     return this.examsRepo.withTransaction(async (tx) => {
       const removed = await this.examSubjects.deleteMany(removeIds, tx);
       let saved = 0;
@@ -511,6 +515,24 @@ export class ExamSubjectsService {
 
       return { saved, removed };
     });
+  }
+
+  /**
+   * The M14 "blocked once marks exist" slot, armed by Module 15.
+   *
+   * Deleting a paper cascades its marks away, which would silently
+   * destroy entered results — so the refusal is unconditional rather
+   * than an override: the school's route is to correct the marks, not to
+   * delete the paper they belong to.
+   */
+  async assertNoMarks(examSubjectIds: string[]): Promise<void> {
+    if (examSubjectIds.length === 0) return;
+    const count = await this.marks.existsForPapers(examSubjectIds);
+    if (count > 0) {
+      throw new ConflictException(
+        `Cannot remove ${examSubjectIds.length} paper(s): ${count} mark(s) have already been entered against them`,
+      );
+    }
   }
 
   private async subjectNameMap(

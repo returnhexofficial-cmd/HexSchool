@@ -50,6 +50,9 @@ describe('ClassSubjectsService', () => {
       sessions as never,
       groups as never,
       { set: jest.fn() } as never,
+      // M15 marks guard — no marks by default; the removal-guard case
+      // overrides it.
+      { countForClassSubject: jest.fn().mockResolvedValue(0) } as never,
     );
   });
 

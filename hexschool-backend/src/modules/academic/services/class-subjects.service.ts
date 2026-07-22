@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+} from '@nestjs/common';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { UpdateClassSubjectsDto } from '../dto';
@@ -10,13 +14,14 @@ import {
 } from '../repositories/class-subjects.repository';
 import { GroupsRepository } from '../repositories/groups.repository';
 import { SubjectsRepository } from '../repositories/subjects.repository';
+import { MarksRepository } from '../../result/repositories/marks.repository';
 
 /**
  * Curriculum mapping (roadmap M06 §4): GET/PUT a class's subjects for
  * one session. PUT is a full replacement (bulk assign) — order,
  * optional flag (4th subject), default full marks, per-group rows.
- * Subjects can't be removed once marks exist — that guard arrives with
- * M15's marks table; today the replace is unconditional.
+ * **A subject cannot be removed once marks exist for it** — live since
+ * M15, over a re-provisioned marks repository.
  */
 @Injectable()
 export class ClassSubjectsService {
@@ -27,6 +32,7 @@ export class ClassSubjectsService {
     private readonly sessions: AcademicSessionsRepository,
     private readonly groups: GroupsRepository,
     private readonly auditContext: AuditContextService,
+    private readonly marks: MarksRepository,
   ) {}
 
   async getForClass(
@@ -88,6 +94,37 @@ export class ClassSubjectsService {
       dto.sessionId,
       schoolId,
     );
+
+    // The M06 "subject removal blocked once marks exist" slot, armed by
+    // Module 15. Dropping a subject from the curriculum does not delete
+    // the exam papers already set on it, but it does make an existing
+    // result unexplainable — the report card would carry a subject the
+    // class is no longer mapped to. Removals are therefore refused;
+    // adding and re-ordering stay unconditional.
+    const keptSubjects = new Set(dto.subjects.map((row) => row.subjectId));
+    const removedSubjects = [
+      ...new Set(
+        before
+          .map((row) => row.subjectId)
+          .filter((subjectId) => !keptSubjects.has(subjectId)),
+      ),
+    ];
+    for (const subjectId of removedSubjects) {
+      const marks = await this.marks.countForClassSubject(
+        classId,
+        subjectId,
+        dto.sessionId,
+      );
+      if (marks > 0) {
+        const label =
+          before.find((row) => row.subjectId === subjectId)?.subject.name ??
+          subjectId;
+        throw new ConflictException(
+          `Cannot remove "${label}" from this class: ${marks} exam mark(s) have already been entered for it this session`,
+        );
+      }
+    }
+
     await this.classSubjects.replaceForClassSession(
       { schoolId, classId, sessionId: dto.sessionId },
       dto.subjects.map((row, index) => ({

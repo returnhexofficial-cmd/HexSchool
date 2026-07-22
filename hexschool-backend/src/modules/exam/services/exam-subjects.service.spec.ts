@@ -102,6 +102,8 @@ describe('ExamSubjectsService', () => {
       clashes as never,
       config as never,
       auditContext as never,
+      // M15 delete guard: no marks entered by default.
+      { existsForPapers: jest.fn().mockResolvedValue(0) } as never,
     );
   });
 

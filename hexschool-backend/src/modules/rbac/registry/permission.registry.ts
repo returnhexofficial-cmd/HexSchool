@@ -264,7 +264,36 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['exam.export', 'Download exam routine / seat plan / admit card PDFs'],
   ]),
 
-  // Modules 15+ append their codes here.
+  // ── Module 15: Marks & Result Processing ────────────────────────────
+  // The four-eyes mark lifecycle is deliberately four codes, not one:
+  // the teacher who enters marks is not the person who verifies them,
+  // and locking is a third decision again.
+  ...define('marks', [
+    ['mark.view', 'View mark-entry grids and their status'],
+    ['mark.entry', 'Enter and save draft marks for a paper'],
+    ['mark.submit', 'Submit a paper’s marks for verification'],
+    ['mark.verify', 'Verify a submitted paper (controller/head of exams)'],
+    ['mark.lock', 'Lock a verified paper against further entry'],
+    [
+      'mark.correction',
+      'Change a LOCKED mark (needs a reason; logged and re-processed)',
+    ],
+  ]),
+  ...define('results', [
+    ['result.view', 'View processed results, tabulation and analytics'],
+    ['result.process', 'Run result processing for an exam'],
+    [
+      'result.process.override',
+      'Process results before every paper is locked (produces INCOMPLETE rows)',
+    ],
+    ['result.publish', 'Publish or unpublish an exam’s results'],
+    [
+      'result.withhold',
+      'Withhold or release an individual candidate’s result',
+    ],
+    ['result.combine', 'Generate weighted combined/final results'],
+    ['result.export', 'Download report cards, tabulation sheets and transcripts'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

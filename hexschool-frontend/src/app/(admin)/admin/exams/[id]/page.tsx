@@ -34,15 +34,26 @@ import { examApi, type ExamStatus } from "@/lib/api/exam";
 import { cn } from "@/lib/utils";
 import { EXAM_STATUS_LABELS, EXAM_STATUS_VARIANT } from "@/lib/validations/exam";
 import { AdmitCardsTab } from "./admit-cards-tab";
+import { AnalyticsTab } from "./analytics-tab";
+import { MarksTab } from "./marks-tab";
+import { ResultsTab } from "./results-tab";
 import { RoutineTab } from "./routine-tab";
 import { SeatPlansTab } from "./seat-plans-tab";
 import { SubjectsTab } from "./subjects-tab";
 
+/**
+ * The tab order follows the exam's own lifecycle: build the papers,
+ * schedule them, seat the candidates, issue admit cards, enter marks,
+ * process and publish the results, then look at what happened.
+ */
 const TABS = [
-  ["subjects", "Papers & marks"],
+  ["subjects", "Papers"],
   ["routine", "Routine"],
   ["seat-plans", "Seat plan"],
   ["admit-cards", "Admit cards"],
+  ["marks", "Mark entry"],
+  ["results", "Results"],
+  ["analytics", "Analytics"],
 ] as const;
 
 type TabKey = (typeof TABS)[number][0];
@@ -159,8 +170,14 @@ export default function ExamDetailPage({
         <RoutineTab examId={id} />
       ) : tab === "seat-plans" ? (
         <SeatPlansTab examId={id} />
-      ) : (
+      ) : tab === "admit-cards" ? (
         <AdmitCardsTab examId={id} classIds={exam.examClasses} />
+      ) : tab === "marks" ? (
+        <MarksTab examId={id} />
+      ) : tab === "results" ? (
+        <ResultsTab examId={id} />
+      ) : (
+        <AnalyticsTab examId={id} />
       )}
 
       {statusOpen ? (

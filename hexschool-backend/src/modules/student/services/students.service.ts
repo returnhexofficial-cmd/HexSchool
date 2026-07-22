@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, Student, StudentMedicalInfo } from '@prisma/client';
+import { ResultsRepository } from '../../result/repositories/results.repository';
 import { randomBytes } from 'crypto';
 import sharp from 'sharp';
 import {
@@ -109,6 +110,7 @@ export class StudentsService {
     // those modules (both import StudentModule).
     private readonly enrollments: EnrollmentsRepository,
     private readonly attendances: StudentAttendancesRepository,
+    private readonly results: ResultsRepository,
     private readonly users: UsersRepository,
     private readonly refreshTokens: RefreshTokensRepository,
     private readonly schools: SchoolsRepository,
@@ -592,12 +594,43 @@ export class StudentsService {
     };
   }
 
+  /**
+   * Exam results for the student detail tab. Live since M15, read
+   * through the re-provisioned results repository rather than by
+   * importing ResultModule — which imports StudentModule, so the reverse
+   * would cycle (the same reasoning as the attendance rollup above).
+   */
   async performanceHistory(studentId: string, schoolId: string) {
     await this.students.findByIdOrFail(studentId, schoolId);
+    const rows = await this.results.findForStudent(studentId, schoolId);
+
+    const published = rows.filter((row) => row.publishedAt !== null);
     return {
-      available: false,
-      reason: 'Results arrive with Module 15',
-      items: [] as unknown[],
+      available: true,
+      items: rows.map((row) => ({
+        examId: row.examId,
+        examName: row.exam.name,
+        className: row.enrollment.class.name,
+        rollNo: row.enrollment.rollNo,
+        gpa: Number(row.gpa),
+        grade: row.grade,
+        status: row.status,
+        obtainedMarks: Number(row.obtainedMarks),
+        totalMarks: Number(row.totalMarks),
+        meritPositionClass: row.meritPositionClass,
+        publishedAt: row.publishedAt,
+      })),
+      /** Averaged over PUBLISHED exams only — a draft result is not a
+       *  fact about the student yet. */
+      averageGpa:
+        published.length === 0
+          ? 0
+          : Math.round(
+              (published.reduce((sum, row) => sum + Number(row.gpa), 0) /
+                published.length) *
+                100,
+            ) / 100,
+      examsPublished: published.length,
     };
   }
 

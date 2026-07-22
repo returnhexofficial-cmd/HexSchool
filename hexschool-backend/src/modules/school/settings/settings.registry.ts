@@ -304,6 +304,57 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Instruction block printed on every admit card',
       'Bring this card to every sitting. Mobile phones and calculators are not allowed in the examination hall.',
     ],
+    // M15 — result processing. `default_pass_mark` and `grace_marks`
+    // above finally have a consumer; the rest arrived with the GPA
+    // engine, merit ranking and the report card.
+    [
+      'exam.grace_max_subjects',
+      'number',
+      'In how many subjects grace marks may be spent',
+      1,
+    ],
+    [
+      'exam.optional_bonus_base',
+      'number',
+      '4th-subject grade points above this are added as a bonus',
+      2,
+    ],
+    [
+      'exam.merit_tiebreak',
+      'string',
+      'When GPA and marks tie: NONE (share the position) or ROLL_ASC',
+      'NONE',
+    ],
+    [
+      'exam.require_locked_marks',
+      'boolean',
+      'Refuse to process results until every paper is LOCKED',
+      true,
+    ],
+    [
+      'exam.result_sms_template',
+      'string',
+      'Result SMS body ({name} {exam} {gpa} {grade} {merit})',
+      '{name}: {exam} result published. GPA {gpa} ({grade}), merit position {merit}.',
+    ],
+    [
+      'exam.public_result_search',
+      'boolean',
+      'Allow the public website to look results up by roll number',
+      true,
+    ],
+    [
+      'exam.report_card_footer',
+      'string',
+      'Note printed at the foot of every report card',
+      'This is a computer-generated report card. Contact the office within 7 days for any correction.',
+    ],
+    [
+      'exam.report_card_show_attendance',
+      'boolean',
+      'Print the attendance percentage on the report card',
+      true,
+    ],
   ]),
   ...g(SettingsGroup.fees, [
     ['fees.due_day_of_month', 'number', 'Monthly due day', 10],

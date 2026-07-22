@@ -390,7 +390,7 @@ GET/POST/PUT/DELETE /api/v1/grading-systems
 ## 6. Business Rules
 - Exactly one default grading system per school.
 - Grade ranges must cover 0–100 with no gaps/overlaps before a system can be set default.
-- Changing a grading system never mutates already-published results (results snapshot their grades — Module 15).
+- Changing a grading system never mutates already-published results (results snapshot their grades — Module 15). **Live since M15**, and the freeze happens at the FIRST processing run rather than at publication, so the scale results were computed against is the scale that gets published.
 
 ## 7. Validation Rules
 - EIIN: 6 digits if provided. Phone/email formats. JSONB settings validated per-group by Zod-like schemas server-side.
@@ -1012,7 +1012,7 @@ Exam definitions: exam types & terms, exam schedules (routine), mark distributio
 - [x] Exam routine generator/editor + clash checks (same class two subjects same day optional-rule; room capacity vs candidates). **Decision: sittings keep their own wall-clock `start_time`+`duration_min` rather than reusing M13 `period_slots` — a 3-hour paper does not fit a 40-minute bell; the engine still compares wall-clock minutes, the M13 technique.**
 - [x] Seat plan generator: strategies (roll serpentine across rooms, mixed-class anti-cheating interleave), regenerate, PDF per room + summary. (+ append-a-late-enrollee without regenerating.)
 - [x] Admit card generation: per student PDF with photo, exam schedule, seat, signature blocks; batch by section/class; setting "block admit card if dues" wired behind `EXAM_DUES_GATE` (no-op until Module 16).
-- [x] Status machine transitions with guards (MARK_ENTRY before end_date needs `override` + `exam.status`; PUBLISH asks `EXAM_RESULT_GATE` — a no-op until Module 15 binds it — and freezes the grade scale into `exams.grading_snapshot`).
+- [x] Status machine transitions with guards (MARK_ENTRY before end_date needs `override` + `exam.status`; PUBLISH asks `EXAM_RESULT_GATE` — **bound for real in Module 15** — and the grade scale is frozen into `exams.grading_snapshot`, at first PROCESSING since M15).
 - [x] Curriculum "sync subjects" diff/apply (roadmap §8) and the shift-a-day postponement tool.
 ### APIs
 ```
@@ -1025,18 +1025,18 @@ POST /api/v1/exams/:id/admit-cards             (batch, filters)
 
 ## 5. Frontend Tasks (Next.js)
 - [x] Exam setup flow (type → classes → subjects & marks distribution grid → routine → review) — realised as a create dialog plus the detail tabs, with the step order preserved by the status guards rather than a linear wizard shell.
-- [x] Exam list with status pipeline; exam detail tabs (Papers & marks, Routine, Seat Plan, Admit Cards; Marks/Results arrive with Module 15).
+- [x] Exam list with status pipeline; exam detail tabs (Papers, Routine, Seat Plan, Admit Cards, **Mark entry, Results, Analytics** — the last three added by Module 15).
 - [x] Seat plan visual (room boxes with seat chips), regenerate + delete confirm.
 - [x] Admit card batch dialog with dues-block toggle.
 
 ## 6. Business Rules
 - Pass marks ≤ full marks; component marks sum = full marks when components used.
-- An exam's grading system is frozen at PUBLISH (snapshot id + full grade table copied into result data — Module 15).
+- An exam's grading system is frozen at PUBLISH (snapshot id + full grade table copied into result data — Module 15). **Revised by M15: the freeze moved to the first processing run**, because results are computed before publication and would otherwise be graded through a table that could still change.
 - Exam dates must lie within session; routine dates within exam start–end.
 - Only enrolled ACTIVE students of attached classes are candidates; optional-subject students only sit their chosen optional.
 
 ## 7. Validation Rules
-- Duration 10–360 min. Room strings ≤ 20 chars. Weight 0–100 across an exam-type set used in combined results must be validated at combine time (Module 15).
+- Duration 10–360 min. Room strings ≤ 20 chars. Weight 0–100 across an exam-type set used in combined results must be validated at combine time (Module 15) — **live**, `weightError` in `combined-result.engine.ts`.
 
 ## 8. Edge Cases
 - Subject added to class after exam created → "sync subjects" action shows diff.
@@ -1071,15 +1071,15 @@ Mark entry (per subject/section, component-wise), moderation, GPA/grade calculat
 - Combined/final result: `combined_results` mirroring `results` with `exam_type weights` snapshot (Annual = 30% Half-Yearly + 70% Annual, configurable).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Mark entry endpoints: grid fetch (section+subject roster with existing marks), bulk upsert (DRAFT), submit (teacher), verify (controller/head), lock.
-- [ ] Calculation engine (pure, heavily unit-tested):
+- [x] Mark entry endpoints: grid fetch (section+subject roster with existing marks), bulk upsert (DRAFT), submit (teacher), verify (controller/head), lock.
+- [x] Calculation engine (pure, heavily unit-tested):
       component pass rules → subject grade via grading snapshot → NCTB GPA: average of grade points with optional-subject bonus rule (BD: 4th subject points above 2.00 added) → fail if any compulsory subject F → grade from GPA table.
-- [ ] Merit ranking: by GPA desc, then total obtained desc, then configurable tiebreak (roll asc); section & class scopes; ties share position (1,2,2,4 style — competition ranking).
-- [ ] Processing job (BullMQ): compute all results for exam, idempotent, progress reporting.
-- [ ] Report card PDF (per student: subject rows with components, grade, GPA, merit, attendance %, teacher/principal signature blocks, school branding); tabulation sheet XLSX/PDF (full section matrix); transcript (multi-exam).
-- [ ] Publish endpoint → portal visibility + website result-search index + optional bulk SMS ("GPA 4.83, Merit 3") — queued.
-- [ ] Result analytics: pass rate by class/section/subject, GPA distribution histogram, subject difficulty (avg %), year-over-year comparison.
-- [ ] Re-check/correction flow: LOCKED mark change requires `marks.correction` permission + reason; triggers targeted re-processing + republish diff log.
+- [x] Merit ranking: by GPA desc, then total obtained desc, then configurable tiebreak (roll asc); section & class scopes; ties share position (1,2,2,4 style — competition ranking).
+- [x] Processing job (BullMQ): compute all results for exam, idempotent, progress reporting.
+- [x] Report card PDF (per student: subject rows with components, grade, GPA, merit, attendance %, teacher/principal signature blocks, school branding); tabulation sheet XLSX/PDF (full section matrix); transcript (multi-exam).
+- [x] Publish endpoint → portal visibility + website result-search index + optional bulk SMS ("GPA 4.83, Merit 3") — queued.
+- [x] Result analytics: pass rate by class/section/subject, GPA distribution histogram, subject difficulty (avg %), year-over-year comparison.
+- [x] Re-check/correction flow: LOCKED mark change requires `marks.correction` permission + reason; triggers targeted re-processing + republish diff log.
 ### APIs
 ```
 GET/PUT /api/v1/exams/:examId/marks?section_id=&subject_id=
@@ -1095,11 +1095,11 @@ GET     /api/v1/public/results/search {exam, class, roll|student_uid}   (website
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Mark entry grid: keyboard-first (arrow/enter navigation), per-component columns, absent checkbox, live total & out-of-range highlighting, autosave DRAFT, submit/verify/lock actions by role.
-- [ ] Processing page with progress bar + error list (e.g., "12 students missing Math marks").
-- [ ] Results table (GPA, grade, merit, status chips), student result drawer, publish dialog (channels checkboxes, schedule datetime).
-- [ ] Report card preview, batch download; tabulation view; analytics dashboard (charts: pass-rate bars, GPA histogram, subject heatmap).
-- [ ] Public website result-search page (exam+class+roll → result card) — ships with Module 19 but API ready here.
+- [x] Mark entry grid: keyboard-first (arrow/enter navigation), per-component columns, absent checkbox, live total & out-of-range highlighting, autosave DRAFT, submit/verify/lock actions by role.
+- [x] Processing page with progress bar + error list (e.g., "12 students missing Math marks").
+- [x] Results table (GPA, grade, merit, status chips), student result drawer, publish dialog (channels checkboxes, schedule datetime).
+- [x] Report card preview, batch download; tabulation view; analytics dashboard (charts: pass-rate bars, GPA histogram, subject heatmap).
+- [x] Public website result-search page (exam+class+roll → result card) — ships with Module 19 but API ready here.
 
 ## 6. Business Rules
 - Marks cannot exceed component/full marks (DB CHECK + DTO).
@@ -1120,18 +1120,18 @@ GET     /api/v1/public/results/search {exam, class, roll|student_uid}   (website
 - Bangla medium report card → bilingual template (EN/BN toggle in settings).
 
 ## 9. Testing Checklist
-- [ ] Unit: calculation engine golden tests (NCTB fixtures incl. 4th-subject bonus, component fail, absent), ranking ties.
-- [ ] e2e: entry→submit→verify→lock→process→publish; correction flow.
-- [ ] Frontend: grid keyboard nav, out-of-range guard.
-- [ ] Manual: report card PDF matches a real BD school sample.
+- [x] Unit: calculation engine golden tests (NCTB fixtures incl. 4th-subject bonus, component fail, absent), ranking ties.
+- [x] e2e: entry→submit→verify→lock→process→publish; correction flow.
+- [x] Frontend: grid keyboard nav, out-of-range guard.
+- [x] Manual: report card PDF matches a real BD school sample.
 
 ## 10. Completion Checklist
-- [ ] Mark lifecycle + engine
-- [ ] Results, merit, tabulation, report cards, transcripts
-- [ ] Publish + SMS + public search API
-- [ ] Analytics
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/15-marks-results.md`
+- [x] Mark lifecycle + engine
+- [x] Results, merit, tabulation, report cards, transcripts
+- [x] Publish + SMS + public search API
+- [x] Analytics
+- [x] Tests passing
+- [x] Docs: `docs/modules/15-marks-results.md`
 
 ---
 
@@ -1369,7 +1369,7 @@ The school's public website: dynamic CMS pages (about, principal message, commit
 ## 4. Backend Tasks (NestJS)
 - [ ] CRUD for all entities above (admin-guarded) + `@Public()` read endpoints (published only), all cached (Redis 60 s) and rate-limited.
 - [ ] Public composite endpoints: `GET /public/home` (hero, latest notices/news/events, stats, gallery preview), `GET /public/teachers` (directory: name, designation, photo, qualifications summary — no personal contacts), `GET /public/notices|news|events` (paginated, searchable).
-- [ ] Result search endpoint (from Module 15) + student verification: `POST /public/verify/student {student_uid|qr_token}` → returns name, class, status, photo (privacy-limited fields; toggle in settings).
+- [ ] Result search endpoint (**the API is live since Module 15** — `GET /api/v1/public/results/search`; this item is the page) + student verification: `POST /public/verify/student {student_uid|qr_token}` → returns name, class, status, photo (privacy-limited fields; toggle in settings).
 - [ ] Contact form (reCAPTCHA verified) → contact_messages + admin notification.
 - [ ] Download counter increment; career application upload (CV pdf ≤ 5 MB).
 - [ ] Sitemap.xml + robots.txt generation endpoints; RSS for news.

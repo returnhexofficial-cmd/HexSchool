@@ -78,6 +78,8 @@ describe('PromotionService', () => {
       students as never,
       statusHistory as never,
       attendances as never,
+      // M15 rollback guard: no marks in the new session by default.
+      { countForEnrollments: jest.fn().mockResolvedValue(0) } as never,
       { set: jest.fn() } as never,
     );
   });

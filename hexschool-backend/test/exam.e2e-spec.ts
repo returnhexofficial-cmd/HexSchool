@@ -932,28 +932,37 @@ describe('Examination (e2e)', () => {
       .expect(409);
   });
 
-  it('publishes and freezes the grade scale into grading_snapshot', async () => {
-    const res = await setStatus('PUBLISHED').expect(200);
-    expect(dataOf<{ status: string }>(res).status).toBe('PUBLISHED');
+  /**
+   * **Changed by Module 15.** This suite used to walk straight to
+   * PUBLISHED, because `EXAM_RESULT_GATE` shipped as a no-op that
+   * allowed it — the behaviour M14's own docs flagged as temporary
+   * ("M15 must bind it, or results can be published before they are
+   * processed"). M15 bound the real gate, so an exam with no processed
+   * results is now refused here. Publication end-to-end, and the
+   * grade-scale freeze (which M15 moved to first PROCESSING so results
+   * are graded through the scale that gets published), are covered by
+   * `result.e2e-spec.ts`.
+   */
+  it('refuses PUBLISHED until Module 15 has processed results', async () => {
+    const res = await setStatus('PUBLISHED').expect(409);
+    expect(JSON.stringify(res.body)).toMatch(/no results have been processed/i);
 
     const row = await prisma.exam.findUnique({
       where: { id: examId },
-      select: { gradingSnapshot: true, resultPublishAt: true },
+      select: { status: true, resultPublishAt: true },
     });
-    expect(row?.resultPublishAt).not.toBeNull();
-    const snapshot = row?.gradingSnapshot as {
-      gradingSystemId: string;
-      gradePoints: unknown[];
-    } | null;
-    expect(snapshot?.gradingSystemId).toBeTruthy();
-    expect(snapshot?.gradePoints.length).toBeGreaterThan(0);
+    expect(row?.status).toBe('PROCESSING');
+    expect(row?.resultPublishAt).toBeNull();
   });
 
-  it('never rewinds past PUBLISHED', async () => {
-    await setStatus('PROCESSING').expect(400);
+  it('refuses a multi-step rewind', async () => {
+    // One step back is legal (PROCESSING → MARK_ENTRY); jumping three is
+    // not, which is what makes the machine a line rather than a graph.
+    await setStatus('SCHEDULED').expect(400);
   });
 
-  it('freezes the papers hard at PUBLISHED', async () => {
+  it('freezes the papers hard once the exam is ARCHIVED', async () => {
+    await setStatus('ARCHIVED').expect(200);
     await putSubjects(canonicalRows()).expect(409);
   });
 

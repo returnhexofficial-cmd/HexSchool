@@ -123,6 +123,29 @@ export class ExamsRepository extends BaseRepository<
     });
   }
 
+  /**
+   * Earlier exams of the same TYPE, newest first — the year-over-year
+   * comparison Module 15's analytics draws. Keyed on the type rather
+   * than the name because "Annual" against "Half-Yearly" is not a
+   * comparison, which is exactly what the type master is for.
+   */
+  async findByType(
+    examTypeId: string,
+    schoolId: string,
+    excludeExamId: string,
+  ): Promise<Exam[]> {
+    return this.prisma.exam.findMany({
+      where: {
+        schoolId,
+        examTypeId,
+        deletedAt: null,
+        id: { not: excludeExamId },
+        status: { in: [ExamStatus.PUBLISHED, ExamStatus.ARCHIVED] },
+      },
+      orderBy: { startDate: 'desc' },
+    });
+  }
+
   async setStatus(
     id: string,
     data: Prisma.ExamUncheckedUpdateInput,

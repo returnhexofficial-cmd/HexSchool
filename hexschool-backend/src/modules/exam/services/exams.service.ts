@@ -15,6 +15,7 @@ import { SessionsService } from '../../academic/services/sessions.service';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { PermissionsService } from '../../rbac/services/permissions.service';
+import { MarksRepository } from '../../result/repositories/marks.repository';
 import { GradingSystemsRepository } from '../../school/repositories/grading-systems.repository';
 import {
   isShapeEditable,
@@ -74,6 +75,7 @@ export class ExamsService {
     private readonly config: ExamSettingsService,
     private readonly permissions: PermissionsService,
     private readonly auditContext: AuditContextService,
+    private readonly marks: MarksRepository,
     @Inject(EXAM_RESULT_GATE) private readonly resultGate: ExamResultGate,
   ) {}
 
@@ -278,6 +280,22 @@ export class ExamsService {
     const previous = await this.exams.findClassIds(id);
     const added = classIds.filter((c) => !previous.includes(c));
     const removed = previous.filter((c) => !classIds.includes(c));
+
+    // The M14 "blocked once marks exist" slot, armed by Module 15:
+    // detaching a class drops its papers, which would cascade away every
+    // mark entered against them.
+    if (removed.length > 0) {
+      const papers = await this.examSubjects.findForExam(id);
+      const orphaned = papers
+        .filter((paper) => removed.includes(paper.classId))
+        .map((paper) => paper.id);
+      const markCount = await this.marks.existsForPapers(orphaned);
+      if (markCount > 0) {
+        throw new ConflictException(
+          `Cannot detach ${removed.length} class(es): ${markCount} mark(s) have already been entered for their papers`,
+        );
+      }
+    }
 
     await this.exams.withTransaction(async (tx) => {
       await this.exams.setClasses(id, classIds, tx);

@@ -44,4 +44,7 @@ export {
   TimetableStatus,
   ExamStatus,
   SeatPlanStrategy,
+  MarkStatus,
+  ResultStatus,
+  ResultRunStatus,
 } from '@prisma/client';

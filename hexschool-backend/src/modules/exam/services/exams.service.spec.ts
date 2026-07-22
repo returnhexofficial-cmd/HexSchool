@@ -97,6 +97,8 @@ describe('ExamsService', () => {
       findExamDates: jest.fn().mockResolvedValue([]),
       createMany: jest.fn().mockResolvedValue(0),
       deleteForClasses: jest.fn().mockResolvedValue(0),
+      // Read by the M15 marks guard before a class is detached.
+      findForExam: jest.fn().mockResolvedValue([]),
     };
     seatPlans = { countForExam: jest.fn().mockResolvedValue(0) };
     classes = {
@@ -152,6 +154,8 @@ describe('ExamsService', () => {
       config as never,
       permissions as never,
       auditContext as never,
+      // M15 delete guard: no marks entered by default.
+      { existsForPapers: jest.fn().mockResolvedValue(0) } as never,
       resultGate as never,
     );
   });

@@ -49,18 +49,38 @@ describe('Health & Version (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/api/v1/health');
     expect([200, 503]).toContain(res.status);
 
+    /**
+     * The probe map moves depending on the status code, which is the
+     * source of a long-standing flake in this suite.
+     *
+     * A healthy check is `@SkipEnvelope`d raw Terminus (`{ status,
+     * details }`); an unhealthy one is a `ServiceUnavailableException`
+     * that the global filter reshapes to `{ success, error: { details }}`.
+     * And this check goes 503 **for reasons that say nothing about the
+     * application**: the memory probes measure whichever process runs
+     * them, which under `test:e2e` is the single Jest worker carrying
+     * the accumulated heap of every preceding suite (the M14 lesson —
+     * every new module's suite makes it likelier).
+     *
+     * So: read the map from wherever it is, and keep asserting the
+     * DEPENDENCY probes strictly — those are the ones that mean
+     * something.
+     */
     const body = res.body as {
-      status: string;
-      details: Record<string, { status: string }>;
+      details?: Record<string, { status: string }>;
+      error?: { details?: Record<string, { status: string }> };
     };
-    expect(body.details).toMatchObject({
+    const details = body.details ?? body.error?.details;
+    expect(details).toBeDefined();
+
+    expect(details).toMatchObject({
       database: { status: 'up' },
       redis: { status: 'up' },
       // disk probe runs on Linux only (wmic is gone on modern Windows)
       ...(process.platform !== 'win32' && { disk: { status: 'up' } }),
     });
-    expect(body.details.memory_heap).toBeDefined();
-    expect(body.details.memory_rss).toBeDefined();
+    expect(details!.memory_heap).toBeDefined();
+    expect(details!.memory_rss).toBeDefined();
   });
 
   it('GET /api/v1/version → enveloped build metadata', async () => {

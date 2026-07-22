@@ -182,14 +182,25 @@ describe('School Setup & Settings (e2e)', () => {
         'E2E High School',
       );
 
-      const entry = await prisma.auditLog.findFirst({
-        where: {
-          entityType: 'School',
-          entityId: DEFAULT_SCHOOL_ID,
-          action: 'UPDATE',
-        },
-        orderBy: { createdAt: 'desc' },
-      });
+      // Audit writes are deliberately fire-and-forget (PROJECT_CONTEXT
+      // §16: auditing must never delay or fail the mutation), so the row
+      // may not exist the instant the response lands. Reading it once
+      // lost that race under load; poll for it, as the other suites do.
+      let entry: { newValues: unknown } | null = null;
+      for (let attempt = 0; attempt < 40 && entry === null; attempt += 1) {
+        entry = await prisma.auditLog.findFirst({
+          where: {
+            entityType: 'School',
+            entityId: DEFAULT_SCHOOL_ID,
+            action: 'UPDATE',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { newValues: true },
+        });
+        if (entry === null) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
       expect(entry?.newValues).toMatchObject({ name: 'E2E High School' });
     });
 

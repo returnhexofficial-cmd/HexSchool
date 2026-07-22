@@ -3,6 +3,7 @@ import { AcademicModule } from '../academic/academic.module';
 import { AcademicSessionsRepository } from '../academic/repositories/academic-sessions.repository';
 import { ClassSubjectsRepository } from '../academic/repositories/class-subjects.repository';
 import { StudentAttendancesRepository } from '../attendance/repositories/student-attendances.repository';
+import { MarksRepository } from '../result/repositories/marks.repository';
 import { RbacModule } from '../rbac/rbac.module';
 import { StudentModule } from '../student/student.module';
 import { EnrollmentsController } from './controllers/enrollments.controller';
@@ -48,6 +49,8 @@ import { PromotionService } from './services/promotion.service';
     AcademicSessionsRepository,
     // M12: the promotion rollback guard checks for attendance rows.
     StudentAttendancesRepository,
+    // M15: the promotion rollback guard now also refuses once marks exist.
+    MarksRepository,
   ],
   // Canonical roster service for Attendance (M12), Exams (M14), Fees (M16).
   exports: [EnrollmentsService, EnrollmentsRepository],

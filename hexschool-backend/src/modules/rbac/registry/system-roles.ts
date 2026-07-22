@@ -138,6 +138,19 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'exam.admit-card',
       'exam.admit-card.dues-override',
       'exam.export',
+      'mark.view',
+      'mark.entry',
+      'mark.submit',
+      'mark.verify',
+      'mark.lock',
+      'mark.correction',
+      'result.view',
+      'result.process',
+      'result.process.override',
+      'result.publish',
+      'result.withhold',
+      'result.combine',
+      'result.export',
     ],
   },
   {
@@ -189,13 +202,24 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'exam.seat-plan.manage',
       'exam.admit-card',
       'exam.export',
+      // Verifies and locks what the teachers entered, and runs the
+      // processor — but publication stays with the Principal, as with
+      // the exam status machine's final step.
+      'mark.view',
+      'mark.entry',
+      'mark.submit',
+      'mark.verify',
+      'mark.lock',
+      'result.view',
+      'result.process',
+      'result.export',
     ],
   },
   {
     name: 'Teacher',
     slug: 'teacher',
     description:
-      'Teaching staff — colleague directory, own schedule, class attendance, and the exam routine they invigilate; mark entry arrives with Module 15.',
+      'Teaching staff — colleague directory, own schedule, class attendance, the exam routine they invigilate, and mark entry for their own papers.',
     corePermissions: [
       'grading.view',
       'session.view',
@@ -213,9 +237,15 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'timetable.view',
       'timetable.export',
       // Read-only exam routine — invigilators need the sitting schedule
-      // and seat plans; mark entry is a Module 15 permission.
+      // and seat plans.
       'exam.view',
       'exam.export',
+      // Enters and submits marks; verifying and locking are somebody
+      // else's job by design, which is the point of a four-eyes flow.
+      'mark.view',
+      'mark.entry',
+      'mark.submit',
+      'result.view',
     ],
   },
   {

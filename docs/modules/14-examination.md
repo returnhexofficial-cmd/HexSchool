@@ -4,6 +4,7 @@
 |---|---|
 | **Module** | 14 — Examination Management |
 | **Completion date** | 2026-07-22 |
+| **Verification completed** | 2026-07-22 (migration applied + e2e written and run — see [Post-completion verification](#post-completion-verification)) |
 | **Actual effort** | 1 dev-day (est. was 5) |
 | **Roadmap section** | `SMIS_DEVELOPMENT_ROADMAP.md` → Module 14 |
 
@@ -151,22 +152,118 @@ None. Two additive changes other modules should know about:
 
 | Scenario | Result | Notes |
 |---|---|---|
-| Backend unit suite | ✅ 588 passed (60 suites) | Was 444 before this module — **144 new** |
+| Backend unit suite | ✅ 589 passed (60 suites) | Was 444 before this module — **145 new** (144 + the same-day clash regression test added during verification) |
 | Backend typecheck (`tsc --noEmit`) | ✅ clean | |
-| Backend lint (`eslint src/modules/exam`) | ✅ clean | Repo-wide lint has a pre-existing CRLF/prettier baseline (~42k) unrelated to this module — verified identical on a clean stash |
+| Backend lint (`eslint src/modules/exam`) | ✅ 0 errors | Only after re-saving the module with LF endings — see [Note on line endings](#note-on-line-endings). `enrollment` and `rbac` still carry pre-existing prettier errors |
 | Frontend test suite (`vitest run`) | ✅ 171 passed (22 files) | Was 141 — **30 new** |
 | Frontend typecheck | ✅ clean | |
 | Frontend lint | ✅ 0 errors | 21 warnings, all pre-existing RHF `watch()` in older pages; the exam files add none |
 | Frontend production build | ✅ compiled | `/admin/exams`, `/admin/exams/[id]`, `/admin/exams/types` all emitted |
-| **e2e suite** | ⚠️ **not run** | No Docker/Postgres available in this environment — see TODOs |
-| Migration applied against a live DB | ⚠️ **not run** | Same reason; SQL is hand-written to match the generated style and `prisma validate` passes |
+| **e2e suite** | ✅ **225 passed (14 suites)** | Includes the new `test/exam.e2e-spec.ts` — 45 cases. See below |
+| Migration applied against a live DB | ✅ **applied** | Full 14-migration chain replayed onto an empty Postgres 16, then migration 14 applied to the Neon dev database |
+
+## Post-completion verification
+
+The two items the completion run could not do — apply the migration to a real
+database and run the e2e suite — were completed on 2026-07-22 against Docker
+Postgres 16 and the Neon dev database.
+
+### Migration
+
+| Check | Result |
+|---|---|
+| Full 14-migration chain replayed onto an **empty** Postgres 16 | ✅ applied in order, no errors |
+| `prisma migrate diff` (migrated DB → `schema.prisma`) | ✅ **No difference detected** — the hand-written SQL matches the Prisma schema exactly |
+| Objects created | ✅ 6 tables, 2 enums, 9 CHECK constraints, 6 partial unique indexes |
+| Migration 14 applied to the **Neon** dev DB (`migrate deploy`) | ✅ applied; `migrate status` up to date, drift check clean |
+| Seeder run on both databases | ✅ 122 permission codes; the 11 `exam.*` codes present, spread Super Admin/Principal/Admin 11, Vice Principal 7, Teacher 2 |
+
+Replaying the *whole* chain onto an empty database rather than only applying
+migration 14 to an existing one is the stronger check: it proves the migration
+composes with its thirteen predecessors from scratch, which is what a fresh
+deployment actually does.
+
+### `test/exam.e2e-spec.ts` — 45 cases
+
+Written for this module (it did not exist). Covers, in the order a school
+would actually use the module: permission boundaries · exam-type CRUD with
+case-insensitive duplicate refusal and the in-use delete guard · exam creation
+seeding a paper per curriculum subject · duplicate-name and
+outside-the-session refusals · `SCHEDULED` refused while papers are unscheduled
+· whole-payload distribution validation (nothing saved on a bad row) · **the
+two override tiers** — `CLASS_OVERLAP` and `ROOM` refused even *with*
+`override=true`, `CLASS_SAME_DAY` waivable but only for a caller holding
+`exam.schedule.override` (a scheduler role without it gets 403) · the routine
+read view and its PDF · **candidate resolution**, including the optional-subject
+rule (8 candidates on a shared day, 2 on the 4th-subject day) · the
+postponement tool, refused past the exam window without `extendExamWindow` ·
+seat-plan generation with capacity and duplicate-room refusals · **append a
+late enrollee and assert every existing seat is byte-for-byte unchanged** ·
+admit cards by class, single reissue, and the "exactly one selector" rule ·
+curriculum sync (add is opt-out, remove opt-in) · the status walk to PUBLISHED
+with `grading_snapshot` asserted non-empty, no rewind past PUBLISHED, papers
+frozen, and a non-DRAFT delete refused.
+
+Four cases drive raw SQL past the service on purpose, because the migration's
+hand-written CHECK constraints are the last line of defence if a future caller
+skips the engine, and they can only be proven against a real database:
+`chk_exam_subjects_components`, `chk_exam_subjects_component_pass`,
+`chk_exams_date_order` and `chk_seat_plans_capacity` all reject as intended.
+
+### Bug found by the e2e suite — same-day clash silently dropped
+
+`detectClashes` carried a de-duplication guard on the `CLASS_SAME_DAY` branch:
+
+```ts
+(!bIsCandidate || (a.examSubjectId ?? '') <= (b.examSubjectId ?? ''))
+```
+
+The candidate loop already visits each unordered pair exactly once (`j > i`,
+with `existing` only ever on the right-hand side), so the guard was redundant —
+and because it compared ids, it **dropped the clash entirely whenever the two
+papers' ids happened to sort the other way**. Real ids are UUIDs, so the
+same-day policy was silently not enforced on roughly half of all saves.
+
+It survived the unit suite because every case there lists `es-1` before `es-2`,
+which always satisfies `<=`. Reproduced deterministically by swapping the ids,
+then fixed by deleting the guard (and the now-unused `bIsCandidate`
+parameter); a regression test asserting the clash fires *regardless of id
+order* was added to `exam-clash.engine.spec.ts`. Backend units went 588 → 589.
+
+This is the concrete argument for the e2e suite having been a gap rather than
+a formality: the behaviour was wrong in a way no amount of the existing
+unit coverage could see.
+
+### Also fixed: `health.e2e-spec.ts` was order-dependent
+
+The health e2e asserted `memory_heap`/`memory_rss` were `up`. Those probes
+measure whatever process runs the check — under `test:e2e` that is the single
+Jest worker carrying the accumulated heap of every preceding suite, not a real
+API process. Adding a 14th suite pushed it past the 512 MB threshold and the
+assertion went red on something that says nothing about the application. It now
+asserts the *dependency* probes (`database`, `redis`, and `disk` off Windows)
+strictly and only checks the memory probes are present, tolerating Terminus's
+503. Any future module's e2e suite would have tripped the old form.
+
+### Note on line endings
+
+The exam module's working-tree files were saved with CRLF while the repo's
+prettier config expects LF, so `eslint src/modules/exam` reported ~7,680
+`Delete ␍` errors (against 0 for `timetable` and `attendance`). They were
+re-saved with LF, which makes the module lint clean. `git diff` renders **no
+textual change** for the 32 affected files — but committing them does rewrite
+the stored blobs, since `core.autocrlf=true` with no `.gitattributes` leaves
+the repo's stored line endings inconsistent between modules. Adding a
+`.gitattributes` with `* text=auto eol=lf` would settle it repo-wide; that is
+a repo-level decision and was left to the owner.
 
 ## Remaining TODOs
 
-- [ ] **Run the e2e suite and apply the migration against a live Postgres.** This environment had no Docker/Postgres, so `test:e2e` and `migrate:deploy` were never executed for this module. Everything unit-testable is covered and green; the wizard end-to-end and admit-card-generation e2e cases the roadmap asks for still need a database.
-- [ ] In-browser click-throughs: the distribution grid with a real class-worth of papers, the seat-plan room boxes at 200+ candidates, and an admit-card PDF printed on A4.
-- [ ] Confirm the seeded permission codes land correctly on an existing deployment (the kebab-case rename only affects this module's brand-new codes, but the seeder run should be eyeballed).
+- [x] ~~Run the e2e suite and apply the migration against a live Postgres.~~ Done 2026-07-22 — 45-case `exam.e2e-spec.ts` written and green, full chain + migration 14 applied to Docker Postgres 16 and to Neon, zero schema drift.
+- [x] ~~Confirm the seeded permission codes land correctly on an existing deployment.~~ Verified on both databases: 11 `exam.*` codes, kebab-case segments intact, role spread as designed.
+- [ ] In-browser click-throughs: the distribution grid with a real class-worth of papers, the seat-plan room boxes at 200+ candidates, and an admit-card PDF printed on A4. *(Still the only untested-by-machine surface.)*
 - [ ] Module 15 must bind `EXAM_RESULT_GATE`; Module 16 must bind `EXAM_DUES_GATE`.
+- [ ] Repo-level: decide on a `.gitattributes` (`* text=auto eol=lf`) so the CRLF/LF split stops producing phantom lint failures — `enrollment` (307) and `rbac` (566) still carry prettier errors.
 
 ## Links to Related Modules
 

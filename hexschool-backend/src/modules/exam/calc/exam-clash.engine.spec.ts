@@ -130,6 +130,35 @@ describe('exam clash engine', () => {
       );
     });
 
+    /**
+     * Regression: the pair used to be de-duplicated by comparing the two
+     * `examSubjectId`s, which dropped the clash entirely whenever they
+     * sorted descending. Real ids are UUIDs, so that silently disabled
+     * the same-day policy on roughly half of all saves. Every other case
+     * in this file happens to list `es-1` before `es-2`, which is exactly
+     * why it went unnoticed.
+     */
+    it('flags the pair regardless of the order the ids sort in', () => {
+      const clashes = detectClashes(
+        [
+          sitting({ examSubjectId: 'es-9' }),
+          sitting({
+            examSubjectId: 'es-2',
+            subjectId: 'sub-eng',
+            subjectName: 'English',
+            startMinutes: 840,
+            endMinutes: 960,
+            room: 'H2',
+          }),
+        ],
+        [],
+        OPTIONS,
+      );
+      expect(clashes.filter((c) => c.kind === 'CLASS_SAME_DAY')).toHaveLength(
+        1,
+      );
+    });
+
     it('stays quiet when the school allows multiple papers per day', () => {
       const clashes = detectClashes(
         [

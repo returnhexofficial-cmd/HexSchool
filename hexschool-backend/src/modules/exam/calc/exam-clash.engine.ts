@@ -126,7 +126,7 @@ export function detectClashes(
     }
   }
 
-  const compare = (a: Sitting, b: Sitting, bIsCandidate: boolean): void => {
+  const compare = (a: Sitting, b: Sitting): void => {
     if (a.date !== b.date) return;
 
     const witness = {
@@ -148,12 +148,13 @@ export function detectClashes(
         message: `${a.classLabel} sits ${a.subjectName} and ${b.subjectName} at overlapping times on ${a.date}`,
         clashesWith: witness,
       });
-    } else if (
-      a.classId === b.classId &&
-      !options.allowMultiplePapersPerDay &&
-      // Only report the pair once when both sides are candidates.
-      (!bIsCandidate || (a.examSubjectId ?? '') <= (b.examSubjectId ?? ''))
-    ) {
+      // The pair is already visited exactly once — the candidate loop
+      // below runs j > i and `existing` is only ever on the right — so
+      // this needs no further de-duplication. It previously carried an
+      // `a.examSubjectId <= b.examSubjectId` guard, which silently
+      // DROPPED the clash whenever the ids happened to sort the other
+      // way (i.e. about half of all real saves, the ids being UUIDs).
+    } else if (a.classId === b.classId && !options.allowMultiplePapersPerDay) {
       clashes.push({
         kind: 'CLASS_SAME_DAY',
         examSubjectId: a.examSubjectId,
@@ -180,10 +181,10 @@ export function detectClashes(
 
   for (let i = 0; i < candidates.length; i += 1) {
     for (let j = i + 1; j < candidates.length; j += 1) {
-      compare(candidates[i], candidates[j], true);
+      compare(candidates[i], candidates[j]);
     }
     for (const other of existing) {
-      compare(candidates[i], other, false);
+      compare(candidates[i], other);
     }
   }
 

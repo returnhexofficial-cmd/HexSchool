@@ -933,7 +933,7 @@ GET      /api/v1/attendance/reports/daily | monthly | student/:id | staff | summ
 # Module 13 — Timetable / Class Routine
 
 ## 1. Goal
-Weekly class routines: period definitions, section timetables mapping period × day → subject + teacher + room, teacher-conflict detection, and printable/portal-visible routines. Also exam routines' foundation (Module 14 reuses period slots).
+Weekly class routines: period definitions, section timetables mapping period × day → subject + teacher + room, teacher-conflict detection, and printable/portal-visible routines. Also exam routines' foundation (~~Module 14 reuses period slots~~ — **superseded during M14**: a 2–3 hour paper does not fit a 40-minute bell, so `exam_subjects` carries its own wall-clock `start_time` + `duration_min`. What M14 reuses is the *technique* — a clash engine comparing wall-clock minutes, never slot ids. See `docs/modules/14-examination.md`).
 
 ## 2. Dependencies
 - Modules 06, 08, 11.

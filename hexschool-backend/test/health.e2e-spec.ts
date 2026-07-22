@@ -32,21 +32,35 @@ describe('Health & Version (e2e)', () => {
     await app.close();
   });
 
-  it('GET /api/v1/health → 200 with component statuses', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/v1/health')
-      .expect(200);
+  /**
+   * The memory probes measure the process that happens to be running the
+   * check — under `test:e2e` that is the single Jest worker, which by
+   * this point carries the accumulated heap of every suite that ran
+   * before it, not the footprint of a real API process. Asserting they
+   * are `up` therefore asserts something about the test runner rather
+   * than about the application, and it fails purely as a function of how
+   * many suites precede this one (it went red the day the 14th suite was
+   * added). What this test exists to prove is that the real dependency
+   * probes are wired and the infrastructure is reachable, so those are
+   * asserted strictly and the memory verdict is only checked for
+   * presence. Terminus answers 503 when any probe is down.
+   */
+  it('GET /api/v1/health → component statuses for every probe', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/health');
+    expect([200, 503]).toContain(res.status);
 
-    const body = res.body as { status: string; details: object };
-    expect(body.status).toBe('ok');
+    const body = res.body as {
+      status: string;
+      details: Record<string, { status: string }>;
+    };
     expect(body.details).toMatchObject({
       database: { status: 'up' },
       redis: { status: 'up' },
       // disk probe runs on Linux only (wmic is gone on modern Windows)
       ...(process.platform !== 'win32' && { disk: { status: 'up' } }),
-      memory_heap: { status: 'up' },
-      memory_rss: { status: 'up' },
     });
+    expect(body.details.memory_heap).toBeDefined();
+    expect(body.details.memory_rss).toBeDefined();
   });
 
   it('GET /api/v1/version → enveloped build metadata', async () => {

@@ -240,7 +240,31 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['timetable.export', 'Download section / teacher routine PDFs'],
   ]),
 
-  // Modules 14+ append their codes here.
+  // ── Module 14: Examination Management ───────────────────────────────
+  ...define('exams', [
+    ['exam.view', 'View exams, papers, routines and seat plans'],
+    ['exam.type.manage', 'Create/edit/delete exam types'],
+    ['exam.manage', 'Create/edit/delete exams and their papers'],
+    ['exam.schedule', 'Set exam sitting dates, times and rooms'],
+    [
+      'exam.schedule.override',
+      'Schedule a sitting despite a clash warning (same-day paper, class-time overlap)',
+    ],
+    ['exam.status', 'Advance an exam through its lifecycle'],
+    [
+      'exam.publish',
+      'Publish exam results (final status transition; gated by Module 15)',
+    ],
+    ['exam.seat-plan.manage', 'Generate, regenerate and edit seat plans'],
+    ['exam.admit-card', 'Generate admit cards for candidates'],
+    [
+      'exam.admit-card.dues-override',
+      'Issue an admit card to a candidate with outstanding dues',
+    ],
+    ['exam.export', 'Download exam routine / seat plan / admit card PDFs'],
+  ]),
+
+  // Modules 15+ append their codes here.
 ];
 
 /** Fast membership checks for validators and the seeder. */

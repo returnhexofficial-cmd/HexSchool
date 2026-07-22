@@ -244,9 +244,66 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       500,
     ],
   ]),
+  // M14 — every knob the examination module reads. `default_pass_mark`
+  // and `grace_marks` predate it (M04 placeholders); the rest arrived
+  // with the exam wizard, routine clash checks and admit cards.
   ...g(SettingsGroup.exam, [
     ['exam.default_pass_mark', 'number', 'Default pass mark', 33],
     ['exam.grace_marks', 'number', 'Grace marks', 0],
+    [
+      'exam.default_full_marks',
+      'number',
+      'Fallback full marks when a class-subject declares none',
+      100,
+    ],
+    [
+      'exam.default_duration_min',
+      'number',
+      'Default sitting length (minutes)',
+      180,
+    ],
+    [
+      'exam.default_start_time',
+      'string',
+      'Default sitting start time (HH:mm)',
+      '10:00',
+    ],
+    [
+      'exam.allow_multiple_papers_per_day',
+      'boolean',
+      'Allow one class to sit more than one paper on the same day',
+      false,
+    ],
+    [
+      'exam.room_conflict_check',
+      'boolean',
+      'Refuse two sittings in the same room at overlapping times',
+      true,
+    ],
+    [
+      'exam.seat_plan_default_capacity',
+      'number',
+      'Default seats per room when the generator is given none',
+      30,
+    ],
+    [
+      'exam.seat_plan_default_strategy',
+      'string',
+      'Default seating layout (SERPENTINE|INTERLEAVE)',
+      'SERPENTINE',
+    ],
+    [
+      'exam.admit_card_block_dues',
+      'boolean',
+      'Block admit cards for candidates with outstanding dues (needs Module 16)',
+      false,
+    ],
+    [
+      'exam.admit_card_instructions',
+      'string',
+      'Instruction block printed on every admit card',
+      'Bring this card to every sitting. Mobile phones and calculators are not allowed in the examination hall.',
+    ],
   ]),
   ...g(SettingsGroup.fees, [
     ['fees.due_day_of_month', 'number', 'Monthly due day', 10],

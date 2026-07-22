@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileClock,
+  FileSpreadsheet,
   GraduationCap,
   LayoutDashboard,
   Network,
@@ -109,6 +110,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/timetables",
     icon: CalendarClock,
     permission: "timetable.view",
+  },
+  {
+    label: "Examinations",
+    href: "/admin/exams",
+    icon: FileSpreadsheet,
+    permission: "exam.view",
   },
   {
     label: "Teachers",

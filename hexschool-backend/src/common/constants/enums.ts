@@ -42,4 +42,6 @@ export {
   PeriodSlotType,
   Weekday,
   TimetableStatus,
+  ExamStatus,
+  SeatPlanStrategy,
 } from '@prisma/client';

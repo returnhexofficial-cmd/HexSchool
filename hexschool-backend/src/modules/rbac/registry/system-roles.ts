@@ -127,6 +127,17 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'timetable.publish',
       'timetable.assign.override',
       'timetable.export',
+      'exam.view',
+      'exam.type.manage',
+      'exam.manage',
+      'exam.schedule',
+      'exam.schedule.override',
+      'exam.status',
+      'exam.publish',
+      'exam.seat-plan.manage',
+      'exam.admit-card',
+      'exam.admit-card.dues-override',
+      'exam.export',
     ],
   },
   {
@@ -169,13 +180,22 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'timetable.manage',
       'timetable.publish',
       'timetable.export',
+      // Runs the exam cycle up to publication — the result announcement
+      // itself stays with the Principal.
+      'exam.view',
+      'exam.manage',
+      'exam.schedule',
+      'exam.status',
+      'exam.seat-plan.manage',
+      'exam.admit-card',
+      'exam.export',
     ],
   },
   {
     name: 'Teacher',
     slug: 'teacher',
     description:
-      'Teaching staff — colleague directory, own schedule, and class attendance; marks arrive with Modules 14–15.',
+      'Teaching staff — colleague directory, own schedule, class attendance, and the exam routine they invigilate; mark entry arrives with Module 15.',
     corePermissions: [
       'grading.view',
       'session.view',
@@ -192,6 +212,10 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // Own routine + the section grids they teach (read-only).
       'timetable.view',
       'timetable.export',
+      // Read-only exam routine — invigilators need the sitting schedule
+      // and seat plans; mark entry is a Module 15 permission.
+      'exam.view',
+      'exam.export',
     ],
   },
   {

@@ -417,6 +417,34 @@ enum TimetableStatus {
   @@map("timetable_status_enum")
 }
 
+/// An exam's lifecycle (roadmap M14 §3). The order is the transition
+/// order: each state may only advance to the next one (or be ARCHIVEd),
+/// which is what makes the status machine a straight line rather than a
+/// graph. MARK_ENTRY is guarded by the exam's own end_date, and
+/// PUBLISHED is gated by the Module 15 result processor.
+enum ExamStatus {
+  DRAFT
+  SCHEDULED
+  ONGOING
+  MARK_ENTRY
+  PROCESSING
+  PUBLISHED
+  ARCHIVED
+
+  @@map("exam_status_enum")
+}
+
+/// How the seat-plan generator lays candidates into rooms (roadmap M14
+/// §4). SERPENTINE keeps a class together and snakes roll order across
+/// rooms; INTERLEAVE round-robins the attached classes so no two
+/// neighbours sit the same paper (the anti-cheating layout).
+enum SeatPlanStrategy {
+  SERPENTINE
+  INTERLEAVE
+
+  @@map("seat_plan_strategy_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -560,6 +588,11 @@ model School {
   periodSlots              PeriodSlot[]
   timetables               Timetable[]
   timetableEntries         TimetableEntry[]
+  examTypes                ExamType[]
+  exams                    Exam[]
+  examSubjects             ExamSubject[]
+  seatPlans                SeatPlan[]
+  seatPlanEntries          SeatPlanEntry[]
 
   @@map("schools")
 }
@@ -601,6 +634,7 @@ model GradingSystem {
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   gradePoints GradePoint[]
+  exams       Exam[]
 
   @@index([schoolId], map: "idx_grading_systems_school")
   @@map("grading_systems")
@@ -659,6 +693,7 @@ model AcademicSession {
   promotionBatchesTo       PromotionBatch[]          @relation("PromotionBatchTo")
   studentLeaveApplications StudentLeaveApplication[]
   timetables               Timetable[]
+  exams                    Exam[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -792,6 +827,8 @@ model SchoolClass {
   admissionTests        AdmissionTest[]
   enrollments           Enrollment[]
   promotionItemsTo      PromotionItem[]
+  examClasses           ExamClass[]
+  examSubjects          ExamSubject[]
 
   @@index([schoolId], map: "idx_classes_school")
   @@map("classes")
@@ -886,6 +923,7 @@ model Subject {
   teacherSectionSubjects TeacherSectionSubject[]
   optionalEnrollments    Enrollment[]            @relation("EnrollmentOptionalSubject")
   timetableEntries       TimetableEntry[]
+  examSubjects           ExamSubject[]
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -1569,9 +1607,10 @@ model Enrollment {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  transfers      EnrollmentTransfer[]
-  promotionItems PromotionItem[]
-  attendances    StudentAttendance[]
+  transfers       EnrollmentTransfer[]
+  promotionItems  PromotionItem[]
+  attendances     StudentAttendance[]
+  seatPlanEntries SeatPlanEntry[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -1874,6 +1913,197 @@ model TimetableEntry {
   @@index([teacherId, day], map: "idx_timetable_entries_teacher_day")
   @@index([periodSlotId, day], map: "idx_timetable_entries_slot_day")
   @@map("timetable_entries")
+}
+
+// ── Module 14: Examination Management ────────────────────────────────
+
+/// A kind of exam the school runs ("Half Yearly", "Class Test"). `weight`
+/// is its share of a combined final result — Module 15 validates that the
+/// weights of the set it combines add up, because only that module knows
+/// which types a given report card merges (roadmap M14 §7).
+model ExamType {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String   @map("school_id") @db.Uuid
+  school   School   @relation(fields: [schoolId], references: [id], map: "fk_exam_types_school")
+  name     String   @db.VarChar(100)
+  /// Percentage share in a combined result; NULL = not combinable.
+  weight   Decimal? @db.Decimal(5, 2)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  exams Exam[]
+
+  @@index([schoolId], map: "idx_exam_types_school")
+  @@map("exam_types")
+}
+
+/// One exam event of a session, spanning one or more classes. The
+/// grading system is referenced live while the exam is being built and
+/// **frozen into `grading_snapshot` at PUBLISH** (roadmap M14 §6) so a
+/// later edit to the grade bands can never restate a published result —
+/// Module 15 reads the snapshot, never the live table.
+model Exam {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String          @map("school_id") @db.Uuid
+  school          School          @relation(fields: [schoolId], references: [id], map: "fk_exams_school")
+  sessionId       String          @map("session_id") @db.Uuid
+  session         AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_exams_session")
+  examTypeId      String          @map("exam_type_id") @db.Uuid
+  examType        ExamType        @relation(fields: [examTypeId], references: [id], map: "fk_exams_type")
+  name            String          @db.VarChar(150)
+  startDate       DateTime        @map("start_date") @db.Date
+  endDate         DateTime        @map("end_date") @db.Date
+  gradingSystemId String          @map("grading_system_id") @db.Uuid
+  gradingSystem   GradingSystem   @relation(fields: [gradingSystemId], references: [id], map: "fk_exams_grading_system")
+  status          ExamStatus      @default(DRAFT)
+  resultPublishAt DateTime?       @map("result_publish_at") @db.Timestamptz(6)
+  /// Grade bands copied verbatim at PUBLISH — the frozen scale M15 reads.
+  gradingSnapshot Json?           @map("grading_snapshot")
+  instructions    String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  examClasses  ExamClass[]
+  examSubjects ExamSubject[]
+  seatPlans    SeatPlan[]
+
+  @@index([schoolId, sessionId, status], map: "idx_exams_school_session_status")
+  @@index([examTypeId], map: "idx_exams_type")
+  @@map("exams")
+}
+
+/// Which classes sit an exam (join table — no soft delete). Detaching a
+/// class is blocked once its subjects carry marks (Module 15).
+model ExamClass {
+  examId  String      @map("exam_id") @db.Uuid
+  exam    Exam        @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_exam_classes_exam")
+  classId String      @map("class_id") @db.Uuid
+  class   SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade, map: "fk_exam_classes_class")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@id([examId, classId], map: "pk_exam_classes")
+  @@index([classId], map: "idx_exam_classes_class")
+  @@map("exam_classes")
+}
+
+/// A single paper: one class × one subject of an exam, carrying both the
+/// mark distribution and the sitting's schedule.
+///
+/// The component columns (CQ/MCQ/practical/CA) are optional — a paper
+/// either has a flat `full_marks` or splits it, and when it splits the
+/// parts must sum to `full_marks` (service-enforced, roadmap M14 §6). The
+/// per-component `*_pass_marks` are the "per-component pass flags" of the
+/// roadmap expressed as thresholds rather than booleans: non-NULL means
+/// that component must be passed on its own, which is how BD boards treat
+/// a practical, and a bare boolean could not carry the threshold.
+///
+/// Scheduling deliberately does NOT reuse M13 `period_slots`: a sitting
+/// runs 2–3 hours across the bell schedule rather than inside one period,
+/// so it keeps its own wall-clock `start_time` + `duration_min`. The
+/// slots are still consulted to warn that a sitting collides with normal
+/// classes (see ExamRoutineService).
+model ExamSubject {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String      @map("school_id") @db.Uuid
+  school    School      @relation(fields: [schoolId], references: [id], map: "fk_exam_subjects_school")
+  examId    String      @map("exam_id") @db.Uuid
+  exam      Exam        @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_exam_subjects_exam")
+  classId   String      @map("class_id") @db.Uuid
+  class     SchoolClass @relation(fields: [classId], references: [id], map: "fk_exam_subjects_class")
+  subjectId String      @map("subject_id") @db.Uuid
+  subject   Subject     @relation(fields: [subjectId], references: [id], map: "fk_exam_subjects_subject")
+
+  fullMarks Int @map("full_marks")
+  passMarks Int @map("pass_marks")
+
+  cqMarks        Int? @map("cq_marks")
+  mcqMarks       Int? @map("mcq_marks")
+  practicalMarks Int? @map("practical_marks")
+  caMarks        Int? @map("ca_marks")
+
+  cqPassMarks        Int? @map("cq_pass_marks")
+  mcqPassMarks       Int? @map("mcq_pass_marks")
+  practicalPassMarks Int? @map("practical_pass_marks")
+  caPassMarks        Int? @map("ca_pass_marks")
+
+  /// Sitting schedule — NULL until the routine step of the wizard.
+  examDate    DateTime? @map("exam_date") @db.Date
+  startTime   DateTime? @map("start_time") @db.Time(0)
+  durationMin Int?      @map("duration_min")
+  room        String?   @db.VarChar(20)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([examId, classId, subjectId], map: "uq_exam_subjects_paper")
+  @@index([examId, examDate], map: "idx_exam_subjects_exam_date")
+  @@index([subjectId], map: "idx_exam_subjects_subject")
+  @@map("exam_subjects")
+}
+
+/// One room's seating for one exam date. Generated artifacts: regenerating
+/// replaces the whole date wholesale, so these are hard-deleted like M13
+/// `timetable_entries` rather than soft-deleted — the audit log keeps the
+/// diff and a stale half-plan would be worse than none.
+model SeatPlan {
+  id       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String           @map("school_id") @db.Uuid
+  school   School           @relation(fields: [schoolId], references: [id], map: "fk_seat_plans_school")
+  examId   String           @map("exam_id") @db.Uuid
+  exam     Exam             @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_seat_plans_exam")
+  room     String           @db.VarChar(20)
+  date     DateTime         @db.Date
+  capacity Int
+  strategy SeatPlanStrategy @default(SERPENTINE)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  entries SeatPlanEntry[]
+
+  @@unique([examId, date, room], map: "uq_seat_plans_room_date")
+  @@index([examId, date], map: "idx_seat_plans_exam_date")
+  @@map("seat_plans")
+}
+
+/// A candidate's seat. Keyed on `enrollment_id` (the M11 canonical roster
+/// handle) rather than student_id, so a mid-year section transfer cannot
+/// silently re-point a seat that was allocated against the old section.
+///
+/// NOTE: "a candidate sits once per exam DATE" is not a DB constraint —
+/// the date lives one join away on `seat_plans` and would have to be
+/// denormalized to express it. The generator replaces every room of a
+/// date in one transaction, so it cannot produce a cross-room duplicate;
+/// the append-a-late-enrollee path checks explicitly.
+model SeatPlanEntry {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_seat_plan_entries_school")
+  seatPlanId   String     @map("seat_plan_id") @db.Uuid
+  seatPlan     SeatPlan   @relation(fields: [seatPlanId], references: [id], onDelete: Cascade, map: "fk_seat_plan_entries_plan")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_seat_plan_entries_enrollment")
+  seatNo       Int        @map("seat_no")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([seatPlanId, seatNo], map: "uq_seat_plan_entries_seat")
+  @@unique([seatPlanId, enrollmentId], map: "uq_seat_plan_entries_candidate")
+  @@index([enrollmentId], map: "idx_seat_plan_entries_enrollment")
+  @@map("seat_plan_entries")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

@@ -124,6 +124,29 @@ export class EnrollmentsRepository extends BaseRepository<
     });
   }
 
+  /**
+   * ACTIVE enrollments of a whole CLASS in a session, across every
+   * section of it (added in M14: an exam paper is set per class, so its
+   * candidates are the class roster, not one section's).
+   */
+  async findClassRoster(
+    classId: string,
+    sessionId: string,
+    schoolId: string,
+  ): Promise<EnrollmentWithRelations[]> {
+    return this.prisma.enrollment.findMany({
+      where: {
+        classId,
+        sessionId,
+        schoolId,
+        deletedAt: null,
+        status: EnrollmentStatus.ACTIVE,
+      },
+      include: ENROLLMENT_INCLUDE,
+      orderBy: [{ section: { name: 'asc' } }, { rollNo: 'asc' }],
+    });
+  }
+
   /** A student's live (non-cancelled) enrollment for a session, if any. */
   async findLiveByStudentSession(
     studentId: string,

@@ -31,10 +31,14 @@ graph TD
     M13 -. conflict checker + periods/week (done) .-> M08
     M11 --> M13[13 Timetable]
     M08 --> M13
-    M13 --> M14[14 Examination]
+    M13 -. pattern only: clash engine + override tiers .-> M14[14 Examination]
     M04 --> M14
+    M06 --> M14
     M11 --> M14
+    M05 --> M14
     M14 --> M15[15 Marks & Results]
+    M15 -. binds EXAM_RESULT_GATE .-> M14
+    M16 -. binds EXAM_DUES_GATE .-> M14
     M11 --> M16[16 Fees & Payments]
     M09 --> M16
     M04 --> M17[17 Communication]
@@ -90,9 +94,9 @@ graph TD
 | 11 Enrollment & Promotion ✅ | 06, 09 | Promotion auto-decisions from results (15); rollback guard starts blocking once attendance (12)/marks (15) exist. Exports the canonical roster service (`getSectionStudents`/`getStudentCurrentEnrollment`) consumed by 12/14/16. Closed the M06 section delete-guard and the M09 section-scoped batch ID-card debts. The M10 ADMITTED backfill is served by the normal enroll flow (no dedicated endpoint). |
 | 12 Attendance ✅ | 05, 08, 09, 11 | Absent SMS actually sends after 17. **Period mode is now live** — 13 added the `period_id` FK and `getCurrentPeriod`. Consumed the M08 `teacher.leave.approved` hook. Added `CalendarService.workingDays()` to M05 and exports `AttendanceReportsService` + the attendance repositories for 18/21. Closed the M09 `attendance-history` debt and armed the M11 promotion rollback guard (M15 must extend it to marks). |
 | 13 Timetable ✅ | 06, 08, 11 | **Closed the M08 `TIMETABLE_CONFLICT_CHECKER` hook** (the real `RoutineConflictChecker` is bound to the token) and finalized M08's periods/week workload stub; turned on M12 period-mode attendance. Exports `RoutineService` + `PeriodSlotsRepository` + `TimetableEntriesRepository` for 14 (exam routines reuse `period_slots`) and 18 (portal routines). Substitution-on-teacher-leave is deferred to the Phase 3 backlog. **Graph note:** the conflict checker lives in the timetable module but is *bound inside* TeacherModule over a re-provisioned repository — TimetableModule imports TeacherModule, so the reverse import would cycle. |
-| 14 Examination | 04, 05, 11, 13 | Admit-card dues block (16) |
-| 15 Marks & Results | 14 | Result SMS (17); public search UI (19) |
-| 16 Fees & Payments | 09, 11 | Receipt SMS (17); accounting auto-posting consumed by 20 |
+| 14 Examination ✅ | 04, 05, 06, 11 | **13 turned out to be a pattern dependency, not a data one** — exam sittings keep their own wall-clock `start_time`+`duration_min` rather than reusing `period_slots` (a 3-hour paper does not fit a 40-minute bell); what M13 supplied was the clash-engine technique (compare wall-clock minutes, never slot ids) and the two-tier override split. Declares two DI hooks bound to no-ops: **`EXAM_RESULT_GATE`** (16 → *15* binds it; publication is currently allowed and logged) and **`EXAM_DUES_GATE`** (16 binds it; `exam.admit_card_block_dues` is inert until then). Extended M11 with `EnrollmentsRepository.findClassRoster()` — a paper is set per class, so its candidates span every section. Exports `ExamsService`/`ExamsRepository`/`ExamSubjectsRepository`/`ExamRoutineService` for 15 and 18. Delete guards on `exam_classes`/`exam_subjects` are slots until 15 creates a marks table. |
+| 15 Marks & Results | 14 | Result SMS (17); public search UI (19). **Must bind `EXAM_RESULT_GATE`**, read `exams.grading_snapshot` (frozen at publish) rather than the live grading system, and arm the M14/M06 "blocked once marks exist" delete guards. |
+| 16 Fees & Payments | 09, 11 | Receipt SMS (17); accounting auto-posting consumed by 20. **Must bind `EXAM_DUES_GATE`** so M14's admit-card dues block starts biting. |
 | 17 Communication | 02, 04, 09 | Retro-wires queued events from 10/12/15/16 |
 | 18 Portals & Dashboards | 02–17 | Contact-school → tickets (28) |
 | 19 Website CMS | 04, 05, 10, 15, 17 | Certificate verification page completed by 27 |
@@ -118,7 +122,9 @@ graph TD
 
 ## Critical Path
 
-`01 → 02 → 03 → 04 → 05 → 06 → 07 → 09 → 11 → 14(→13) → 15 → 18` — protect this chain; everything else can flex around it.
+`01 → 02 → 03 → 04 → 05 → 06 → 07 → 09 → 11 → 14 → 15 → 18` — protect this chain; everything else can flex around it.
+
+*(Updated after M14: 13 is no longer on the critical path. It was scheduled before 14 on the assumption that exam scheduling would reuse `period_slots`; implementation showed sittings need their own wall-clock timing, so 13 contributed patterns rather than data and 14 could have run in parallel with it.)*
 
 ## Update Rule
 

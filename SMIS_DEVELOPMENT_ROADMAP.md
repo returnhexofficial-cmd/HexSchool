@@ -88,8 +88,8 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 10 | Admission Management | ☑ |
 | 11 | Enrollment & Promotion | ☑ |
 | 12 | Attendance Management | ☑ |
-| 13 | Timetable / Class Routine | ☐ |
-| 14 | Examination Management | ☐ |
+| 13 | Timetable / Class Routine | ☑ |
+| 14 | Examination Management | ☑ |
 | 15 | Marks & Result Processing | ☐ |
 | 16 | Fees & Payments | ☐ |
 | 17 | Communication & Notifications (SMS/Email) | ☐ |
@@ -1008,11 +1008,12 @@ Exam definitions: exam types & terms, exam schedules (routine), mark distributio
 - `seat_plans`: `id`, `exam_id`, `room`, `date`; `seat_plan_entries(seat_plan_id, enrollment_id, seat_no)` — generated.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Exam type CRUD; exam wizard endpoints (create → attach classes → per class-subject distribution defaults from `class_subjects.full_marks_default` → schedule dates).
-- [ ] Exam routine generator/editor + clash checks (same class two subjects same day optional-rule; room capacity vs candidates).
-- [ ] Seat plan generator: strategies (roll serpentine across rooms, mixed-class anti-cheating interleave), regenerate, PDF per room + summary.
-- [ ] Admit card generation: per student PDF with photo, exam schedule, seat, signature blocks; batch by section; setting "block admit card if dues" (activates after Module 16).
-- [ ] Status machine transitions with guards (can't enter MARK_ENTRY before end_date unless override; can't PUBLISH before Module 15 processing complete).
+- [x] Exam type CRUD; exam wizard endpoints (create → attach classes → per class-subject distribution defaults from `class_subjects.full_marks_default` → schedule dates).
+- [x] Exam routine generator/editor + clash checks (same class two subjects same day optional-rule; room capacity vs candidates). **Decision: sittings keep their own wall-clock `start_time`+`duration_min` rather than reusing M13 `period_slots` — a 3-hour paper does not fit a 40-minute bell; the engine still compares wall-clock minutes, the M13 technique.**
+- [x] Seat plan generator: strategies (roll serpentine across rooms, mixed-class anti-cheating interleave), regenerate, PDF per room + summary. (+ append-a-late-enrollee without regenerating.)
+- [x] Admit card generation: per student PDF with photo, exam schedule, seat, signature blocks; batch by section/class; setting "block admit card if dues" wired behind `EXAM_DUES_GATE` (no-op until Module 16).
+- [x] Status machine transitions with guards (MARK_ENTRY before end_date needs `override` + `exam.status`; PUBLISH asks `EXAM_RESULT_GATE` — a no-op until Module 15 binds it — and freezes the grade scale into `exams.grading_snapshot`).
+- [x] Curriculum "sync subjects" diff/apply (roadmap §8) and the shift-a-day postponement tool.
 ### APIs
 ```
 CRUD /api/v1/exam-types
@@ -1023,10 +1024,10 @@ POST /api/v1/exams/:id/admit-cards             (batch, filters)
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Exam setup wizard (type → classes → subjects & marks distribution grid → routine calendar → review).
-- [ ] Exam list with status pipeline; exam detail tabs (Subjects, Routine, Seat Plan, Admit Cards, Marks [Module 15], Results [15]).
-- [ ] Seat plan visual (room boxes with seat chips), regenerate confirm.
-- [ ] Admit card batch dialog with dues-block toggle.
+- [x] Exam setup flow (type → classes → subjects & marks distribution grid → routine → review) — realised as a create dialog plus the detail tabs, with the step order preserved by the status guards rather than a linear wizard shell.
+- [x] Exam list with status pipeline; exam detail tabs (Papers & marks, Routine, Seat Plan, Admit Cards; Marks/Results arrive with Module 15).
+- [x] Seat plan visual (room boxes with seat chips), regenerate + delete confirm.
+- [x] Admit card batch dialog with dues-block toggle.
 
 ## 6. Business Rules
 - Pass marks ≤ full marks; component marks sum = full marks when components used.
@@ -1043,15 +1044,15 @@ POST /api/v1/exams/:id/admit-cards             (batch, filters)
 - Postponed exam day (strike/weather — common) → shift-routine tool (moves a date, cascades notifications).
 
 ## 9. Testing Checklist
-- [ ] Unit: distribution validation, seat plan strategies, status machine.
-- [ ] e2e: wizard end-to-end, admit card generation with/without photo.
-- [ ] Frontend: distribution grid validation, routine calendar edits.
+- [x] Unit: distribution validation, seat plan strategies, status machine (+ clash engine matrix, candidate resolution incl. the optional-subject rule, override tiers, curriculum sync).
+- [ ] e2e: wizard end-to-end, admit card generation with/without photo. **Not run — no Docker/Postgres in the build environment; see the completion doc's TODOs.**
+- [x] Frontend: distribution grid validation, schema mirrors, clash grouping/override tiers (30 tests).
 
 ## 10. Completion Checklist
-- [ ] Types, exams, subjects, routine
-- [ ] Seat plans + admit cards PDFs
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/14-examination.md`
+- [x] Types, exams, subjects, routine
+- [x] Seat plans + admit cards PDFs
+- [x] Tests passing (588 backend unit / 171 frontend; e2e outstanding — see above)
+- [x] Docs: `docs/modules/14-examination.md`
 
 ---
 

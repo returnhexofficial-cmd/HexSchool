@@ -9,7 +9,10 @@ import { parseDate } from '../../academic/calendar/date.util';
 import { CalendarService } from '../../academic/services/calendar.service';
 import { EnrollmentsRepository } from '../../enrollment/repositories/enrollments.repository';
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
-import { dhakaMinutesOfDay, dhakaToday } from '../calc/clock.util';
+import {
+  dhakaMinutesOfDay,
+  dhakaToday,
+} from '../../../common/utils/clock.util';
 import { StudentAttendancesRepository } from '../repositories/student-attendances.repository';
 import { AttendanceSettingsService } from '../services/attendance-settings.service';
 

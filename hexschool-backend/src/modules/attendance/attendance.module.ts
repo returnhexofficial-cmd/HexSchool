@@ -11,6 +11,7 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StorageModule } from '../storage/storage.module';
 import { StudentModule } from '../student/student.module';
 import { StudentGuardiansRepository } from '../student/repositories/student-guardians.repository';
+import { TimetableModule } from '../timetable/timetable.module';
 import { AttendanceReportsController } from './controllers/attendance-reports.controller';
 import { StaffAttendanceController } from './controllers/staff-attendance.controller';
 import { StudentAttendanceController } from './controllers/student-attendance.controller';
@@ -53,6 +54,10 @@ import { StudentLeavesService } from './services/student-leaves.service';
     RbacModule,
     StorageModule,
     QueuesModule,
+    // M13: RoutineService.getCurrentPeriod + PeriodSlotsRepository turn
+    // period-mode marking on. One-directional — TimetableModule knows
+    // nothing about attendance.
+    TimetableModule,
   ],
   controllers: [
     StudentAttendanceController,

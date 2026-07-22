@@ -5,6 +5,10 @@ import { BadRequestException } from '@nestjs/common';
  * the school's local day). Bangladesh has a fixed +06:00 offset with no
  * DST, so the arithmetic is a constant shift — no timezone library and
  * no ambiguity around the DST transitions other zones have.
+ *
+ * Written for M12 attendance; promoted here in M13 when the timetable
+ * module needed the same minutes-of-day arithmetic to place a routine's
+ * bell schedule against the wall clock.
  */
 export const DHAKA_OFFSET_MINUTES = 6 * 60;
 

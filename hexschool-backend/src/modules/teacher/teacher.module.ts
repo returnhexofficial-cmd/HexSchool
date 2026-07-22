@@ -16,10 +16,9 @@ import { TeacherAssignmentsController } from './controllers/teacher-assignments.
 import { TeacherLeavesController } from './controllers/teacher-leaves.controller';
 import { TeachersController } from './controllers/teachers.controller';
 import { TeacherListener } from './events/teacher.listener';
-import {
-  NoopTimetableConflictChecker,
-  TIMETABLE_CONFLICT_CHECKER,
-} from './interfaces/timetable-conflict.interface';
+import { TIMETABLE_CONFLICT_CHECKER } from './interfaces/timetable-conflict.interface';
+import { TimetableEntriesRepository } from '../timetable/repositories/timetable-entries.repository';
+import { RoutineConflictChecker } from '../timetable/services/routine-conflict-checker';
 import { TeacherAssignmentsRepository } from './repositories/teacher-assignments.repository';
 import { TeacherDocumentsRepository } from './repositories/teacher-documents.repository';
 import { TeacherEvaluationsRepository } from './repositories/teacher-evaluations.repository';
@@ -35,12 +34,15 @@ import { TeachersService } from './services/teachers.service';
 
 /**
  * Module 08 — Teacher Management: the M07 staff pattern plus expertise
- * mapping, section-subject assignments (one holder per slot, timetable
- * hook no-op until M13), interim leaves (HR M21 absorbs them), and
- * evaluations. AcademicModule supplies SessionsService +
- * SectionsRepository (exported); other cross-module repositories are
- * stateless re-provisions (M07 convention). The timetable conflict
- * checker is bound to a no-op — M13 swaps the provider.
+ * mapping, section-subject assignments (one holder per slot), interim
+ * leaves (HR M21 absorbs them), and evaluations. AcademicModule supplies
+ * SessionsService + SectionsRepository (exported); other cross-module
+ * repositories are stateless re-provisions (M07 convention).
+ *
+ * As of M13 the `TIMETABLE_CONFLICT_CHECKER` token is bound to the real
+ * `RoutineConflictChecker` (it was a no-op through M08–M12): reassigning
+ * a section-subject now fails if the published routine would put the
+ * incoming teacher in two rooms at once.
  */
 @Module({
   imports: [
@@ -65,7 +67,7 @@ import { TeachersService } from './services/teachers.service';
     TeacherListener,
     {
       provide: TIMETABLE_CONFLICT_CHECKER,
-      useClass: NoopTimetableConflictChecker,
+      useClass: RoutineConflictChecker,
     },
     TeachersRepository,
     TeacherQualificationsRepository,
@@ -82,6 +84,11 @@ import { TeachersService } from './services/teachers.service';
     SchoolsRepository,
     DepartmentsRepository,
     SubjectsRepository,
+    // M13 routine cells: the real conflict checker and the periods/week
+    // side of the workload report read them. Re-provisioned rather than
+    // imported — TimetableModule imports THIS module for
+    // TeachersRepository, so the graph must not point back.
+    TimetableEntriesRepository,
   ],
   exports: [TeachersRepository],
 })

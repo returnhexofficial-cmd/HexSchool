@@ -121,6 +121,12 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'student.leave.view',
       'student.leave.manage',
       'student.leave.approve',
+      'timetable.view',
+      'period.slot.manage',
+      'timetable.manage',
+      'timetable.publish',
+      'timetable.assign.override',
+      'timetable.export',
     ],
   },
   {
@@ -159,6 +165,10 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'attendance.report',
       'student.leave.view',
       'student.leave.approve',
+      'timetable.view',
+      'timetable.manage',
+      'timetable.publish',
+      'timetable.export',
     ],
   },
   {
@@ -179,6 +189,9 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'attendance.mark',
       'attendance.qr.checkin',
       'student.leave.view',
+      // Own routine + the section grids they teach (read-only).
+      'timetable.view',
+      'timetable.export',
     ],
   },
   {

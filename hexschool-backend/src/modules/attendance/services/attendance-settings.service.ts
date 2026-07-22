@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '../../school/services/settings.service';
-import { minutesOfDayOr } from '../calc/clock.util';
+import { minutesOfDayOr } from '../../../common/utils/clock.util';
 
 /** Resolved `attendance.*` settings (M04 registry group). */
 export interface AttendanceConfig {

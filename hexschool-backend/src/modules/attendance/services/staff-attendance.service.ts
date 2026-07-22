@@ -15,7 +15,7 @@ import { CalendarService } from '../../academic/services/calendar.service';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { PermissionsService } from '../../rbac/services/permissions.service';
-import { dhakaToday } from '../calc/clock.util';
+import { dhakaToday } from '../../../common/utils/clock.util';
 import { MarkStaffAttendanceDto, StaffAttendanceQueryDto } from '../dto';
 import { EmployeeDirectoryRepository } from '../repositories/employee-directory.repository';
 import { StaffAttendancesRepository } from '../repositories/staff-attendances.repository';

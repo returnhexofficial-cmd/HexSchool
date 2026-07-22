@@ -4,6 +4,7 @@ import {
   BookUser,
   BriefcaseBusiness,
   CalendarCheck,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   ClipboardCheck,
@@ -102,6 +103,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/attendance/leaves",
     icon: FileClock,
     permission: "student.leave.view",
+  },
+  {
+    label: "Class Routines",
+    href: "/admin/timetables",
+    icon: CalendarClock,
+    permission: "timetable.view",
   },
   {
     label: "Teachers",

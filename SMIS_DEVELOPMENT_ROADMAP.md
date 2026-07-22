@@ -944,12 +944,12 @@ Weekly class routines: period definitions, section timetables mapping period × 
 - `timetable_entries`: `id`, `timetable_id FK`, `day ENUM('SAT'..'FRI')`, `period_slot_id FK`, `subject_id FK`, `teacher_id FK`, `room_no NULL`. `uq(timetable_id, day, period_slot_id)`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Period slot CRUD per shift (overlap validation).
-- [ ] Timetable builder endpoints: create draft, upsert entries (bulk), publish.
-- [ ] Conflict engine: on entry upsert, check teacher not already booked (same session, same day+overlapping slot in any section) and room not double-booked; return conflict details.
-- [ ] Teacher schedule + workload endpoints (periods/week) — completes Module 08 stub.
-- [ ] Routine PDF (section) + teacher personal routine PDF.
-- [ ] `getCurrentPeriod(sectionId, datetime)` helper (used by period attendance).
+- [x] Period slot CRUD per shift (overlap validation).
+- [x] Timetable builder endpoints: create draft, upsert entries (bulk), publish.
+- [x] Conflict engine: on entry upsert, check teacher not already booked (same session, same day+overlapping slot in any section) and room not double-booked; return conflict details.
+- [x] Teacher schedule + workload endpoints (periods/week) — completes Module 08 stub.
+- [x] Routine PDF (section) + teacher personal routine PDF.
+- [x] `getCurrentPeriod(sectionId, datetime)` helper (used by period attendance).
 ### APIs
 ```
 CRUD /api/v1/period-slots
@@ -960,9 +960,9 @@ GET  /api/v1/timetables/:id/pdf
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Routine builder: grid (days × periods), cell editor popover (subject → filtered teacher list → room), live conflict badges (red cell + tooltip "Mr. X busy in 7-B"), copy-day, clear-day, publish with validation summary.
-- [ ] Teacher routine viewer; section routine print view.
-- [ ] Master routine page: whole-school grid by shift (read-only heat view of teacher load).
+- [x] Routine builder: grid (days × periods), cell editor popover (subject → filtered teacher list → room), live conflict badges (red cell + tooltip "Mr. X busy in 7-B"), copy-day, clear-day, publish with validation summary.
+- [x] Teacher routine viewer; section routine print view.
+- [x] Master routine page: whole-school grid by shift (read-only heat view of teacher load).
 
 ## 6. Business Rules
 - Only PUBLISHED routines visible in portals.
@@ -977,19 +977,19 @@ GET  /api/v1/timetables/:id/pdf
 ## 8. Edge Cases
 - Two sections legitimately sharing one teacher same slot (combined class) → allowed via explicit `combined_with_section_id` marker rather than override abuse.
 - Shift change mid-session → new timetable version; old attendance untouched.
-- Teacher leave day → routines don't change; substitution feature deferred to Phase 3 backlog (note in roadmap backlog).
+- Teacher leave day → routines don't change; substitution feature deferred to Phase 3 backlog (confirmed at M13 completion — `freeByDay` on the teacher routine is the raw material for it).
 
 ## 9. Testing Checklist
-- [ ] Unit: conflict engine matrix (same slot, overlapping custom slots, cross-shift).
-- [ ] e2e: build → publish → portal fetch; conflict rejection.
-- [ ] Frontend: grid interactions, conflict UX.
+- [x] Unit: conflict engine matrix (same slot, overlapping custom slots, cross-shift).
+- [x] e2e: build → publish → portal fetch; conflict rejection.
+- [x] Frontend: grid interactions, conflict UX (schema-tested; in-browser click-through pending — see completion doc TODOs).
 
 ## 10. Completion Checklist
-- [ ] Slots + builder + conflicts
-- [ ] PDFs
-- [ ] Teacher workload finalized
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/13-timetable.md`
+- [x] Slots + builder + conflicts
+- [x] PDFs
+- [x] Teacher workload finalized
+- [x] Tests passing
+- [x] Docs: `docs/modules/13-timetable.md`
 
 ---
 

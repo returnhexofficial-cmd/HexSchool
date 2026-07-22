@@ -380,6 +380,43 @@ enum StudentLeaveAppliedBy {
   @@map("student_leave_applied_by_enum")
 }
 
+/// What a period slot is used for. Only CLASS slots may hold a routine
+/// entry (roadmap M13 §6) — BREAK/ASSEMBLY exist so the printed grid has
+/// the real day shape and so attendance never targets a tiffin break.
+enum PeriodSlotType {
+  CLASS
+  BREAK
+  ASSEMBLY
+
+  @@map("period_slot_type_enum")
+}
+
+/// Routine days. Saturday-first because the Bangladeshi school week runs
+/// SAT→THU with Friday the standard weekly holiday; which days are
+/// actually offered is filtered by `general.weekly_holidays` (M04).
+enum Weekday {
+  SAT
+  SUN
+  MON
+  TUE
+  WED
+  THU
+  FRI
+
+  @@map("weekday_enum")
+}
+
+/// A routine version's lifecycle. Publishing promotes the DRAFT and
+/// ARCHIVEs the timetable it replaces — old versions stay readable so a
+/// past date's routine can still be reconstructed (roadmap M13 §6).
+enum TimetableStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("timetable_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -520,6 +557,9 @@ model School {
   studentAttendances       StudentAttendance[]
   staffAttendances         StaffAttendance[]
   studentLeaveApplications StudentLeaveApplication[]
+  periodSlots              PeriodSlot[]
+  timetables               Timetable[]
+  timetableEntries         TimetableEntry[]
 
   @@map("schools")
 }
@@ -618,6 +658,7 @@ model AcademicSession {
   promotionBatchesFrom     PromotionBatch[]          @relation("PromotionBatchFrom")
   promotionBatchesTo       PromotionBatch[]          @relation("PromotionBatchTo")
   studentLeaveApplications StudentLeaveApplication[]
+  timetables               Timetable[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -714,6 +755,7 @@ model Shift {
 
   sections    Section[]
   enrollments Enrollment[]
+  periodSlots PeriodSlot[]
 
   // Hand-written in the M06 migration; declared here too so drift
   // detection doesn't try to drop it (it's a plain unique index, which
@@ -812,6 +854,8 @@ model Section {
   enrollments            Enrollment[]
   promotionItemsTo       PromotionItem[]
   studentAttendances     StudentAttendance[]
+  timetables             Timetable[]
+  combinedTimetableEntry TimetableEntry[]        @relation("TimetableEntryCombinedWith")
 
   @@index([schoolId, sessionId], map: "idx_sections_school_session")
   @@index([classId], map: "idx_sections_class")
@@ -841,6 +885,7 @@ model Subject {
   teacherSubjects        TeacherSubject[]
   teacherSectionSubjects TeacherSectionSubject[]
   optionalEnrollments    Enrollment[]            @relation("EnrollmentOptionalSubject")
+  timetableEntries       TimetableEntry[]
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -989,13 +1034,14 @@ model Teacher {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  qualifications TeacherQualification[]
-  subjects       TeacherSubject[]
-  assignments    TeacherSectionSubject[]
-  leaves         TeacherLeave[]
-  evaluations    TeacherEvaluation[]
-  documents      TeacherDocument[]
-  classTeacherOf Section[]
+  qualifications   TeacherQualification[]
+  subjects         TeacherSubject[]
+  assignments      TeacherSectionSubject[]
+  leaves           TeacherLeave[]
+  evaluations      TeacherEvaluation[]
+  documents        TeacherDocument[]
+  classTeacherOf   Section[]
+  timetableEntries TimetableEntry[]
 
   // Same rule as staff: NOT deleted_at-scoped — teacher IDs never reused.
   @@unique([schoolId, employeeId], map: "uq_teachers_employee_id")
@@ -1639,9 +1685,10 @@ model StudentAttendance {
   sectionId        String           @map("section_id") @db.Uuid
   section          Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "fk_student_attendances_section")
   date             DateTime         @db.Date
-  /// Timetable period (M13). Plain UUID column until periods exist — the
-  /// FK is added by that module; NULL means daily-mode attendance.
+  /// Timetable period (M13 — the FK is live as of that module's
+  /// migration). NULL means daily-mode attendance.
   periodId         String?          @map("period_id") @db.Uuid
+  period           PeriodSlot?      @relation(fields: [periodId], references: [id], onDelete: Restrict, map: "fk_student_attendances_period")
   status           AttendanceStatus
   checkInTime      DateTime?        @map("check_in_time") @db.Timestamptz(6)
   method           AttendanceMethod @default(MANUAL)
@@ -1724,6 +1771,109 @@ model StudentLeaveApplication {
   @@index([schoolId, status], map: "idx_student_leave_applications_school_status")
   @@index([studentId, fromDate], map: "idx_student_leave_applications_student")
   @@map("student_leave_applications")
+}
+
+// ── Module 13: Timetable / Class Routine ─────────────────────────────
+
+/// One bell-schedule row of a shift ("Period 1", 08:00–08:45). Slots are
+/// per SHIFT, not per section, so the morning and day shifts each keep
+/// their own bell schedule and a part-time teacher's cross-shift clash is
+/// detected by comparing real times rather than slot ids (roadmap M13
+/// §8). Times are TIME(0) columns like `shifts.start_time`; the service
+/// compares them as minutes-of-day. Soft-deleted so a retired slot never
+/// orphans the routine history that referenced it.
+model PeriodSlot {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String         @map("school_id") @db.Uuid
+  school       School         @relation(fields: [schoolId], references: [id], map: "fk_period_slots_school")
+  shiftId      String         @map("shift_id") @db.Uuid
+  shift        Shift          @relation(fields: [shiftId], references: [id], map: "fk_period_slots_shift")
+  name         String         @db.VarChar(50)
+  startTime    DateTime       @map("start_time") @db.Time(0)
+  endTime      DateTime       @map("end_time") @db.Time(0)
+  type         PeriodSlotType @default(CLASS)
+  displayOrder Int            @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  entries            TimetableEntry[]
+  studentAttendances StudentAttendance[]
+
+  @@index([schoolId, shiftId], map: "idx_period_slots_school_shift")
+  @@map("period_slots")
+}
+
+/// A section's routine for a session, versioned. At most one DRAFT and
+/// one PUBLISHED per (session, section) — a hand-written partial unique
+/// index over (session_id, section_id, status) WHERE deleted_at IS NULL
+/// AND status <> 'ARCHIVED'. Publishing promotes the DRAFT and ARCHIVEs
+/// the timetable it replaces, so `effective_from` + `version` reconstruct
+/// which routine was in force on any past date (roadmap M13 §6).
+model Timetable {
+  id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String          @map("school_id") @db.Uuid
+  school        School          @relation(fields: [schoolId], references: [id], map: "fk_timetables_school")
+  sessionId     String          @map("session_id") @db.Uuid
+  session       AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_timetables_session")
+  sectionId     String          @map("section_id") @db.Uuid
+  section       Section         @relation(fields: [sectionId], references: [id], onDelete: Cascade, map: "fk_timetables_section")
+  status        TimetableStatus @default(DRAFT)
+  effectiveFrom DateTime        @map("effective_from") @db.Date
+  /// 1-based, incremented per published version of the same section.
+  version       Int             @default(1)
+  publishedAt   DateTime?       @map("published_at") @db.Timestamptz(6)
+  publishedBy   String?         @map("published_by") @db.Uuid
+  notes         String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  entries TimetableEntry[]
+
+  @@index([schoolId, sessionId, status], map: "idx_timetables_school_session_status")
+  @@index([sectionId, status], map: "idx_timetables_section_status")
+  @@map("timetables")
+}
+
+/// One cell of the routine grid: day × period → subject + teacher (+
+/// room). Hard-deleted — the bulk entry endpoint replaces cells outright
+/// and the audit log keeps the diff. `combined_with_section_id` is the
+/// explicit combined-class marker (roadmap M13 §8): two sections sitting
+/// the same lesson declare each other, and the conflict engine treats the
+/// pair as one booking instead of a double-booking to be overridden away.
+model TimetableEntry {
+  id                    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId              String     @map("school_id") @db.Uuid
+  school                School     @relation(fields: [schoolId], references: [id], map: "fk_timetable_entries_school")
+  timetableId           String     @map("timetable_id") @db.Uuid
+  timetable             Timetable  @relation(fields: [timetableId], references: [id], onDelete: Cascade, map: "fk_timetable_entries_timetable")
+  day                   Weekday
+  periodSlotId          String     @map("period_slot_id") @db.Uuid
+  periodSlot            PeriodSlot @relation(fields: [periodSlotId], references: [id], map: "fk_timetable_entries_period_slot")
+  subjectId             String     @map("subject_id") @db.Uuid
+  subject               Subject    @relation(fields: [subjectId], references: [id], map: "fk_timetable_entries_subject")
+  teacherId             String     @map("teacher_id") @db.Uuid
+  teacher               Teacher    @relation(fields: [teacherId], references: [id], map: "fk_timetable_entries_teacher")
+  roomNo                String?    @map("room_no") @db.VarChar(20)
+  combinedWithSectionId String?    @map("combined_with_section_id") @db.Uuid
+  combinedWithSection   Section?   @relation("TimetableEntryCombinedWith", fields: [combinedWithSectionId], references: [id], map: "fk_timetable_entries_combined_section")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([timetableId, day, periodSlotId], map: "uq_timetable_entries_cell")
+  @@index([teacherId, day], map: "idx_timetable_entries_teacher_day")
+  @@index([periodSlotId, day], map: "idx_timetable_entries_slot_day")
+  @@map("timetable_entries")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

@@ -30,6 +30,8 @@ describe('StudentAttendanceService', () => {
   let calendar: Record<string, jest.Mock>;
   let config: Record<string, jest.Mock>;
   let permissions: Record<string, jest.Mock>;
+  let routines: Record<string, jest.Mock>;
+  let periodSlots: Record<string, jest.Mock>;
   let service: StudentAttendanceService;
 
   const roster = [
@@ -95,8 +97,24 @@ describe('StudentAttendanceService', () => {
     };
     enrollments = { getSectionStudents: jest.fn().mockResolvedValue(roster) };
     calendar = { isHoliday: jest.fn().mockResolvedValue({ holiday: false }) };
-    config = { load: jest.fn().mockResolvedValue({ editWindowDays: 7 }) };
+    config = {
+      load: jest.fn().mockResolvedValue({ editWindowDays: 7, mode: 'daily' }),
+    };
     permissions = { getUserPermissionCodes: jest.fn().mockResolvedValue([]) };
+    // M13 period mode is off in these cases (`mode: 'daily'`), so the
+    // routine collaborators are never reached — see the period-mode
+    // block at the bottom for the cases that do exercise them.
+    routines = {
+      getCurrentPeriod: jest.fn().mockResolvedValue({
+        date: TODAY,
+        day: 'TUE',
+        at: '10:00',
+        holiday: false,
+        slot: null,
+        cell: null,
+      }),
+    };
+    periodSlots = { findByIds: jest.fn().mockResolvedValue([]) };
 
     service = new StudentAttendanceService(
       attendances as never,
@@ -108,6 +126,8 @@ describe('StudentAttendanceService', () => {
       config as never,
       permissions as never,
       { set: jest.fn() } as never,
+      routines as never,
+      periodSlots as never,
     );
   });
 
@@ -271,5 +291,143 @@ describe('StudentAttendanceService', () => {
       undefined,
       'actor-1',
     );
+  });
+
+  /**
+   * M13 turned `period_id` from a bare column into a real FK, which is
+   * what makes per-period marking safe: the identity index keys on
+   * (enrollment, date, period), so the period a row is filed under has to
+   * be resolved deliberately rather than passed through.
+   */
+  describe('period mode (M13)', () => {
+    const SLOT = {
+      id: 'slot-1',
+      shiftId: 'shift-1',
+      name: 'Period 1',
+      startTime: new Date('1970-01-01T08:00:00.000Z'),
+      endTime: new Date('1970-01-01T08:45:00.000Z'),
+      type: 'CLASS',
+    };
+
+    beforeEach(() => {
+      config.load.mockResolvedValue({ editWindowDays: 7, mode: 'period' });
+      routines.getCurrentPeriod.mockResolvedValue({
+        date: TODAY,
+        day: 'TUE',
+        at: '08:20',
+        holiday: false,
+        slot: {
+          id: 'slot-1',
+          name: 'Period 1',
+          startTime: '08:00',
+          endTime: '08:45',
+          type: 'CLASS',
+          displayOrder: 1,
+        },
+        cell: {
+          subject: { name: 'Mathematics' },
+          teacher: { name: 'Mr X' },
+        },
+      });
+    });
+
+    it('files marks under the period running now when none is given', async () => {
+      await service.mark(markDto(), actor);
+      expect(attendances.upsertEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ periodId: 'slot-1' }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('labels the sheet with the period and its routine cell', async () => {
+      const sheet = await service.getSheet(
+        { sectionId: 'sec-1', date: TODAY },
+        actor,
+      );
+      expect(sheet.mode).toBe('period');
+      expect(sheet.period).toMatchObject({
+        id: 'slot-1',
+        subject: 'Mathematics',
+        teacher: 'Mr X',
+      });
+    });
+
+    it('refuses when no period is running and none was given', async () => {
+      routines.getCurrentPeriod.mockResolvedValue({
+        date: TODAY,
+        day: 'TUE',
+        at: '17:30',
+        holiday: false,
+        slot: null,
+        cell: null,
+      });
+      await expect(service.mark(markDto(), actor)).rejects.toThrow(
+        /No period is running/,
+      );
+    });
+
+    it('accepts an explicit period of the section shift', async () => {
+      periodSlots.findByIds.mockResolvedValue([SLOT]);
+      sections.findDetail.mockResolvedValue({
+        id: 'sec-1',
+        name: 'A',
+        sessionId: 'ses-1',
+        shiftId: 'shift-1',
+        class: { id: 'cls-6', name: 'Class 6' },
+      });
+      await service.mark(markDto({ periodId: 'slot-1' }), actor);
+      expect(attendances.upsertEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ periodId: 'slot-1' }),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("rejects a period from another shift's bell schedule", async () => {
+      periodSlots.findByIds.mockResolvedValue([
+        { ...SLOT, shiftId: 'shift-other' },
+      ]);
+      sections.findDetail.mockResolvedValue({
+        id: 'sec-1',
+        name: 'A',
+        sessionId: 'ses-1',
+        shiftId: 'shift-1',
+        class: { id: 'cls-6', name: 'Class 6' },
+      });
+      await expect(
+        service.mark(markDto({ periodId: 'slot-1' }), actor),
+      ).rejects.toThrow(/another shift/);
+    });
+
+    it('rejects marking a BREAK slot', async () => {
+      periodSlots.findByIds.mockResolvedValue([{ ...SLOT, type: 'BREAK' }]);
+      await expect(
+        service.mark(markDto({ periodId: 'slot-1' }), actor),
+      ).rejects.toThrow(/attendance is not taken/);
+    });
+
+    it('refuses a period on a holiday rather than guessing one', async () => {
+      routines.getCurrentPeriod.mockResolvedValue({
+        date: TODAY,
+        day: 'TUE',
+        at: '08:20',
+        holiday: true,
+        holidayTitle: 'Victory Day',
+        slot: null,
+        cell: null,
+      });
+      await expect(service.mark(markDto(), actor)).rejects.toThrow(
+        /Victory Day/,
+      );
+    });
+  });
+
+  it('refuses a periodId while attendance is in daily mode', async () => {
+    // Silently dropping it would file the marks under the daily identity
+    // key and let a duplicate through the partial unique index.
+    await expect(
+      service.mark(markDto({ periodId: 'slot-1' }), actor),
+    ).rejects.toThrow(/daily mode/);
   });
 });

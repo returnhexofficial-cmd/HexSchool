@@ -221,7 +221,26 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ],
   ]),
 
-  // Modules 13+ append their codes here.
+  // ── Module 13: Timetable / Class Routine ────────────────────────────
+  ...define('timetable', [
+    ['timetable.view', 'View routines, period slots and the master grid'],
+    ['period.slot.manage', 'Create/edit/delete the bell schedule of a shift'],
+    [
+      'timetable.manage',
+      'Create a draft routine and edit its cells (copy/clear day)',
+    ],
+    [
+      'timetable.publish',
+      'Publish a draft routine (archives the version it replaces)',
+    ],
+    [
+      'timetable.assign.override',
+      'Place a teacher who is not assigned to that section-subject',
+    ],
+    ['timetable.export', 'Download section / teacher routine PDFs'],
+  ]),
+
+  // Modules 14+ append their codes here.
 ];
 
 /** Fast membership checks for validators and the seeder. */

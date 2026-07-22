@@ -59,10 +59,14 @@
 | `SequenceService` (exported by `SequenceModule`) | gap-free document numbers: per-(school, prefix) counters in `document_sequences`, claimed by an atomic row-locking upsert INSIDE the caller's transaction (rollback returns the number); token-pattern renderer `{SCHOOL_CODE} {YYYY} {YY} {MM} {SEQ<n>}`. Employee IDs (M07) use setting `general.employee_id_pattern` + counter `staff:{YY}`; student UIDs/applications/invoices/vouchers (M09/10/16/20) reuse it | M07 |
 | `CalendarService.isHoliday(schoolId, date, appliesTo?)` (exported by `AcademicModule`) | weekly off-days (M04 setting `general.weekly_holidays`) + holiday ranges → `{holiday, reason, title}`; consumed by Attendance (M12) / Payroll (M21) | M05 |
 | `CalendarService.workingDays(schoolId, from, to, appliesTo?)` | YYYY-MM-DD list of working days in a range (one holidays query + one settings read, unlike per-date `isHoliday`) — **the denominator of every attendance/payroll percentage**; pure core in `calendar/working-days.util.ts` | M05→12 |
-| Attendance engine (`attendance/calc/percentage.util.ts`, `calc/clock.util.ts`) | dependency-free: `countByStatus`/`presentEquivalent`/`summarize` (`present + late + ½ half-day ÷ working days`, HOLIDAY rows removed from both sides) and the Asia/Dhaka clock helpers (`dhakaToday`, `dhakaMinutesOfDay`, `minutesOfDay`). Importable from any module (M09 student history does) without touching AttendanceModule | M12 |
+| Attendance engine (`attendance/calc/percentage.util.ts`) | dependency-free: `countByStatus`/`presentEquivalent`/`summarize` (`present + late + ½ half-day ÷ working days`, HOLIDAY rows removed from both sides). Importable from any module (M09 student history does) without touching AttendanceModule | M12 |
+| Asia/Dhaka clock (`common/utils/clock.util.ts`) | `dhakaToday`, `dhakaMinutesOfDay`, `minutesOfDay(Or)`, `timeColumnMinutes` (a `TIME(0)` column → minutes), `dateRange`. Written for M12; **promoted out of the attendance module in M13** when the timetable needed the same minutes-of-day arithmetic | M12→13 |
 | `AttendanceReportsService` + `StudentAttendancesRepository` / `StaffAttendancesRepository` (exported by `AttendanceModule`) | daily/monthly/student/staff/summary/late-analysis reports for M18 dashboards; the repositories for M21 payroll and the M09/M11 re-provisions | M12 |
 | `AttendanceSettingsService` (AttendanceModule-local) | one typed read of the whole `attendance.*` settings group (mode, late/half-day minutes, edit window, job times, SMS cap); malformed HH:mm falls back to the registry default instead of 500-ing the sheet | M12 |
-| `TIMETABLE_CONFLICT_CHECKER` (DI token, TeacherModule) | assignment-time conflict hook — bound to a no-op until M13 provides the real checker (swap the provider, keep the token) | M08 |
+| `TIMETABLE_CONFLICT_CHECKER` (DI token, TeacherModule) | assignment-time conflict hook. **Live since M13**: bound to `RoutineConflictChecker`, which refuses a reassignment the published routine cannot accommodate. The checker's code lives in the timetable module but is *bound inside* TeacherModule over a re-provisioned repository — TimetableModule imports TeacherModule, so the reverse import would cycle | M08→13 |
+| Conflict engine (`timetable/calc/conflict.engine.ts`, `calc/slot-schedule.util.ts`) | dependency-free: `detectConflicts(candidates, existing, options)` over teacher/room/duplicate-cell/daily-cap rules, plus `overlaps` and the bell-schedule helpers (`findOverlap`, `withinShift`, `slotAt`, `minutesLabel`). **Compares wall-clock windows, never slot ids** — slot ids are per-shift, so only time comparison catches a cross-shift clash. Windows are half-open | M13 |
+| `RoutineService` + `PeriodSlotsRepository` + `TimetableEntriesRepository` (exported by `TimetableModule`) | `getCurrentPeriod(sectionId, datetime)` for M12 period-mode marking; section/teacher/master routine reads and `periodsPerWeek` for M08 workload, M14 exam routines and M18 portals | M13 |
+| `TimetableSettingsService` (TimetableModule-local) | one typed read of the `academic.timetable_*` knobs **plus the derived school week** — `workingDays` comes from `general.weekly_holidays`, deliberately not its own setting, so moving the weekend changes one value and calendar/attendance/routine all follow | M13 |
 | `teacher.leave.approved` event (`TEACHER_EVENTS.LEAVE_APPROVED`) | consumed since M12 — `AttendanceListener` marks those days LEAVE in `staff_attendances` (holidays skipped) | M08→12 |
 | `SessionsService` (exported by `AcademicModule`) | current-session resolution + session rules for session-scoped modules | M05 |
 | `parseDate` (`academic/calendar/date.util.ts`) | strict YYYY-MM-DD parsing (regex shape ≠ valid date — always parse through this) | M05 |
@@ -107,7 +111,8 @@ UI library: **shadcn/ui** (Tailwind-based, components vendored into `src/compone
 
 - One `is_current` academic session (DB partial unique index since M05); sessions never overlap in dates; COMPLETED sessions are read-only for entry flows — **enforced since M12** (attendance marking refuses a COMPLETED/ARCHIVED session; M15 marks entry must do the same). Activate rolls the demoted ACTIVE session to COMPLETED.
 - One enrollment per student per session; roll unique per section.
-- One attendance record per student per date (per period once M13 lands); attendance may not be taken for a future date, outside its session, or on a holiday without `attendance.holiday.override`. Attendance % = `(present + late + ½ half-day) ÷ working days`, working days excluding holidays, weekly off-days and days before the student's `enrollment_date`.
+- One attendance record per student per date (**per period since M13** — `period_id` has its FK and `attendance.mode = 'period'` turns it on; a `periodId` sent while the mode is `daily` is refused, not ignored); attendance may not be taken for a future date, outside its session, or on a holiday without `attendance.holiday.override`. Attendance % = `(present + late + ½ half-day) ÷ working days`, working days excluding holidays, weekly off-days and days before the student's `enrollment_date`.
+- **Only PUBLISHED routines are portal-visible** (M13). One DRAFT + one PUBLISHED per section per session; publishing archives the version it replaces, so `effective_from` + `version` reconstruct any past date's routine. Drafts are deletable; published/archived versions are history.
 - Published results/receipts/vouchers/certificates are immutable — corrections via reversal/reissue with audit trail.
 - All money NUMERIC(12,2) BDT; every monetary override needs permission + reason.
 - Soft delete everywhere except append-only logs (audit, ledger, login activity, notifications).
@@ -228,7 +233,7 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M06:** one e2e suite leaves an open handle at teardown (`--forceExit` in use); chase with `--detectOpenHandles`.
 - **M07:** in-browser photo/document upload click-through against MinIO pending (validation + storage layers individually verified — same status as the M04 logo).
 - **M07:** temp password is returned in the reset API response (admin handover) — revisit once M17 makes SMS delivery real (config-gate the response field).
-- **M08:** `TIMETABLE_CONFLICT_CHECKER` is a no-op — M13 MUST swap the provider; workload/schedule are assignment-count-based until then.
+- ~~**M08:** `TIMETABLE_CONFLICT_CHECKER` is a no-op~~ — real checker bound in M13; workload now reports `periodsPerWeek` from the published routines.
 - **M08:** `teacher_qualifications.document_url` reserved but unused (certificate scans go through teacher_documents).
 - **M08:** in-browser click-through pending: assignment matrix, leave inbox, teacher uploads (API layers e2e-tested).
 - ~~**M09:** SECTION-scoped batch ID cards wait for M11 rosters~~ — shipped in M11 (`POST /sections/:id/id-cards`).
@@ -244,7 +249,7 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M11:** promotion execution does NOT enforce target-section capacity (interactive enroll/transfer do).
 - ~~**M11:** promotion rollback guard is a no-op hook~~ — live since M12 for attendance (409 when the created enrollments have marks); **M15 must extend the same check to marks**.
 - ~~**M11:** `enrollments.enrollment_date` … not yet consumed~~ — M12 consumes it (days before the join date never count toward attendance); fee proration still waits for M16.
-- **M12:** period mode is schema-only — `period_id` is a bare UUID column and `attendance.mode` is unused until M13 adds periods, the FK and the per-period UI.
+- ~~**M12:** period mode is schema-only~~ — live since M13: `period_id` has its FK, the sheet resolves the running period via `RoutineService.getCurrentPeriod`, and `attendance.mode = 'period'` turns it on. The marking **UI** still submits daily-mode sheets; a per-period picker on `/admin/attendance` is the remaining piece.
 - **M12:** QR check-in always resolves the CURRENT session's enrollment, so the accepted `date` parameter cannot back-date across a session boundary.
 - **M12:** the attendance percentage counts LEAVE in the denominator (the roadmap formula) — schools wanting approved leave excluded need a new setting.
 - **M12:** `AutoAbsentJob`/`AbsentSmsJob` loop every school every 15 minutes — fine at one school, shard or queue for M31.
@@ -252,4 +257,10 @@ SSLCommerz / bKash / Nagad (adapter pattern, server-side verification mandatory)
 - **M12:** attendance PDF exports are plain tables (no branding) until the M18 report engine; the daily roll-up loads each section's roster in a loop.
 - **M12:** in-browser click-throughs pending: QR scanner on a real phone camera, and the marking grid with 100+ students (virtualization deferred).
 - **M11:** in-browser click-throughs pending: enroll picker, promotion wizard, section batch ID cards (API layers e2e-tested).
+- **M13:** substitution-on-teacher-leave is deferred to the Phase 3 backlog — an approved leave does not alter the routine (`freeByDay` on the teacher routine is the raw material for it).
+- **M13:** a section with no shift is only supported when the school defines exactly one bell schedule; with two or more the builder refuses rather than guess which applies.
+- **M13:** room conflicts are string-matched on `room_no` (trimmed, case-insensitive) — no room master table until M24.
+- **M13:** the conflict engine reads every published cell of the session on each save; cache the competition set if a large school feels it.
+- **M13:** routine PDFs are plain landscape tables (pdfkit's default font has the same Bangla limitation flagged for M09 ID cards); branded output waits for the M18 report engine.
+- **M13:** in-browser click-through pending: builder grid (cell popover, copy/clear day, red-cell tooltips), publish dialog, master heat table, teacher Routine tab.
 - **Cross-module (pre-M09):** `school.e2e-spec` "PUT /school writes an audit diff" is flaky — it reads the fire-and-forget audit row immediately after the mutation (§16 "audit writes fire-and-forget"), so it loses the race under load. Poll for the row (as other suites do) when next touching that suite.

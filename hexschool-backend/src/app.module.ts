@@ -29,6 +29,7 @@ import { StaffModule } from './modules/staff/staff.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { StudentModule } from './modules/student/student.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
+import { TimetableModule } from './modules/timetable/timetable.module';
 import { VersionModule } from './modules/version/version.module';
 import { QueuesModule } from './queues/queues.module';
 
@@ -107,6 +108,9 @@ import { QueuesModule } from './queues/queues.module';
     StudentModule,
     AdmissionModule,
     EnrollmentModule,
+    // TimetableModule before AttendanceModule: the latter imports it for
+    // period-mode marking (RoutineService.getCurrentPeriod).
+    TimetableModule,
     AttendanceModule,
   ],
   providers: [

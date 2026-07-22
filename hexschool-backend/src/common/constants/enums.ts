@@ -39,4 +39,7 @@ export {
   AttendanceMethod,
   AttendancePersonType,
   StudentLeaveAppliedBy,
+  PeriodSlotType,
+  Weekday,
+  TimetableStatus,
 } from '@prisma/client';

@@ -9,9 +9,11 @@ import {
   AttendanceMethod,
   AttendanceStatus,
   HolidayAppliesTo,
+  PeriodSlotType,
   SessionStatus,
   UserType,
 } from '../../../common/constants';
+import { timeColumnMinutes } from '../../../common/utils/clock.util';
 import { parseDate } from '../../academic/calendar/date.util';
 import { AcademicSessionsRepository } from '../../academic/repositories/academic-sessions.repository';
 import {
@@ -24,7 +26,11 @@ import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.int
 import { EnrollmentsService } from '../../enrollment/services/enrollments.service';
 import type { EnrollmentWithRelations } from '../../enrollment/repositories/enrollments.repository';
 import { PermissionsService } from '../../rbac/services/permissions.service';
-import { dhakaToday } from '../calc/clock.util';
+import { minutesLabel } from '../../timetable/calc/slot-schedule.util';
+import { PeriodSlotsRepository } from '../../timetable/repositories/period-slots.repository';
+import type { CurrentPeriod } from '../../timetable/services/routine.service';
+import { RoutineService } from '../../timetable/services/routine.service';
+import { dhakaToday } from '../../../common/utils/clock.util';
 import {
   AttendanceSheetQueryDto,
   ConvertToHolidayDto,
@@ -50,10 +56,24 @@ export interface AttendanceSheetRow {
   beforeEnrollment: boolean;
 }
 
+/** The period a sheet is scoped to — null in daily mode (M13). */
+export interface AttendancePeriod {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  /** Subject+teacher from the published routine, when the cell is filled. */
+  subject: string | null;
+  teacher: string | null;
+}
+
 export interface AttendanceSheet {
   section: { id: string; name: string; className: string; sessionId: string };
   date: string;
+  /** 'period' means every row belongs to one timetable slot (M13). */
+  mode: 'daily' | 'period';
   periodId: string | null;
+  period: AttendancePeriod | null;
   holiday: { holiday: boolean; reason?: string; title?: string };
   /** True once at least one row exists — the UI shows its "edit" banner. */
   marked: boolean;
@@ -90,6 +110,9 @@ export class StudentAttendanceService {
     private readonly config: AttendanceSettingsService,
     private readonly permissions: PermissionsService,
     private readonly auditContext: AuditContextService,
+    /** M13: resolves which period a mark belongs to in period mode. */
+    private readonly routines: RoutineService,
+    private readonly periodSlots: PeriodSlotsRepository,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
@@ -101,7 +124,13 @@ export class StudentAttendanceService {
     const schoolId = actor.schoolId;
     const date = parseDate(query.date);
     const section = await this.loadSection(query.sectionId, schoolId);
-    const periodId = query.periodId ?? null;
+    const { mode, period } = await this.resolvePeriod(
+      section.id,
+      query.date,
+      query.periodId ?? null,
+      schoolId,
+    );
+    const periodId = period?.id ?? null;
 
     const [roster, existing, holiday] = await Promise.all([
       this.enrollments.getSectionStudents(section.id, schoolId),
@@ -128,7 +157,9 @@ export class StudentAttendanceService {
         sessionId: section.sessionId,
       },
       date: query.date,
+      mode,
       periodId,
+      period,
       holiday,
       marked: existing.length > 0,
       editable: lock === null,
@@ -161,7 +192,13 @@ export class StudentAttendanceService {
     const schoolId = actor.schoolId;
     const date = parseDate(dto.date);
     const section = await this.loadSection(dto.sectionId, schoolId);
-    const periodId = dto.periodId ?? null;
+    const { period } = await this.resolvePeriod(
+      section.id,
+      dto.date,
+      dto.periodId ?? null,
+      schoolId,
+    );
+    const periodId = period?.id ?? null;
 
     const lock = await this.entryLock(section, date, schoolId);
     if (lock) throw new BadRequestException(lock);
@@ -354,6 +391,101 @@ export class StudentAttendanceService {
       return `Date is outside session ${session.name}`;
     }
     return null;
+  }
+
+  /**
+   * Which timetable period a sheet belongs to (M13 closed the M12 debt:
+   * `student_attendances.period_id` now has a real FK).
+   *
+   * In `daily` mode the answer is always null and a supplied period is
+   * refused rather than ignored — silently dropping it would file the
+   * marks under the wrong identity key and the partial unique index
+   * would then let a duplicate day through.
+   *
+   * In `period` mode an explicit period must be a CLASS slot of the
+   * section's own shift; omitting it means "the period running now",
+   * which is what the marking screen sends when a teacher opens it
+   * mid-lesson.
+   */
+  private async resolvePeriod(
+    sectionId: string,
+    date: string,
+    requested: string | null,
+    schoolId: string,
+  ): Promise<{ mode: 'daily' | 'period'; period: AttendancePeriod | null }> {
+    const { mode } = await this.config.load(schoolId);
+
+    if (mode === 'daily') {
+      if (requested) {
+        throw new BadRequestException(
+          'Attendance is in daily mode — set attendance.mode to "period" before marking per period',
+        );
+      }
+      return { mode, period: null };
+    }
+
+    const current = await this.routines.getCurrentPeriod(
+      sectionId,
+      { date, ...(requested ? {} : {}) },
+      schoolId,
+    );
+
+    if (!requested) {
+      if (!current.slot) {
+        throw new BadRequestException(
+          current.holiday
+            ? `${current.holidayTitle ?? 'This date'} is a holiday — no period is running`
+            : `No period is running at ${current.at} — pass periodId explicitly`,
+        );
+      }
+      return { mode, period: this.toPeriod(current) };
+    }
+
+    const slots = await this.periodSlots.findByIds([requested], schoolId);
+    const slot = slots[0];
+    if (!slot) {
+      throw new BadRequestException(`Period ${requested} not found`);
+    }
+    if (slot.type !== PeriodSlotType.CLASS) {
+      throw new BadRequestException(
+        `"${slot.name}" is a ${slot.type.toLowerCase()} slot — attendance is not taken in it`,
+      );
+    }
+    const section = await this.loadSection(sectionId, schoolId);
+    if (section.shiftId && slot.shiftId !== section.shiftId) {
+      throw new BadRequestException(
+        `"${slot.name}" belongs to another shift's bell schedule`,
+      );
+    }
+
+    // Enrich with the routine cell when the asked-for period happens to
+    // be the one running — otherwise subject/teacher stay null rather
+    // than being guessed.
+    const cell =
+      current.slot?.id === requested && current.cell ? current.cell : null;
+    return {
+      mode,
+      period: {
+        id: slot.id,
+        name: slot.name,
+        startTime: minutesLabel(timeColumnMinutes(slot.startTime)),
+        endTime: minutesLabel(timeColumnMinutes(slot.endTime)),
+        subject: cell?.subject.name ?? null,
+        teacher: cell?.teacher.name ?? null,
+      },
+    };
+  }
+
+  private toPeriod(current: CurrentPeriod): AttendancePeriod {
+    const slot = current.slot!;
+    return {
+      id: slot.id,
+      name: slot.name,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      subject: current.cell?.subject.name ?? null,
+      teacher: current.cell?.teacher.name ?? null,
+    };
   }
 
   /** Holiday guard — override needs `attendance.holiday.override`. */

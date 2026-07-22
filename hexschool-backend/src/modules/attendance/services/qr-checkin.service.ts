@@ -22,7 +22,7 @@ import {
   dhakaMinutesOfDay,
   dhakaToday,
   timeColumnMinutes,
-} from '../calc/clock.util';
+} from '../../../common/utils/clock.util';
 import { QrCheckinDto } from '../dto';
 import { StudentAttendancesRepository } from '../repositories/student-attendances.repository';
 import { AttendanceSettingsService } from './attendance-settings.service';

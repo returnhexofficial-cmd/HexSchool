@@ -27,7 +27,8 @@ graph TD
     M08 --> M12
     M09 --> M12
     M05 --> M12
-    M13 -. soft: period mode + period_id FK .-> M12
+    M13 -. period mode + period_id FK (done) .-> M12
+    M13 -. conflict checker + periods/week (done) .-> M08
     M11 --> M13[13 Timetable]
     M08 --> M13
     M13 --> M14[14 Examination]
@@ -83,12 +84,12 @@ graph TD
 | 05 Academic Session | 04 | — |
 | 06 Academic Structure | 05 | — |
 | 07 Staff & Users | 03, 04, 06 | Provides shared SequenceService consumed by 09/10/16/20 |
-| 08 Teachers | 06, 07 | Timetable conflict hook (13 — swap the `TIMETABLE_CONFLICT_CHECKER` provider); `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
+| 08 Teachers | 06, 07 | Timetable conflict hook **closed by 13** (`TIMETABLE_CONFLICT_CHECKER` now binds the real checker; `TimetableConflictCheck` gained `schoolId`) and workload finalized with `periodsPerWeek`; `teacher.leave.approved` event consumed by 12; leave migrates to HR (21) |
 | 09 Students & Guardians ✅ | 06, 07 | Dues hard-block on status change (16); history tabs fill as 12/15 land. Adjusted the M02 user-uniqueness constraint to `(school_id, user_type, contact)` so a guardian can also be staff — login now checks every candidate account. |
 | 10 Admission ✅ | 06, 09 | Enrollment backfill for ADMITTED students (11 — roadmap: run 11 before the first REAL admission cycle); online gateway wiring (16); publish merit to website (19). Implementation confirmed 11 is NOT a hard dep: conversion completes at ADMITTED via the exported `StudentsService`. AuthModule newly exports `OtpService` (public phone verify). |
 | 11 Enrollment & Promotion ✅ | 06, 09 | Promotion auto-decisions from results (15); rollback guard starts blocking once attendance (12)/marks (15) exist. Exports the canonical roster service (`getSectionStudents`/`getStudentCurrentEnrollment`) consumed by 12/14/16. Closed the M06 section delete-guard and the M09 section-scoped batch ID-card debts. The M10 ADMITTED backfill is served by the normal enroll flow (no dedicated endpoint). |
-| 12 Attendance ✅ | 05, 08, 09, 11 | Absent SMS actually sends after 17; period mode after 13 (add the `period_id` FK then). Consumed the M08 `teacher.leave.approved` hook. Added `CalendarService.workingDays()` to M05 and exports `AttendanceReportsService` + the attendance repositories for 18/21. Closed the M09 `attendance-history` debt and armed the M11 promotion rollback guard (M15 must extend it to marks). |
-| 13 Timetable | 06, 08, 11 | — |
+| 12 Attendance ✅ | 05, 08, 09, 11 | Absent SMS actually sends after 17. **Period mode is now live** — 13 added the `period_id` FK and `getCurrentPeriod`. Consumed the M08 `teacher.leave.approved` hook. Added `CalendarService.workingDays()` to M05 and exports `AttendanceReportsService` + the attendance repositories for 18/21. Closed the M09 `attendance-history` debt and armed the M11 promotion rollback guard (M15 must extend it to marks). |
+| 13 Timetable ✅ | 06, 08, 11 | **Closed the M08 `TIMETABLE_CONFLICT_CHECKER` hook** (the real `RoutineConflictChecker` is bound to the token) and finalized M08's periods/week workload stub; turned on M12 period-mode attendance. Exports `RoutineService` + `PeriodSlotsRepository` + `TimetableEntriesRepository` for 14 (exam routines reuse `period_slots`) and 18 (portal routines). Substitution-on-teacher-leave is deferred to the Phase 3 backlog. **Graph note:** the conflict checker lives in the timetable module but is *bound inside* TeacherModule over a re-provisioned repository — TimetableModule imports TeacherModule, so the reverse import would cycle. |
 | 14 Examination | 04, 05, 11, 13 | Admit-card dues block (16) |
 | 15 Marks & Results | 14 | Result SMS (17); public search UI (19) |
 | 16 Fees & Payments | 09, 11 | Receipt SMS (17); accounting auto-posting consumed by 20 |

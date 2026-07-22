@@ -70,6 +70,9 @@ describe('TeacherAssignmentsService', () => {
       sessions as never,
       permissions as never,
       { set: jest.fn() } as never,
+      // Periods/week (M13) is additive to these cases — an empty routine
+      // reports 0 and leaves the assignment rules under test alone.
+      { periodsPerWeek: jest.fn().mockResolvedValue([]) } as never,
       new NoopTimetableConflictChecker(),
     );
   });

@@ -27,6 +27,7 @@ import {
 } from '../repositories/teacher-assignments.repository';
 import { TeacherSubjectsRepository } from '../repositories/teacher-subjects.repository';
 import { TeachersRepository } from '../repositories/teachers.repository';
+import { TimetableEntriesRepository } from '../../timetable/repositories/timetable-entries.repository';
 
 export interface WorkloadRow {
   teacherId: string;
@@ -34,6 +35,9 @@ export interface WorkloadRow {
   name: string;
   designation: string;
   assignments: number;
+  /** Scheduled periods per week from the PUBLISHED routines (M13). Zero
+   *  until a section this teacher holds has a routine live. */
+  periodsPerWeek: number;
 }
 
 /**
@@ -54,6 +58,8 @@ export class TeacherAssignmentsService {
     private readonly sessions: SessionsService,
     private readonly permissions: PermissionsService,
     private readonly auditContext: AuditContextService,
+    /** M13 routine cells — read-only here, for periods/week. */
+    private readonly timetableEntries: TimetableEntriesRepository,
     @Inject(TIMETABLE_CONFLICT_CHECKER)
     private readonly timetable: TimetableConflictChecker,
   ) {}
@@ -109,6 +115,7 @@ export class TeacherAssignmentsService {
       actor,
     );
     await this.timetable.assertNoConflict({
+      schoolId,
       sessionId: dto.sessionId,
       sectionId: dto.sectionId,
       subjectId: dto.subjectId,
@@ -230,29 +237,56 @@ export class TeacherAssignmentsService {
     return { transferred };
   }
 
-  /** Interim workload = assignment counts (periods/week arrive with M13). */
+  /**
+   * Workload per teacher. `assignments` counts section-subject duties;
+   * `periodsPerWeek` is the real scheduled load from the M13 published
+   * routines — the number that finalizes this endpoint's roadmap stub.
+   * A teacher with duties but no routine yet shows 0, which is exactly
+   * the gap a scheduler wants to see.
+   */
   async workload(sessionId: string, schoolId: string): Promise<WorkloadRow[]> {
     await this.sessions.getById(sessionId, schoolId);
-    const counts = await this.assignments.workloadCounts(sessionId, schoolId);
-    if (counts.length === 0) return [];
+    const [counts, periods] = await Promise.all([
+      this.assignments.workloadCounts(sessionId, schoolId),
+      this.timetableEntries.periodsPerWeek(sessionId, schoolId),
+    ]);
+    const periodsByTeacher = new Map(
+      periods.map((p) => [p.teacherId, p.periods]),
+    );
+    // A substitute may hold routine periods without a formal assignment;
+    // the union keeps them visible instead of hiding real load.
+    const teacherIds = [
+      ...new Set([
+        ...counts.map((c) => c.teacherId),
+        ...periods.map((p) => p.teacherId),
+      ]),
+    ];
+    if (teacherIds.length === 0) return [];
 
+    const assignmentsByTeacher = new Map(
+      counts.map((c) => [c.teacherId, c.assignments]),
+    );
     const teachers = await this.teachers.findAll(
-      { id: { in: counts.map((c) => c.teacherId) } },
+      { id: { in: teacherIds } },
       schoolId,
     );
     const byId = new Map(teachers.map((t) => [t.id, t]));
-    return counts
-      .map((c) => {
-        const teacher = byId.get(c.teacherId);
+    return teacherIds
+      .map((teacherId) => {
+        const teacher = byId.get(teacherId);
         return {
-          teacherId: c.teacherId,
+          teacherId,
           employeeId: teacher?.employeeId ?? '—',
           name: teacher ? `${teacher.firstName} ${teacher.lastName}` : '—',
           designation: teacher?.designation ?? '—',
-          assignments: c.assignments,
+          assignments: assignmentsByTeacher.get(teacherId) ?? 0,
+          periodsPerWeek: periodsByTeacher.get(teacherId) ?? 0,
         };
       })
-      .sort((a, b) => b.assignments - a.assignments);
+      .sort(
+        (a, b) =>
+          b.periodsPerWeek - a.periodsPerWeek || b.assignments - a.assignments,
+      );
   }
 
   // ── internals ─────────────────────────────────────────────────────

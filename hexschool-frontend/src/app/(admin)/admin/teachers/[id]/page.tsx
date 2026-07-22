@@ -34,6 +34,7 @@ import { EvaluationsTab } from "./evaluations-tab";
 import { LeavesTab } from "./leaves-tab";
 import { ProfileTab } from "./profile-tab";
 import { QualificationsTab } from "./qualifications-tab";
+import { RoutineTab } from "./routine-tab";
 import { SubjectsTab } from "./subjects-tab";
 
 const TABS = [
@@ -41,6 +42,7 @@ const TABS = [
   ["qualifications", "Qualifications"],
   ["subjects", "Subjects"],
   ["assignments", "Assignments"],
+  ["routine", "Routine"],
   ["leaves", "Leaves"],
   ["evaluations", "Evaluations"],
   ["documents", "Documents"],
@@ -160,6 +162,8 @@ export default function TeacherDetailPage({
         <SubjectsTab teacherId={t.id} />
       ) : tab === "assignments" ? (
         <AssignmentsTab teacherId={t.id} />
+      ) : tab === "routine" ? (
+        <RoutineTab teacherId={t.id} />
       ) : tab === "leaves" ? (
         <LeavesTab teacherId={t.id} />
       ) : tab === "evaluations" ? (

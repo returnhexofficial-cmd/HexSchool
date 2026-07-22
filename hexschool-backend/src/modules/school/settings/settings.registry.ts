@@ -125,6 +125,27 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Allow one applicant to apply to multiple classes',
       true,
     ],
+    // M13 — routine knobs. Which DAYS the routine offers is not a setting:
+    // it is derived from `general.weekly_holidays` (roadmap M13 §6), so
+    // there is one place to change the school week.
+    [
+      'academic.timetable_max_periods_per_teacher_per_day',
+      'number',
+      'Max periods one teacher may be booked for in a day (0 = unlimited)',
+      0,
+    ],
+    [
+      'academic.timetable_allow_combined_classes',
+      'boolean',
+      'Allow two sections to share one teacher via a combined-class marker',
+      true,
+    ],
+    [
+      'academic.timetable_room_conflict_check',
+      'boolean',
+      'Refuse two sections in the same room at overlapping times',
+      true,
+    ],
   ]),
   ...g(SettingsGroup.sms, [
     ['sms.enabled', 'boolean', 'SMS sending enabled', false],

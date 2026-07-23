@@ -346,7 +346,18 @@ export class InvoiceService {
             fineTotal: 0,
             paidTotal: 0,
             payable: write.payable,
-            status: InvoiceStatus.UNPAID,
+            // Derived, not assigned: a fully-waived (payable 0) invoice is
+            // PAID from birth, so the nightly fine job never picks it up.
+            // dueDate >= issueDate is enforced above, so a payable-bearing
+            // invoice is still UNPAID here (never spuriously OVERDUE).
+            status: deriveStatus({
+              payable: write.payable,
+              paidTotal: 0,
+              dueDate: isoDate(dueDate),
+              today: isoDate(issueDate),
+              cancelled: false,
+              fullyRefunded: false,
+            }),
             remarks: dto.remarks ?? null,
             createdBy: actor.sub,
             updatedBy: actor.sub,

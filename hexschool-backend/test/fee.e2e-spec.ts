@@ -13,7 +13,64 @@ import {
   syncPermissionRegistry,
 } from '../src/modules/rbac/seed/rbac.seeder';
 import { FineJob } from '../src/modules/fee/jobs/fine.job';
+import { ReconciliationJob } from '../src/modules/fee/jobs/reconciliation.job';
 import { LedgerService } from '../src/modules/fee/services/ledger.service';
+import { SslcommerzAdapter } from '../src/modules/fee/gateways/sslcommerz.adapter';
+import { BkashAdapter } from '../src/modules/fee/gateways/bkash.adapter';
+import { NagadAdapter } from '../src/modules/fee/gateways/nagad.adapter';
+import type {
+  CallbackHint,
+  InitPaymentInput,
+  InitPaymentResult,
+  PaymentGatewayAdapter,
+  RefundResult,
+  VerificationResult,
+} from '../src/modules/fee/gateways/gateway.interface';
+
+/**
+ * A deterministic stand-in for a real gateway. The adapters are the only
+ * part of M16 that reach the network, so the online-payment tests swap
+ * them out and drive `verify()` by hand — which is exactly the seam the
+ * design intends: the callback trusts nothing but `verify()`.
+ */
+class FakeGateway implements PaymentGatewayAdapter {
+  /** A test sets this to control what the next verification reports. */
+  nextVerdict: VerificationResult = {
+    outcome: 'SUCCESS',
+    transactionId: 'FAKE-TXN',
+    raw: { fake: true },
+  };
+
+  constructor(public readonly name: string) {}
+
+  isConfigured(): boolean {
+    return true;
+  }
+
+  async init(input: InitPaymentInput): Promise<InitPaymentResult> {
+    return {
+      checkoutUrl: `https://fake-gateway.test/checkout/${input.reference}`,
+      gatewayRef: `${this.name}-SESS-${input.reference}`,
+    };
+  }
+
+  parseCallback(body: Record<string, unknown>): CallbackHint {
+    return {
+      gatewayRef: body.gatewayRef as string | undefined,
+      reference: body.reference as string | undefined,
+      transactionId: body.transactionId as string | undefined,
+      claimedStatus: body.status as string | undefined,
+    };
+  }
+
+  async verify(): Promise<VerificationResult> {
+    return this.nextVerdict;
+  }
+
+  async refund(): Promise<RefundResult> {
+    return { accepted: true, refundId: 'FAKE-REFUND', raw: {} };
+  }
+}
 
 /**
  * Requires dev infra (DB + redis). The whole M16 loop in the order a
@@ -53,6 +110,11 @@ describe('Fees & Payments (e2e)', () => {
   /** enrollmentId per roll 1..4. */
   const enrollments = new Map<number, string>();
   const studentIds = new Map<number, string>();
+
+  /** Gateway stand-ins, driven directly by the online-payment tests. */
+  const fakeSsl = new FakeGateway('SSLCOMMERZ');
+  const fakeBkash = new FakeGateway('BKASH');
+  const fakeNagad = new FakeGateway('NAGAD');
 
   const day = (offset: number): string => {
     const d = new Date();
@@ -114,7 +176,14 @@ describe('Fees & Payments (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(SslcommerzAdapter)
+      .useValue(fakeSsl)
+      .overrideProvider(BkashAdapter)
+      .useValue(fakeBkash)
+      .overrideProvider(NagadAdapter)
+      .useValue(fakeNagad)
+      .compile();
 
     app = moduleFixture.createNestApplication<NestExpressApplication>();
     app.setGlobalPrefix('api/v1');
@@ -485,7 +554,7 @@ describe('Fees & Payments (e2e)', () => {
                 amount: 500,
               },
             ],
-            dueDate: day(-5),
+            dueDate: day(15),
           })
           .expect(201),
       );
@@ -711,6 +780,200 @@ describe('Fees & Payments (e2e)', () => {
           2,
         );
       }
+    });
+  });
+
+  // ── online payments (gateway adapters + reconciliation) ─────────────
+
+  describe('online payments through a gateway', () => {
+    /**
+     * Mint a fresh, unpaid ad-hoc invoice for roll 3 with a distinct
+     * amount, so each online test owns an invoice no other test touches.
+     */
+    const freshInvoice = async (amount: number) => {
+      await server()
+        .post('/api/v1/invoices/generate')
+        .set(auth(adminToken))
+        .send({
+          sessionId,
+          enrollmentIds: [enrollments.get(3)],
+          lines: [
+            {
+              feeHeadId: admissionHeadId,
+              description: `Online charge ${amount}`,
+              amount,
+            },
+          ],
+          dueDate: day(20),
+        })
+        .expect(201);
+
+      const invoice = await prisma.invoice.findFirst({
+        where: {
+          enrollmentId: enrollments.get(3),
+          billingMonth: null,
+          subtotal: amount,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      return invoice!;
+    };
+
+    interface InitResult {
+      paymentIds: string[];
+      amount: number;
+      gatewayRef: string;
+      reference: string;
+      checkoutUrl: string;
+    }
+
+    const initOnline = (invoiceId: string, gateway = 'SSLCOMMERZ') =>
+      server()
+        .post('/api/v1/payments/online/init')
+        .set(auth(adminToken))
+        .send({ gateway, invoiceIds: [invoiceId] });
+
+    it('opens a checkout and parks the money as PENDING, unverified', async () => {
+      const invoice = await freshInvoice(711);
+      const init = dataOf<InitResult>(await initOnline(invoice.id).expect(201));
+
+      expect(init.amount).toBe(711);
+      expect(init.paymentIds).toHaveLength(1);
+      expect(init.checkoutUrl).toContain('fake-gateway.test');
+
+      const payment = await prisma.payment.findUnique({
+        where: { id: init.paymentIds[0] },
+      });
+      // Nothing is verified yet — a checkout is not a payment.
+      expect(payment!.status).toBe('PENDING');
+      expect(payment!.verifiedAt).toBeNull();
+      expect(payment!.gatewayRef).toBe(init.gatewayRef);
+    });
+
+    it('settles the invoice only after a server-side verification', async () => {
+      const invoice = await freshInvoice(722);
+      const init = dataOf<InitResult>(await initOnline(invoice.id).expect(201));
+
+      const txnId = `SSL-TXN-${init.reference}`;
+      fakeSsl.nextVerdict = {
+        outcome: 'SUCCESS',
+        amount: 722,
+        transactionId: txnId,
+        raw: { status: 'VALID' },
+      };
+
+      const outcome = dataOf<{ status: string; paymentIds: string[] }>(
+        await server()
+          .post('/api/v1/payments/callback/sslcommerz')
+          .query({
+            gatewayRef: init.gatewayRef,
+            transactionId: txnId,
+            reference: init.reference,
+          })
+          .send({})
+          .expect(201),
+      );
+
+      expect(outcome.status).toBe('SUCCESS');
+
+      const payment = await prisma.payment.findUnique({
+        where: { id: init.paymentIds[0] },
+      });
+      // The evidence chk_payments_success_evidence demands for online money.
+      expect(payment!.status).toBe('SUCCESS');
+      expect(payment!.verifiedAt).not.toBeNull();
+      expect(payment!.paidAt).not.toBeNull();
+      expect(payment!.gatewayTxnId).toBe(txnId);
+
+      const settled = await prisma.invoice.findUnique({
+        where: { id: invoice.id },
+      });
+      expect(Number(settled!.paidTotal)).toBeCloseTo(722, 2);
+      expect(settled!.status).toBe('PAID');
+    });
+
+    it('refuses to credit when the gateway reports a different amount', async () => {
+      const invoice = await freshInvoice(733);
+      const init = dataOf<InitResult>(await initOnline(invoice.id).expect(201));
+
+      // The verified figure disagrees with what we asked for — tampering,
+      // not a rounding quibble.
+      fakeSsl.nextVerdict = {
+        outcome: 'SUCCESS',
+        amount: 99999,
+        transactionId: `SSL-TAMPER-${init.reference}`,
+        raw: {},
+      };
+
+      const outcome = dataOf<{ status: string; message: string }>(
+        await server()
+          .post('/api/v1/payments/callback/sslcommerz')
+          .query({
+            gatewayRef: init.gatewayRef,
+            transactionId: `SSL-TAMPER-${init.reference}`,
+            reference: init.reference,
+          })
+          .send({})
+          .expect(201),
+      );
+
+      expect(outcome.status).toBe('FAILED');
+      expect(outcome.message).toMatch(/mismatch/i);
+
+      const payment = await prisma.payment.findUnique({
+        where: { id: init.paymentIds[0] },
+      });
+      expect(payment!.status).toBe('FAILED');
+      expect(payment!.verifiedAt).toBeNull();
+
+      const stillDue = await prisma.invoice.findUnique({
+        where: { id: invoice.id },
+      });
+      expect(Number(stillDue!.paidTotal)).toBe(0);
+    });
+
+    it('reconciles a payment left PENDING when the callback never arrived', async () => {
+      const invoice = await freshInvoice(744);
+      const init = dataOf<InitResult>(await initOnline(invoice.id).expect(201));
+
+      // Simulate the payer closing the app: no callback, and the row ages
+      // past the reconciliation window.
+      await prisma.payment.updateMany({
+        where: { id: { in: init.paymentIds } },
+        data: { createdAt: new Date(Date.now() - 30 * 60_000) },
+      });
+
+      fakeSsl.nextVerdict = {
+        outcome: 'SUCCESS',
+        amount: 744,
+        transactionId: `SSL-RECON-${init.reference}`,
+        raw: {},
+      };
+
+      const settled = await app
+        .get(ReconciliationJob)
+        .runForSchool(DEFAULT_SCHOOL_ID);
+      expect(settled).toBeGreaterThan(0);
+
+      const payment = await prisma.payment.findUnique({
+        where: { id: init.paymentIds[0] },
+      });
+      expect(payment!.status).toBe('SUCCESS');
+      expect(payment!.verifiedAt).not.toBeNull();
+
+      const paid = await prisma.invoice.findUnique({
+        where: { id: invoice.id },
+      });
+      expect(paid!.status).toBe('PAID');
+    });
+
+    it('rejects an unknown gateway name', async () => {
+      const invoice = await freshInvoice(755);
+      await server()
+        .post('/api/v1/payments/online/init')
+        .set(auth(adminToken))
+        .send({ gateway: 'PAYPAL', invoiceIds: [invoice.id] })
+        .expect(400);
     });
   });
 

@@ -21,6 +21,7 @@ import {
   UserCheck,
   Users,
   UsersRound,
+  Wallet,
 } from "lucide-react";
 
 /**
@@ -123,6 +124,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/results/combined",
     icon: Award,
     permission: "result.view",
+  },
+  {
+    label: "Fees & Payments",
+    href: "/admin/fees",
+    icon: Wallet,
+    permission: "fee.view",
   },
   {
     label: "Teachers",

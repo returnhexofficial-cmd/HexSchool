@@ -294,6 +294,27 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['result.combine', 'Generate weighted combined/final results'],
     ['result.export', 'Download report cards, tabulation sheets and transcripts'],
   ]),
+
+  // ── Module 16: Fees & Payments ──────────────────────────────────────
+  // Setup, billing and collection are separate roles in a real school:
+  // the accountant sets structures, the office generates invoices, the
+  // desk takes money, and only a senior signs off a waiver or a refund.
+  ...define('fees', [
+    ['fee.view', 'View fee heads, structures, invoices and payments'],
+    ['fee.setup', 'Create/edit fee heads and fee structures'],
+    ['fee.override.manage', 'Record discounts, scholarships and waivers'],
+    [
+      'fee.override.approve',
+      'Approve a waiver or a full concession (senior sign-off)',
+    ],
+    ['fee.invoice.generate', 'Generate monthly and ad-hoc invoices'],
+    ['fee.invoice.cancel', 'Cancel an invoice with a reason'],
+    ['fee.collect', 'Record an offline payment at the collection desk'],
+    ['fee.overpay', 'Accept more money than an invoice asks for'],
+    ['fee.refund', 'Refund a payment'],
+    ['fee.report', 'View collection, dues and defaulter reports'],
+    ['fee.export', 'Download receipts, invoices and fee report files'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

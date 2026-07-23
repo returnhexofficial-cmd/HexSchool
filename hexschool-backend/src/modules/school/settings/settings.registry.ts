@@ -175,6 +175,10 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
     ],
     ['payment.bkash_app_key', 'string', 'bKash app key', ''],
     ['payment.bkash_app_secret', 'string', 'bKash app secret', '', true],
+    // M16 — bKash's token-grant call needs the merchant's portal
+    // username/password in addition to the app key pair.
+    ['payment.bkash_username', 'string', 'bKash merchant username', ''],
+    ['payment.bkash_password', 'string', 'bKash merchant password', '', true],
     ['payment.nagad_merchant_id', 'string', 'Nagad merchant ID', ''],
     ['payment.nagad_private_key', 'string', 'Nagad private key', '', true],
   ]),
@@ -356,9 +360,85 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       true,
     ],
   ]),
+  // M16 — `due_day_of_month` and `late_fee_percent` predate it (M04
+  // placeholders) and finally have a consumer; the rest arrived with
+  // invoicing, the fine job and the collection desk.
   ...g(SettingsGroup.fees, [
     ['fees.due_day_of_month', 'number', 'Monthly due day', 10],
-    ['fees.late_fee_percent', 'number', 'Late fee (%)', 0],
+    ['fees.late_fee_percent', 'number', 'Late fine per overdue month (%)', 0],
+    [
+      'fees.fine_flat_per_month',
+      'number',
+      'Late fine per overdue month (flat BDT)',
+      0,
+    ],
+    ['fees.fine_grace_days', 'number', 'Days after the due date before a fine', 5],
+    [
+      'fees.fine_cap',
+      'number',
+      'Maximum total fine per invoice (0 = uncapped)',
+      0,
+    ],
+    [
+      'fees.prorate_enabled',
+      'boolean',
+      'Prorate monthly fees for mid-month joiners',
+      true,
+    ],
+    [
+      'fees.prorate_include_join_day',
+      'boolean',
+      'Count the joining day itself as billable',
+      true,
+    ],
+    [
+      'fees.allow_overpayment',
+      'boolean',
+      'Allow collecting more than an invoice asks for (needs fee.overpay)',
+      false,
+    ],
+    [
+      'fees.invoice_no_pattern',
+      'string',
+      'Invoice number pattern',
+      'INV-{YY}{MM}-{SEQ6}',
+    ],
+    [
+      'fees.payment_no_pattern',
+      'string',
+      'Receipt number pattern',
+      'RCP-{YY}{MM}-{SEQ6}',
+    ],
+    [
+      'fees.receipt_footer',
+      'string',
+      'Note printed at the foot of every receipt',
+      'This receipt is computer-generated. Please retain it for your records.',
+    ],
+    [
+      'fees.receipt_sms_enabled',
+      'boolean',
+      'Send an SMS receipt when a payment succeeds',
+      false,
+    ],
+    [
+      'fees.receipt_sms_template',
+      'string',
+      'Receipt SMS body ({school} {name} {amount} {invoice} {balance})',
+      '{school}: received {amount} BDT against {invoice} for {name}. Outstanding {balance} BDT.',
+    ],
+    [
+      'fees.dues_sms_template',
+      'string',
+      'Dues reminder SMS body ({school} {name} {amount} {due})',
+      '{school}: {name} has {amount} BDT outstanding. Please pay by {due}.',
+    ],
+    [
+      'fees.dues_block_exit_status',
+      'boolean',
+      'Block TRANSFERRED/GRADUATED/DROPPED while dues are outstanding',
+      false,
+    ],
   ]),
 ];
 

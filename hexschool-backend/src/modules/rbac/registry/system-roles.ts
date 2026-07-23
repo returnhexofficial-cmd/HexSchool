@@ -151,6 +151,18 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'result.withhold',
       'result.combine',
       'result.export',
+      // M16 — the Principal signs off waivers and refunds.
+      'fee.view',
+      'fee.setup',
+      'fee.override.manage',
+      'fee.override.approve',
+      'fee.invoice.generate',
+      'fee.invoice.cancel',
+      'fee.collect',
+      'fee.overpay',
+      'fee.refund',
+      'fee.report',
+      'fee.export',
     ],
   },
   {
@@ -251,8 +263,27 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
   {
     name: 'Accountant',
     slug: 'accountant',
-    description: 'Fees and finance. Permissions arrive with Modules 16/20.',
-    corePermissions: [],
+    description:
+      'Fees and finance — fee setup, invoicing, the collection desk and the money reports (Module 16). Accounting vouchers arrive with Module 20.',
+    corePermissions: [
+      'session.view',
+      'structure.view',
+      'student.view',
+      'guardian.view',
+      'enrollment.view',
+      'fee.view',
+      'fee.setup',
+      'fee.override.manage',
+      'fee.invoice.generate',
+      'fee.invoice.cancel',
+      'fee.collect',
+      'fee.refund',
+      'fee.report',
+      'fee.export',
+      // Deliberately NOT granted: `fee.override.approve` (a waiver needs
+      // a senior's sign-off) and `fee.overpay` — the two places where
+      // taking the money and authorising it must be different people.
+    ],
   },
   {
     name: 'Admission Officer',

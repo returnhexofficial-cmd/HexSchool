@@ -90,7 +90,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 12 | Attendance Management | ☑ |
 | 13 | Timetable / Class Routine | ☑ |
 | 14 | Examination Management | ☑ |
-| 15 | Marks & Result Processing | ☐ |
+| 15 | Marks & Result Processing | ☑ |
 | 16 | Fees & Payments | ☐ |
 | 17 | Communication & Notifications (SMS/Email) | ☐ |
 | 18 | Portals & Dashboards (Student, Parent, Teacher, Principal) + Reports v1 | ☐ |

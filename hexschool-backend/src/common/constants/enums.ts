@@ -47,4 +47,9 @@ export {
   MarkStatus,
   ResultStatus,
   ResultRunStatus,
+  FeeHeadType,
+  FeeOverrideType,
+  InvoiceStatus,
+  PaymentMethod,
+  PaymentStatus,
 } from '@prisma/client';

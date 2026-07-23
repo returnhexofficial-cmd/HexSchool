@@ -3,6 +3,7 @@ import { QueuesModule } from '../../queues/queues.module';
 import { AcademicModule } from '../academic/academic.module';
 import { ClassesRepository } from '../academic/repositories/classes.repository';
 import { StudentAttendancesRepository } from '../attendance/repositories/student-attendances.repository';
+import { InvoicesRepository } from '../fee/repositories/invoices.repository';
 import { ResultsRepository } from '../result/repositories/results.repository';
 import { AuthModule } from '../auth/auth.module';
 import { EnrollmentsRepository } from '../enrollment/repositories/enrollments.repository';
@@ -77,6 +78,8 @@ import { StudentsService } from './services/students.service';
     EnrollmentsRepository,
     StudentAttendancesRepository,
     ResultsRepository,
+    // M16: the exit-status dues check.
+    InvoicesRepository,
   ],
   // StudentsService exported since M10 — admission conversion reuses the
   // registration path (gap-free UID + guardian dedup), per roadmap M10 §4.

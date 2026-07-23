@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, Student, StudentMedicalInfo } from '@prisma/client';
+import { InvoicesRepository } from '../../fee/repositories/invoices.repository';
 import { ResultsRepository } from '../../result/repositories/results.repository';
 import { randomBytes } from 'crypto';
 import sharp from 'sharp';
@@ -111,6 +112,7 @@ export class StudentsService {
     private readonly enrollments: EnrollmentsRepository,
     private readonly attendances: StudentAttendancesRepository,
     private readonly results: ResultsRepository,
+    private readonly invoices: InvoicesRepository,
     private readonly users: UsersRepository,
     private readonly refreshTokens: RefreshTokensRepository,
     private readonly schools: SchoolsRepository,
@@ -343,11 +345,39 @@ export class StudentsService {
       throw new BadRequestException(`Student is already ${dto.status}`);
     }
 
+    // Dues clearance on the way out (roadmap M09 §6). Live since M16:
+    // a warning by default, a hard block when the school turns
+    // `fees.dues_block_exit_status` on — which is deliberately opt-in,
+    // because a school that transfers a student mid-dispute still has
+    // to be able to record it.
     const warnings: string[] = [];
     if (EXIT_STATUSES.has(dto.status)) {
-      warnings.push(
-        'Dues clearance could not be verified (Fees module not installed yet) — verify outstanding dues manually.',
+      const enrollments = await this.enrollments.findAll(
+        { studentId: id },
+        actor.schoolId,
       );
+      const outstanding = await this.invoices.outstandingByEnrollment(
+        enrollments.map((e) => e.id),
+        actor.schoolId,
+      );
+      const owed = [...outstanding.values()].reduce(
+        (sum, amount) => sum + amount,
+        0,
+      );
+
+      if (owed > 0.009) {
+        const blocking = await this.settings.getValue<boolean>(
+          actor.schoolId,
+          'fees.dues_block_exit_status',
+        );
+        const message = `${existing.firstName} ${existing.lastName} has ${owed.toFixed(2)} BDT outstanding`;
+        if (blocking === true) {
+          throw new ConflictException(
+            `${message} — clear the dues first, or turn off fees.dues_block_exit_status`,
+          );
+        }
+        warnings.push(`${message}. Verify before completing the exit.`);
+      }
     }
 
     await this.students.withTransaction(async (tx) => {

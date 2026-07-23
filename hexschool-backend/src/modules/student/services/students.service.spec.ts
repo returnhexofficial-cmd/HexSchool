@@ -41,6 +41,8 @@ describe('StudentsService', () => {
   let statusHistory: Record<string, jest.Mock>;
   let classes: Record<string, jest.Mock>;
   let users: Record<string, jest.Mock>;
+  let invoices: Record<string, jest.Mock>;
+  let settings: Record<string, jest.Mock>;
   let refreshTokens: Record<string, jest.Mock>;
   let sequences: Record<string, jest.Mock>;
   let events: { emit: jest.Mock };
@@ -109,6 +111,15 @@ describe('StudentsService', () => {
     };
     events = { emit: jest.fn() };
 
+    // M16: no outstanding dues by default; the exit-status cases
+    // override it.
+    invoices = {
+      outstandingByEnrollment: jest.fn().mockResolvedValue(new Map()),
+    };
+    settings = {
+      getValue: jest.fn().mockResolvedValue('{SCHOOL_CODE}-{YYYY}{SEQ5}'),
+    };
+
     service = new StudentsService(
       students as never,
       guardians as never,
@@ -117,9 +128,10 @@ describe('StudentsService', () => {
       statusHistory as never,
       classes as never,
       // M11/M12 history tabs (re-provisioned repos).
-      { findAll: jest.fn().mockResolvedValue([]) } as never, // enrollments
+      { findAll: jest.fn().mockResolvedValue([{ id: 'enr-1' }]) } as never, // enrollments
       { findForEnrollments: jest.fn().mockResolvedValue([]) } as never, // attendances
       { findForStudent: jest.fn().mockResolvedValue([]) } as never, // results (M15)
+      invoices as never,
       users as never,
       refreshTokens as never,
       {
@@ -127,9 +139,7 @@ describe('StudentsService', () => {
           .fn()
           .mockResolvedValue({ id: 'school-1', code: 'HXS' }),
       } as never, // schools
-      {
-        getValue: jest.fn().mockResolvedValue('{SCHOOL_CODE}-{YYYY}{SEQ5}'),
-      } as never, // settings
+      settings as never,
       sequences as never,
       {
         getSignedUrl: jest.fn().mockResolvedValue('https://signed'),
@@ -327,11 +337,48 @@ describe('StudentsService', () => {
         STUDENT_EVENTS.STATUS_CHANGED,
         expect.objectContaining({ userId: 'user-9', to: 'TRANSFERRED' }),
       );
-      // Dues check is soft until M16 (roadmap M09 §6).
-      expect(result.warnings[0]).toContain('Dues clearance');
+      // The dues check is real since M16 and this student owes nothing,
+      // so an exit is clean. (Before M16 this asserted a placeholder
+      // "could not be verified" warning.)
+      expect(result.warnings).toEqual([]);
     });
 
-    it('non-exit transitions carry no dues warning', async () => {
+    it('warns on an exit while dues are outstanding', async () => {
+      invoices.outstandingByEnrollment.mockResolvedValue(
+        new Map([['enr-1', 1500]]),
+      );
+
+      const result = await service.updateStatus(
+        'student-1',
+        { status: StudentStatus.TRANSFERRED, reason: 'Family moved' },
+        actor,
+      );
+
+      expect(result.warnings[0]).toContain('1500.00 BDT outstanding');
+    });
+
+    it('blocks the exit outright when the school turns the setting on', async () => {
+      // Opt-in, because a school transferring a student mid-dispute
+      // still has to be able to record it.
+      invoices.outstandingByEnrollment.mockResolvedValue(
+        new Map([['enr-1', 1500]]),
+      );
+      settings.getValue.mockResolvedValue(true);
+
+      await expect(
+        service.updateStatus(
+          'student-1',
+          { status: StudentStatus.TRANSFERRED, reason: 'Family moved' },
+          actor,
+        ),
+      ).rejects.toThrow(/clear the dues first/);
+    });
+
+    it('non-exit transitions never check dues', async () => {
+      invoices.outstandingByEnrollment.mockResolvedValue(
+        new Map([['enr-1', 1500]]),
+      );
+
       const result = await service.updateStatus(
         'student-1',
         { status: StudentStatus.SUSPENDED, reason: 'Disciplinary' },

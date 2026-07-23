@@ -430,7 +430,13 @@ describe('Student & Guardian Management (e2e)', () => {
       warnings: string[];
     }>(res);
     expect(data.student.status).toBe('TRANSFERRED');
-    expect(data.warnings[0]).toContain('Dues clearance');
+    // **Changed by Module 16.** This used to assert a placeholder
+    // "Dues clearance could not be verified (Fees module not installed
+    // yet)" warning. The check is real now, and this student has no
+    // invoices — so a clean exit carries no warning at all. The dues
+    // warning and the opt-in hard block are covered by
+    // `fee.e2e-spec.ts` and the M09 service spec.
+    expect(data.warnings).toEqual([]);
 
     const full = dataOf<{
       statusHistory: Array<{ fromStatus: string; toStatus: string }>;

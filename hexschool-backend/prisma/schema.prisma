@@ -483,6 +483,71 @@ enum ResultRunStatus {
   @@map("result_run_status_enum")
 }
 
+/// How a fee head recurs. RECURRING_MONTHLY is billed by the monthly
+/// batch; ONE_TIME is billed once per session (admission, session
+/// charge); ON_DEMAND is only ever billed by an explicit ad-hoc run
+/// (an exam fee for one class).
+enum FeeHeadType {
+  RECURRING_MONTHLY
+  ONE_TIME
+  ON_DEMAND
+
+  @@map("fee_head_type_enum")
+}
+
+/// A per-student concession. PERCENT and FLAT reduce the line; WAIVER
+/// zeroes it; SCHOLARSHIP is a flat reduction that reports separately
+/// because schools account for it differently from a discount.
+enum FeeOverrideType {
+  DISCOUNT_PERCENT
+  DISCOUNT_FLAT
+  WAIVER
+  SCHOLARSHIP
+
+  @@map("fee_override_type_enum")
+}
+
+/// An invoice's money state. OVERDUE is derived by the nightly job from
+/// `due_date`, never set by hand; REFUNDED means every successful
+/// payment against it has been refunded.
+enum InvoiceStatus {
+  UNPAID
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+
+  @@map("invoice_status_enum")
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  SSLCOMMERZ
+  BKASH
+  NAGAD
+  ROCKET
+  CHEQUE
+  ADJUSTMENT
+
+  @@map("payment_method_enum")
+}
+
+/// PENDING is the online-payment landing state: the gateway session was
+/// opened but no server-side verification has confirmed it yet. Only a
+/// verified callback or the reconciliation job may move it to SUCCESS
+/// (roadmap M16 §6 — redirect parameters are forgeable).
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+  CANCELLED
+
+  @@map("payment_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -637,6 +702,13 @@ model School {
   resultPublications       ResultPublication[]
   resultRuns               ResultRun[]
   combinedResults          CombinedResult[]
+  feeHeads                 FeeHead[]
+  feeStructures            FeeStructure[]
+  feeOverrides             StudentFeeOverride[]
+  invoices                 Invoice[]
+  invoiceItems             InvoiceItem[]
+  payments                 Payment[]
+  paymentRefunds           PaymentRefund[]
 
   @@map("schools")
 }
@@ -739,6 +811,8 @@ model AcademicSession {
   timetables               Timetable[]
   exams                    Exam[]
   combinedResults          CombinedResult[]
+  feeStructures            FeeStructure[]
+  invoices                 Invoice[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -874,6 +948,7 @@ model SchoolClass {
   promotionItemsTo      PromotionItem[]
   examClasses           ExamClass[]
   examSubjects          ExamSubject[]
+  feeStructures         FeeStructure[]
 
   @@index([schoolId], map: "idx_classes_school")
   @@map("classes")
@@ -897,6 +972,7 @@ model Group {
   sections      Section[]
   classSubjects ClassSubject[]
   enrollments   Enrollment[]
+  feeStructures FeeStructure[]
 
   @@index([schoolId], map: "idx_groups_school")
   @@map("groups")
@@ -1659,6 +1735,8 @@ model Enrollment {
   marks           Mark[]
   results         Result[]
   combinedResults CombinedResult[]
+  feeOverrides    StudentFeeOverride[]
+  invoices        Invoice[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -2396,6 +2474,265 @@ model CombinedResult {
   @@index([sessionId, name], map: "idx_combined_results_batch")
   @@index([enrollmentId], map: "idx_combined_results_enrollment")
   @@map("combined_results")
+}
+
+// ── Module 16: Fees & Payments ────────────────────────────────────────
+
+/// A billable line item type ("Tuition", "Exam Fee", "Transport").
+/// Session-independent master, like the M06 structure masters — the
+/// per-session AMOUNT lives on `fee_structures`.
+model FeeHead {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String      @map("school_id") @db.Uuid
+  school       School      @relation(fields: [schoolId], references: [id], map: "fk_fee_heads_school")
+  name         String      @db.VarChar(100)
+  code         String?     @db.VarChar(20)
+  type         FeeHeadType @default(RECURRING_MONTHLY)
+  /// Whether a payment against this head may be refunded (M16 §3).
+  isRefundable Boolean     @default(true) @map("is_refundable")
+  displayOrder Int         @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  structures   FeeStructure[]
+  overrides    StudentFeeOverride[]
+  invoiceItems InvoiceItem[]
+
+  @@index([schoolId], map: "idx_fee_heads_school")
+  @@map("fee_heads")
+}
+
+/// What one head costs for one class in one session (optionally narrowed
+/// to a group). `uq(session, class, group, fee_head)` is a hand-written
+/// COALESCE index because `group_id` is nullable and Postgres treats
+/// NULLs as distinct — the M06 section-identity trick.
+model FeeStructure {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String          @map("school_id") @db.Uuid
+  school    School          @relation(fields: [schoolId], references: [id], map: "fk_fee_structures_school")
+  sessionId String          @map("session_id") @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_fee_structures_session")
+  classId   String          @map("class_id") @db.Uuid
+  class     SchoolClass     @relation(fields: [classId], references: [id], map: "fk_fee_structures_class")
+  groupId   String?         @map("group_id") @db.Uuid
+  /// Restrict rather than Prisma's default SetNull for an optional
+  /// relation: a structure that silently lost its group would widen
+  /// from one stream to the whole class and start billing students it
+  /// should not.
+  group     Group?          @relation(fields: [groupId], references: [id], onDelete: Restrict, map: "fk_fee_structures_group")
+  feeHeadId String          @map("fee_head_id") @db.Uuid
+  feeHead   FeeHead         @relation(fields: [feeHeadId], references: [id], map: "fk_fee_structures_head")
+
+  amount Decimal @db.Decimal(12, 2)
+  /// Day of month a monthly invoice falls due; NULL inherits the
+  /// `fees.due_day_of_month` setting.
+  dueDay Int?    @map("due_day")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, sessionId, classId], map: "idx_fee_structures_scope")
+  @@index([feeHeadId], map: "idx_fee_structures_head")
+  @@map("fee_structures")
+}
+
+/// A concession for one candidate on one head. Keyed on `enrollment_id`
+/// (the M11 canonical handle) so a concession does not follow a student
+/// into next session by accident — a scholarship is granted per year.
+///
+/// `valid_from`/`valid_to` bound it to part of the session, which is what
+/// makes a mid-year transport opt-out expressible.
+model StudentFeeOverride {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String          @map("school_id") @db.Uuid
+  school       School          @relation(fields: [schoolId], references: [id], map: "fk_fee_overrides_school")
+  enrollmentId String          @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_fee_overrides_enrollment")
+  feeHeadId    String          @map("fee_head_id") @db.Uuid
+  feeHead      FeeHead         @relation(fields: [feeHeadId], references: [id], map: "fk_fee_overrides_head")
+
+  type      FeeOverrideType
+  /// Percent (0–100) for DISCOUNT_PERCENT, else an amount. Ignored for WAIVER.
+  value     Decimal         @db.Decimal(12, 2)
+  reason    String          @db.VarChar(500)
+  validFrom DateTime?       @map("valid_from") @db.Date
+  validTo   DateTime?       @map("valid_to") @db.Date
+
+  /// Who signed it off — a waiver needs `fee.override.approve`.
+  approvedBy String?   @map("approved_by") @db.Uuid
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([enrollmentId], map: "idx_fee_overrides_enrollment")
+  @@index([feeHeadId], map: "idx_fee_overrides_head")
+  @@map("student_fee_overrides")
+}
+
+/// One bill. Keyed on `enrollment_id` like every other student-history
+/// table, so a mid-year transfer or promotion cannot re-point it.
+///
+/// The roadmap calls `payable` a generated column. It is instead a
+/// plain column pinned by `chk_invoices_payable` (`payable = subtotal -
+/// discount_total + fine_total`): a Postgres GENERATED column cannot be
+/// written, but Prisma always includes every scalar in its create input,
+/// so every insert would fail. The CHECK gives the identical guarantee —
+/// the arithmetic cannot drift — without fighting the ORM.
+/// `paid_total` is maintained by the payment path and CHECKed never to
+/// exceed `payable`.
+///
+/// `billing_month` is the first day of the billed month for a monthly
+/// invoice and NULL for an ad-hoc one — the idempotency key for the
+/// monthly batch is a partial unique over (enrollment, billing_month).
+model Invoice {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String        @map("school_id") @db.Uuid
+  school       School        @relation(fields: [schoolId], references: [id], map: "fk_invoices_school")
+  invoiceNo    String        @map("invoice_no") @db.VarChar(30)
+  enrollmentId String        @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_invoices_enrollment")
+  sessionId    String        @map("session_id") @db.Uuid
+  session      AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_invoices_session")
+
+  billingMonth DateTime? @map("billing_month") @db.Date
+  issueDate    DateTime  @map("issue_date") @db.Date
+  dueDate      DateTime  @map("due_date") @db.Date
+
+  subtotal      Decimal @db.Decimal(12, 2)
+  discountTotal Decimal @default(0) @map("discount_total") @db.Decimal(12, 2)
+  fineTotal     Decimal @default(0) @map("fine_total") @db.Decimal(12, 2)
+  paidTotal     Decimal @default(0) @map("paid_total") @db.Decimal(12, 2)
+  /// = subtotal - discount_total + fine_total (pinned by a DB CHECK).
+  payable       Decimal @db.Decimal(12, 2)
+
+  status         InvoiceStatus @default(UNPAID)
+  /// The month the fine job last charged, so it stays idempotent.
+  finedForMonth  DateTime?     @map("fined_for_month") @db.Date
+  cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason   String?       @map("cancel_reason") @db.VarChar(500)
+  remarks        String?       @db.VarChar(500)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  // Document numbers are never reused, so this unique deliberately
+  // IGNORES `deleted_at` (the M07 employee-ID precedent). The
+  // idempotency unique over (enrollment, billing_month) is partial and
+  // therefore hand-written in the migration only.
+  @@unique([schoolId, invoiceNo], map: "uq_invoices_no")
+  @@index([schoolId, sessionId, status], map: "idx_invoices_school_session_status")
+  @@index([enrollmentId, billingMonth], map: "idx_invoices_enrollment_month")
+  @@index([dueDate], map: "idx_invoices_due_date")
+  @@map("invoices")
+}
+
+/// One billed line. `amount` is the gross structure amount and
+/// `discount` what the override engine took off it, kept separate so a
+/// receipt can show the concession rather than a silently smaller number.
+model InvoiceItem {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], map: "fk_invoice_items_school")
+  invoiceId String  @map("invoice_id") @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, map: "fk_invoice_items_invoice")
+  feeHeadId String? @map("fee_head_id") @db.Uuid
+  feeHead   FeeHead? @relation(fields: [feeHeadId], references: [id], map: "fk_invoice_items_head")
+
+  description String  @db.VarChar(200)
+  amount      Decimal @db.Decimal(12, 2)
+  discount    Decimal @default(0) @db.Decimal(12, 2)
+  /// Why the discount was applied — the override type, or "Prorated".
+  note        String? @db.VarChar(200)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([invoiceId], map: "idx_invoice_items_invoice")
+  @@map("invoice_items")
+}
+
+/// Money received. Append-only in spirit: a mistake is corrected by a
+/// refund plus a new payment, never by editing one (roadmap M16 §6 —
+/// receipts are immutable).
+///
+/// `gateway_txn_id` is globally unique where present, which is what makes
+/// an IPN retry idempotent rather than a double credit.
+model Payment {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], map: "fk_payments_school")
+  paymentNo String  @map("payment_no") @db.VarChar(30)
+  invoiceId String  @map("invoice_id") @db.Uuid
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, map: "fk_payments_invoice")
+
+  amount Decimal       @db.Decimal(12, 2)
+  method PaymentMethod
+  status PaymentStatus @default(PENDING)
+
+  gatewayTxnId  String? @map("gateway_txn_id") @db.VarChar(120)
+  /// The gateway's own session handle, needed to VERIFY the payment
+  /// server-side later (SSLCommerz val_id, bKash paymentID, …).
+  gatewayRef    String? @map("gateway_ref") @db.VarChar(120)
+  gatewayPayload Json?  @map("gateway_payload")
+
+  /// Cash/cheque reference the office writes on the counterfoil.
+  reference  String?   @db.VarChar(100)
+  remarks    String?   @db.VarChar(500)
+  receivedBy String?   @map("received_by") @db.Uuid
+  paidAt     DateTime? @map("paid_at") @db.Timestamptz(6)
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  refunds PaymentRefund[]
+
+  // Receipt numbers are never reused either. `gateway_txn_id`'s unique
+  // is partial (WHERE NOT NULL) and stays hand-written.
+  @@unique([schoolId, paymentNo], map: "uq_payments_no")
+  @@index([invoiceId], map: "idx_payments_invoice")
+  @@index([schoolId, status, paidAt], map: "idx_payments_school_status_paid")
+  @@map("payments")
+}
+
+/// Append-only refund log. A refund never deletes the payment — the
+/// ledger has to keep both sides.
+model PaymentRefund {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], map: "fk_payment_refunds_school")
+  paymentId String  @map("payment_id") @db.Uuid
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade, map: "fk_payment_refunds_payment")
+
+  amount     Decimal  @db.Decimal(12, 2)
+  reason     String   @db.VarChar(500)
+  approvedBy String   @map("approved_by") @db.Uuid
+  refundedAt DateTime @default(now()) @map("refunded_at") @db.Timestamptz(6)
+  /// The gateway's refund handle, when it was an online payment.
+  gatewayRefundId String? @map("gateway_refund_id") @db.VarChar(120)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([paymentId], map: "idx_payment_refunds_payment")
+  @@map("payment_refunds")
 }
 
 // ── Module 03: Authorization, Roles & Audit Logging ──────────────────

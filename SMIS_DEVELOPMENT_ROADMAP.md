@@ -91,7 +91,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 13 | Timetable / Class Routine | ☑ |
 | 14 | Examination Management | ☑ |
 | 15 | Marks & Result Processing | ☑ |
-| 16 | Fees & Payments | ☐ |
+| 16 | Fees & Payments | ☑ |
 | 17 | Communication & Notifications (SMS/Email) | ☐ |
 | 18 | Portals & Dashboards (Student, Parent, Teacher, Principal) + Reports v1 | ☐ |
 
@@ -734,7 +734,7 @@ POST /api/v1/students/:id/create-account
 End-to-end admission: public online application, application fee payment, admission test, merit & waiting lists, approval → student conversion, and admission reporting.
 
 ## 2. Dependencies
-- Modules 06, 09; payment gateway integration is stubbed until Module 16 (design the interface now, wire SSLCommerz/bKash in 16; offline payment recording works immediately).
+- Modules 06, 09; payment gateway integration is stubbed until Module 16 (design the interface now, wire SSLCommerz/bKash in 16; offline payment recording works immediately). — **Wired in Module 16**: the admission fee pays through `PaymentGatewayService.openSession` over the same SSLCommerz/bKash/Nagad adapters.
 
 ## 3. Database Design
 - `admission_cycles`: `id`, `school_id`, `session_id FK`, `name` ("Admission 2027"), `class_ids UUID[]` or child table `admission_cycle_classes(cycle_id, class_id, seats INT, application_fee NUMERIC)`, `start_at`, `end_at`, `test_required BOOL`, `status ENUM('DRAFT','OPEN','CLOSED','COMPLETED')`, `instructions TEXT`, audit.
@@ -779,7 +779,7 @@ GET  /api/v1/admission-reports/summary
 - Cycle end > start; within session. Test marks ≤ total. Photo ≤ 1 MB jpg/png. Applicant age vs class-level bounds (from settings) hard-checked.
 
 ## 8. Edge Cases
-- Payment succeeded but callback lost → reconciliation endpoint by gateway txn id (Module 16 fleshes out).
+- Payment succeeded but callback lost → reconciliation endpoint by gateway txn id (**Module 16 built it** — the hourly `ReconciliationJob` re-runs `verify()` for payments PENDING > 15 min, plus a manual `POST /payments/:id/reconcile`).
 - Applicant applies to multiple classes → allowed (separate apps) unless setting forbids.
 - Seats increased after merit publish → "promote next N from waitlist" action.
 - Cycle closed early with SUBMITTED unpaid apps → auto CANCELLED + SMS.
@@ -1011,7 +1011,7 @@ Exam definitions: exam types & terms, exam schedules (routine), mark distributio
 - [x] Exam type CRUD; exam wizard endpoints (create → attach classes → per class-subject distribution defaults from `class_subjects.full_marks_default` → schedule dates).
 - [x] Exam routine generator/editor + clash checks (same class two subjects same day optional-rule; room capacity vs candidates). **Decision: sittings keep their own wall-clock `start_time`+`duration_min` rather than reusing M13 `period_slots` — a 3-hour paper does not fit a 40-minute bell; the engine still compares wall-clock minutes, the M13 technique.**
 - [x] Seat plan generator: strategies (roll serpentine across rooms, mixed-class anti-cheating interleave), regenerate, PDF per room + summary. (+ append-a-late-enrollee without regenerating.)
-- [x] Admit card generation: per student PDF with photo, exam schedule, seat, signature blocks; batch by section/class; setting "block admit card if dues" wired behind `EXAM_DUES_GATE` (no-op until Module 16).
+- [x] Admit card generation: per student PDF with photo, exam schedule, seat, signature blocks; batch by section/class; setting "block admit card if dues" wired behind `EXAM_DUES_GATE` (**live since Module 16** via `LedgerService.outstandingFor` — the gate reports real dues; flipping the warning to a hard block is a UI toggle).
 - [x] Status machine transitions with guards (MARK_ENTRY before end_date needs `override` + `exam.status`; PUBLISH asks `EXAM_RESULT_GATE` — **bound for real in Module 15** — and the grade scale is frozen into `exams.grading_snapshot`, at first PROCESSING since M15).
 - [x] Curriculum "sync subjects" diff/apply (roadmap §8) and the shift-a-day postponement tool.
 ### APIs
@@ -1153,16 +1153,16 @@ Fee structures, invoicing (monthly + one-off), discounts/waivers/scholarships, c
 - `fines_config` in settings (grace days, flat/percent per month, cap).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Fee head/structure CRUD; structure clone-to-session.
-- [ ] Invoice generation job: monthly batch (1st of month, prorate from enrollment_date for mid-year joiners), on-demand single/bulk (e.g., exam fee for class 8).
-- [ ] Discount engine applied at generation (overrides) + manual line discount with permission.
-- [ ] Fine job: nightly, applies late fine per config to OVERDUE invoices (idempotent per month).
-- [ ] Collection: offline payment endpoint (cash/bank/cheque) with receipt PDF + SMS; partial payments supported.
-- [ ] Gateway integrations (adapter pattern `PaymentGatewayService` → `SslcommerzAdapter`, `BkashAdapter`, `NagadAdapter`):
+- [x] Fee head/structure CRUD; structure clone-to-session.
+- [x] Invoice generation job: monthly batch (1st of month, prorate from enrollment_date for mid-year joiners), on-demand single/bulk (e.g., exam fee for class 8).
+- [x] Discount engine applied at generation (overrides) + manual line discount with permission.
+- [x] Fine job: nightly, applies late fine per config to OVERDUE invoices (idempotent per month).
+- [x] Collection: offline payment endpoint (cash/bank/cheque) with receipt PDF + SMS; partial payments supported.
+- [x] Gateway integrations (adapter pattern `PaymentGatewayService` → `SslcommerzAdapter`, `BkashAdapter`, `NagadAdapter`):
       init payment (returns redirect/checkout URL), IPN/callback verify (server-to-server validation mandatory), reconcile-by-txn endpoint, sandbox/live mode per settings.
-- [ ] Admission payment interface (Module 10) wired to same adapters.
-- [ ] Dues ledger per student; clearance-check service (consumed by Modules 09/14/27).
-- [ ] Reports: daily collection (by method/collector), monthly summary, dues by class/section (aging buckets), head-wise income, defaulter list export + bulk dues SMS.
+- [x] Admission payment interface (Module 10) wired to same adapters.
+- [x] Dues ledger per student; clearance-check service (consumed by Modules 09/14/27).
+- [x] Reports: daily collection (by method/collector), monthly summary, dues by class/section (aging buckets), head-wise income, defaulter list export + bulk dues SMS.
 ### APIs
 ```
 CRUD /api/v1/fee-heads | fee-structures      POST /api/v1/fee-structures/clone
@@ -1178,12 +1178,12 @@ GET  /api/v1/payments/:id/receipt.pdf
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Fee setup pages (heads, structure matrix class × head editable grid, overrides on student profile Fees tab).
-- [ ] Invoice generation wizard (scope preview: N invoices, total ৳X).
-- [ ] Collection desk: search student → dues list → select invoices → amount → method → confirm → print receipt (thermal-friendly + A5 templates).
-- [ ] Invoice list (status filters, aging), invoice detail with payment history and refund action.
-- [ ] Portal (student/parent): dues card, invoice list, **Pay Now** → gateway redirect → success/failure pages → receipt download.
-- [ ] Reports pages with charts (collection trend, method split, dues aging).
+- [x] Fee setup pages (heads, structure matrix class × head editable grid, overrides on student profile Fees tab). — Heads + structure matrix on the `/admin/fees` Setup tab; **per-student concessions (list / add / remove) live on the `/admin/students/[id]` Fees tab**, alongside the student's dues summary and running ledger.
+- [x] Invoice generation wizard (scope preview: N invoices, total ৳X).
+- [x] Collection desk: search student → dues list → select invoices → amount → method → confirm → print receipt (thermal-friendly + A5 templates).
+- [x] Invoice list (status filters, aging), invoice detail with payment history and refund action.
+- [ ] Portal (student/parent): dues card, invoice list, **Pay Now** → gateway redirect → success/failure pages → receipt download. — **Module 18 (Portals)** — the `LedgerService` / `PaymentGatewayService` it needs are exported and live.
+- [ ] Reports pages with charts (collection trend, method split, dues aging). — **Shipped as tables** (dues aging, daily-by-method, head-wise, XLSX export); the chart visuals wait for the M18 report engine, and the `monthly` trend API is live for them.
 
 ## 6. Business Rules
 - Invoice regeneration for same enrollment+month blocked (idempotency key).
@@ -1203,18 +1203,18 @@ GET  /api/v1/payments/:id/receipt.pdf
 - Refund limits per gateway (bKash refund window) → surfaced errors.
 
 ## 9. Testing Checklist
-- [ ] Unit: proration, fine idempotency, discount stacking order (percent then flat, cap at amount), status transitions.
-- [ ] e2e: generate→collect offline→receipt; sandbox online flow per gateway (mock adapters in CI, real sandbox manually).
-- [ ] Frontend: collection desk flow, portal payment redirect handling.
-- [ ] Manual: SSLCommerz/bKash/Nagad sandbox end-to-end incl. failure & cancel paths.
+- [x] Unit: proration, fine idempotency, discount stacking order (percent then flat, cap at amount), status transitions.
+- [x] e2e: generate→collect offline→receipt; sandbox online flow per gateway (mock adapters in CI, real sandbox manually).
+- [ ] Frontend: collection desk flow, portal payment redirect handling. — **Collection-desk flow shipped** (validations unit-tested; `fee.test.ts`); portal redirect handling is M18.
+- [ ] Manual: SSLCommerz/bKash/Nagad sandbox end-to-end incl. failure & cancel paths. — **Not run against a real sandbox** — the e2e suite exercises the full init → verify → callback path through a **stubbed** adapter; real-credential sandbox testing needs merchant accounts.
 
 ## 10. Completion Checklist
-- [ ] Structures, invoicing, fines, collection
-- [ ] All three gateways sandbox-verified + reconciliation
-- [ ] Receipts + reports
-- [ ] Admission payments wired
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/16-fees-payments.md`
+- [x] Structures, invoicing, fines, collection
+- [ ] All three gateways sandbox-verified + reconciliation — **Reconciliation live and e2e-tested**; the three adapters are implemented and exercised through a stubbed gateway, but **real sandbox verification is pending** merchant accounts (Rocket has no adapter yet).
+- [x] Receipts + reports
+- [x] Admission payments wired
+- [x] Tests passing
+- [x] Docs: `docs/modules/16-fees-payments.md`
 
 ---
 

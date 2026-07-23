@@ -36,6 +36,7 @@ import { MedicalTab } from "./medical-tab";
 import { DocumentsTab } from "./documents-tab";
 import { TimelineTab } from "./timeline-tab";
 import { HistoryTab } from "./history-tab";
+import { StudentFeesTab } from "./fees-tab";
 
 const TABS = [
   ["profile", "Profile", null],
@@ -44,6 +45,7 @@ const TABS = [
   ["documents", "Documents", null],
   ["attendance", "Attendance", null],
   ["results", "Results", null],
+  ["fees", "Fees", "fee.view"],
   ["timeline", "Timeline", null],
 ] as const;
 
@@ -208,6 +210,8 @@ export default function StudentDetailPage({
         <HistoryTab studentId={s.id} kind="attendance" />
       ) : tab === "results" ? (
         <HistoryTab studentId={s.id} kind="performance" />
+      ) : tab === "fees" ? (
+        <StudentFeesTab studentId={s.id} />
       ) : (
         <TimelineTab studentId={s.id} />
       )}

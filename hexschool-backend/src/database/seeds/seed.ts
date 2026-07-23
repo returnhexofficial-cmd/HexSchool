@@ -10,6 +10,7 @@ import {
 } from '../../modules/rbac/seed/rbac.seeder';
 import { seedNctbGradingSystem } from '../../modules/school/seed/school.seeder';
 import { seedStandardGroups } from '../../modules/academic/seed/structure.seeder';
+import { seedNotificationTemplates } from '../../modules/communication/seed/communication.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -97,6 +98,17 @@ const seeders: Seeder[] = [
     run: async (prisma) => {
       const created = await seedStandardGroups(prisma, DEFAULT_SCHOOL_ID);
       process.stdout.write(created ? 'created; ' : 'already present; ');
+    },
+  },
+  {
+    // Module 17: default EN notification templates (idempotent inserts).
+    name: 'notification-templates (M17)',
+    run: async (prisma) => {
+      const created = await seedNotificationTemplates(
+        prisma,
+        DEFAULT_SCHOOL_ID,
+      );
+      process.stdout.write(`${created} created; `);
     },
   },
 ];

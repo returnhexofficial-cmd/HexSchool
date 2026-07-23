@@ -1,12 +1,10 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import {
-  NOTIFICATIONS_QUEUE,
-  RESULTS_QUEUE,
-} from '../../queues/queues.constants';
+import { RESULTS_QUEUE } from '../../queues/queues.constants';
 import { AcademicModule } from '../academic/academic.module';
 import { ClassSubjectsRepository } from '../academic/repositories/class-subjects.repository';
 import { StudentAttendancesRepository } from '../attendance/repositories/student-attendances.repository';
+import { CommunicationModule } from '../communication/communication.module';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { ExamModule } from '../exam/exam.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -71,12 +69,11 @@ import { ResultsService } from './services/results.service';
     SchoolModule,
     StudentModule,
     RbacModule,
-    // `results` carries processing runs; `notifications` carries the
-    // "GPA 4.83, Merit 3" SMS at publication (M02's shared queue).
-    BullModule.registerQueue(
-      { name: RESULTS_QUEUE },
-      { name: NOTIFICATIONS_QUEUE },
-    ),
+    // M17: the "GPA 4.83, Merit 3" SMS goes through NotificationService
+    // (RESULT_PUBLISHED template) at publication.
+    CommunicationModule,
+    // `results` carries the processing-run jobs.
+    BullModule.registerQueue({ name: RESULTS_QUEUE }),
   ],
   controllers: [
     MarksController,

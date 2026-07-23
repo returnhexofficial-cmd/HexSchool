@@ -16,6 +16,7 @@ import { RedisModule } from './database/redis/redis.module';
 import { AcademicModule } from './modules/academic/academic.module';
 import { AdmissionModule } from './modules/admission/admission.module';
 import { AttendanceModule } from './modules/attendance/attendance.module';
+import { CommunicationModule } from './modules/communication/communication.module';
 import { ExamModule } from './modules/exam/exam.module';
 import { FeeModule } from './modules/fee/fee.module';
 import { ResultModule } from './modules/result/result.module';
@@ -122,6 +123,10 @@ import { QueuesModule } from './queues/queues.module';
     // FeeModule likewise binds EXAM_DUES_GATE inside ExamModule, and
     // exports the gateway adapters that M10 admission payments reuse.
     FeeModule,
+    // CommunicationModule owns the notifications worker and the single
+    // NotificationService.send() entry point; the producer modules above
+    // import it to retro-wire their queued events.
+    CommunicationModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -1,12 +1,7 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import type { Queue } from 'bullmq';
 import { AdmissionApplicationStatus } from '../../../common/constants';
-import {
-  NOTIFICATIONS_QUEUE,
-  NotificationJob,
-} from '../../../queues/queues.constants';
+import { NotificationService } from '../../communication/services/notification.service';
 import { ADMISSION_EVENTS } from './admission.events';
 import type {
   ApplicationStatusChangedEvent,
@@ -41,17 +36,21 @@ const STATUS_MESSAGES: Partial<Record<AdmissionApplicationStatus, string>> = {
 };
 
 /**
- * Fire-and-forget SMS enqueues (M07 convention: delivery must never
- * block or fail the mutation — Redis being down buffers `add` forever).
+ * Applicant-facing SMS per status (roadmap M10 §4). **Retro-wired to
+ * M17**: each message goes through `NotificationService.send` (coded
+ * `ADMISSION_STATUS`), so admission SMS is now real, credit-accounted and
+ * in the delivery log — not the old log-only stub. The status prose is
+ * specific per transition, so it is passed as a `rawBody`; a school that
+ * wants a uniform template can still author the `ADMISSION_STATUS` one.
+ *
+ * Delivery is fire-and-forget (M07 convention: it must never block or fail
+ * the mutation).
  */
 @Injectable()
 export class AdmissionListener {
   private readonly logger = new Logger(AdmissionListener.name);
 
-  constructor(
-    @InjectQueue(NOTIFICATIONS_QUEUE)
-    private readonly notifications: Queue<NotificationJob>,
-  ) {}
+  constructor(private readonly notifications: NotificationService) {}
 
   @OnEvent(ADMISSION_EVENTS.APPLICATION_SUBMITTED)
   handleSubmitted(event: ApplicationSubmittedEvent): void {
@@ -59,9 +58,11 @@ export class AdmissionListener {
       event.fee > 0
         ? ` Application fee BDT ${event.fee.toFixed(2)} is due — pay at the school office to confirm.`
         : '';
-    this.enqueueSms(
+    this.sendSms(
+      event.schoolId,
       event.phone,
-      `HexSchool admission: application ${event.applicationNo} for ${event.applicantName} (${event.className}) received.${feeLine} Track with your application number + phone.`,
+      event.applicationNo,
+      `Admission: application ${event.applicationNo} for ${event.applicantName} (${event.className}) received.${feeLine} Track with your application number + phone.`,
     );
   }
 
@@ -69,17 +70,31 @@ export class AdmissionListener {
   handleStatusChanged(event: ApplicationStatusChangedEvent): void {
     const body = STATUS_MESSAGES[event.to];
     if (!body) return;
-    this.enqueueSms(
+    this.sendSms(
+      event.schoolId,
       event.phone,
-      `HexSchool admission ${event.applicationNo}: ${body}${event.note ? ` ${event.note}` : ''}`,
+      event.applicationNo,
+      `Admission ${event.applicationNo}: ${body}${event.note ? ` ${event.note}` : ''}`,
     );
   }
 
-  private enqueueSms(to: string, text: string): void {
+  private sendSms(
+    schoolId: string,
+    to: string,
+    applicationNo: string,
+    text: string,
+  ): void {
     void this.notifications
-      .add('sms', { type: 'sms', to, text })
+      .send({
+        schoolId,
+        code: 'ADMISSION_STATUS',
+        channel: 'SMS',
+        recipient: { type: 'RAW', destination: to },
+        rawBody: text,
+        vars: { application_no: applicationNo },
+      })
       .catch((err: Error) =>
-        this.logger.error(`Failed to enqueue admission SMS: ${err.message}`),
+        this.logger.error(`Failed to send admission SMS: ${err.message}`),
       );
   }
 }

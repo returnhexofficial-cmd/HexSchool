@@ -15,6 +15,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Network,
+  MessageSquare,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -130,6 +131,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/fees",
     icon: Wallet,
     permission: "fee.view",
+  },
+  {
+    label: "Communication",
+    href: "/admin/communication",
+    icon: MessageSquare,
+    anyOf: ["notification.view", "notice.view"],
   },
   {
     label: "Teachers",

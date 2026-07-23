@@ -52,4 +52,10 @@ export {
   InvoiceStatus,
   PaymentMethod,
   PaymentStatus,
+  NotificationChannel,
+  NotificationLanguage,
+  NotificationRecipientType,
+  NotificationStatus,
+  NoticeAudience,
+  SmsCreditType,
 } from '@prisma/client';

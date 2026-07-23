@@ -440,6 +440,66 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       false,
     ],
   ]),
+  // M17 — every knob the communication module reads (quiet hours, SMS
+  // cost + credit, dedupe, bulk gating, scheduled jobs, DLR secret). The
+  // gateway credentials themselves stay in the `sms.*` / `email.*` groups.
+  ...g(SettingsGroup.communication, [
+    ['communication.quiet_hours_enabled', 'boolean', 'Hold SMS during quiet hours', false],
+    ['communication.quiet_hours_start', 'string', 'Quiet hours start (HH:mm)', '21:00'],
+    ['communication.quiet_hours_end', 'string', 'Quiet hours end (HH:mm)', '08:00'],
+    ['communication.sms_rate_per_part', 'number', 'SMS cost per part (BDT)', 0.5],
+    [
+      'communication.sms_unicode_rate_per_part',
+      'number',
+      'SMS cost per Bangla/unicode part (0 = same as text)',
+      0,
+    ],
+    [
+      'communication.dedupe_window_minutes',
+      'number',
+      'Window that collapses a repeat (destination, template) send',
+      120,
+    ],
+    [
+      'communication.bulk_large_threshold',
+      'number',
+      'Recipient count above which a bulk send needs notification.bulk.large',
+      500,
+    ],
+    [
+      'communication.bulk_chunk_size',
+      'number',
+      'Bulk messages per rate-spread chunk',
+      100,
+    ],
+    [
+      'communication.low_credit_threshold',
+      'number',
+      'SMS-credit balance that triggers a low-balance alert',
+      100,
+    ],
+    ['communication.default_language', 'string', 'Default template language (EN|BN)', 'EN'],
+    ['communication.sms_masking', 'boolean', 'Use a masked (branded) sender id', true],
+    [
+      'communication.birthday_wish_enabled',
+      'boolean',
+      'Send a daily birthday SMS to guardians',
+      false,
+    ],
+    [
+      'communication.birthday_wish_time',
+      'string',
+      'Birthday-wish dispatch time (HH:mm)',
+      '08:00',
+    ],
+    [
+      'communication.dlr_webhook_secret',
+      'string',
+      'Shared secret for the SMS delivery-report webhook',
+      '',
+      true,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

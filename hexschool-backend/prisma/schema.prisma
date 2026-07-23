@@ -93,6 +93,7 @@ enum SettingsGroup {
   attendance
   exam
   fees
+  communication
 
   @@map("settings_group_enum")
 }
@@ -548,6 +549,74 @@ enum PaymentStatus {
   @@map("payment_status_enum")
 }
 
+// ── Module 17: Communication & Notifications ──────────────────────────
+
+/// Delivery channel of a template / message. IN_APP never leaves the
+/// system — it is a `notifications` row a portal bell reads.
+enum NotificationChannel {
+  SMS
+  EMAIL
+  IN_APP
+
+  @@map("notification_channel_enum")
+}
+
+/// The two languages a template body is authored in. BN forces UCS-2 SMS
+/// segmentation (70 chars/part) — see `calc/sms-parts.util.ts`.
+enum NotificationLanguage {
+  EN
+  BN
+
+  @@map("notification_language_enum")
+}
+
+/// What a notification's `recipient_id` points at. RAW is a bare
+/// phone/email with no owning record (custom bulk numbers, OTP).
+enum NotificationRecipientType {
+  USER
+  GUARDIAN
+  STUDENT
+  STAFF
+  RAW
+
+  @@map("notification_recipient_type_enum")
+}
+
+/// Lifecycle of one dispatched message. DELIVERED only ever arrives from
+/// a provider DLR webhook; the queue worker moves QUEUED→SENT/FAILED.
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+
+  @@map("notification_status_enum")
+}
+
+/// Who a notice targets. CLASS/SECTION read the id list in `audience_ref`.
+enum NoticeAudience {
+  ALL
+  STUDENTS
+  PARENTS
+  TEACHERS
+  STAFF
+  CLASS
+  SECTION
+
+  @@map("notice_audience_enum")
+}
+
+/// SMS-credit ledger movement. PURCHASE adds credits, CONSUME is written
+/// by the dispatcher per sent part, ADJUST is a manual correction.
+enum SmsCreditType {
+  PURCHASE
+  CONSUME
+  ADJUST
+
+  @@map("sms_credit_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -709,6 +778,10 @@ model School {
   invoiceItems             InvoiceItem[]
   payments                 Payment[]
   paymentRefunds           PaymentRefund[]
+  notificationTemplates    NotificationTemplate[]
+  notifications            Notification[]
+  notices                  Notice[]
+  smsCredits               SmsCredit[]
 
   @@map("schools")
 }
@@ -2413,17 +2486,17 @@ model ResultRun {
   examId   String @map("exam_id") @db.Uuid
   exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade, map: "fk_result_runs_exam")
 
-  status    ResultRunStatus @default(QUEUED)
-  total     Int             @default(0)
-  processed Int             @default(0)
+  status            ResultRunStatus @default(QUEUED)
+  total             Int             @default(0)
+  processed         Int             @default(0)
   /// Per-candidate problems ("12 students missing Math marks") — the
   /// list the processing page renders under the progress bar.
-  issues    Json?
-  error     String?
+  issues            Json?
+  error             String?
   /// Ran despite unlocked papers (needs `result.process.override`).
-  override  Boolean         @default(false)
+  override          Boolean         @default(false)
   /// Re-processing a single candidate after a correction, not the exam.
-  scopeEnrollmentId String? @map("scope_enrollment_id") @db.Uuid
+  scopeEnrollmentId String?         @map("scope_enrollment_id") @db.Uuid
 
   triggeredBy String    @map("triggered_by") @db.Uuid
   startedAt   DateTime? @map("started_at") @db.Timestamptz(6)
@@ -2449,7 +2522,7 @@ model CombinedResult {
   enrollment   Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_combined_results_enrollment")
 
   /// Names the merge ("Final Result 2026") — the handle a report card asks for.
-  name String @db.VarChar(150)
+  name       String @db.VarChar(150)
   /// [{ examId, examName, weight, gpa, obtainedMarks }] frozen at generation.
   components Json
   /// { examId: weight } — the weight set, summing to 100.
@@ -2550,13 +2623,13 @@ model FeeStructure {
 /// `valid_from`/`valid_to` bound it to part of the session, which is what
 /// makes a mid-year transport opt-out expressible.
 model StudentFeeOverride {
-  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId     String          @map("school_id") @db.Uuid
-  school       School          @relation(fields: [schoolId], references: [id], map: "fk_fee_overrides_school")
-  enrollmentId String          @map("enrollment_id") @db.Uuid
-  enrollment   Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_fee_overrides_enrollment")
-  feeHeadId    String          @map("fee_head_id") @db.Uuid
-  feeHead      FeeHead         @relation(fields: [feeHeadId], references: [id], map: "fk_fee_overrides_head")
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_fee_overrides_school")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_fee_overrides_enrollment")
+  feeHeadId    String     @map("fee_head_id") @db.Uuid
+  feeHead      FeeHead    @relation(fields: [feeHeadId], references: [id], map: "fk_fee_overrides_head")
 
   type      FeeOverrideType
   /// Percent (0–100) for DISCOUNT_PERCENT, else an amount. Ignored for WAIVER.
@@ -2596,13 +2669,13 @@ model StudentFeeOverride {
 /// invoice and NULL for an ad-hoc one — the idempotency key for the
 /// monthly batch is a partial unique over (enrollment, billing_month).
 model Invoice {
-  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId     String        @map("school_id") @db.Uuid
-  school       School        @relation(fields: [schoolId], references: [id], map: "fk_invoices_school")
-  invoiceNo    String        @map("invoice_no") @db.VarChar(30)
-  enrollmentId String        @map("enrollment_id") @db.Uuid
-  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_invoices_enrollment")
-  sessionId    String        @map("session_id") @db.Uuid
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String          @map("school_id") @db.Uuid
+  school       School          @relation(fields: [schoolId], references: [id], map: "fk_invoices_school")
+  invoiceNo    String          @map("invoice_no") @db.VarChar(30)
+  enrollmentId String          @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_invoices_enrollment")
+  sessionId    String          @map("session_id") @db.Uuid
   session      AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_invoices_session")
 
   billingMonth DateTime? @map("billing_month") @db.Date
@@ -2616,12 +2689,12 @@ model Invoice {
   /// = subtotal - discount_total + fine_total (pinned by a DB CHECK).
   payable       Decimal @db.Decimal(12, 2)
 
-  status         InvoiceStatus @default(UNPAID)
+  status        InvoiceStatus @default(UNPAID)
   /// The month the fine job last charged, so it stays idempotent.
-  finedForMonth  DateTime?     @map("fined_for_month") @db.Date
-  cancelledAt    DateTime?     @map("cancelled_at") @db.Timestamptz(6)
-  cancelReason   String?       @map("cancel_reason") @db.VarChar(500)
-  remarks        String?       @db.VarChar(500)
+  finedForMonth DateTime?     @map("fined_for_month") @db.Date
+  cancelledAt   DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason  String?       @map("cancel_reason") @db.VarChar(500)
+  remarks       String?       @db.VarChar(500)
 
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -2647,12 +2720,12 @@ model Invoice {
 /// `discount` what the override engine took off it, kept separate so a
 /// receipt can show the concession rather than a silently smaller number.
 model InvoiceItem {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId  String  @map("school_id") @db.Uuid
-  school    School  @relation(fields: [schoolId], references: [id], map: "fk_invoice_items_school")
-  invoiceId String  @map("invoice_id") @db.Uuid
-  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade, map: "fk_invoice_items_invoice")
-  feeHeadId String? @map("fee_head_id") @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  school    School   @relation(fields: [schoolId], references: [id], map: "fk_invoice_items_school")
+  invoiceId String   @map("invoice_id") @db.Uuid
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade, map: "fk_invoice_items_invoice")
+  feeHeadId String?  @map("fee_head_id") @db.Uuid
   feeHead   FeeHead? @relation(fields: [feeHeadId], references: [id], map: "fk_invoice_items_head")
 
   description String  @db.VarChar(200)
@@ -2685,11 +2758,11 @@ model Payment {
   method PaymentMethod
   status PaymentStatus @default(PENDING)
 
-  gatewayTxnId  String? @map("gateway_txn_id") @db.VarChar(120)
+  gatewayTxnId   String? @map("gateway_txn_id") @db.VarChar(120)
   /// The gateway's own session handle, needed to VERIFY the payment
   /// server-side later (SSLCommerz val_id, bKash paymentID, …).
-  gatewayRef    String? @map("gateway_ref") @db.VarChar(120)
-  gatewayPayload Json?  @map("gateway_payload")
+  gatewayRef     String? @map("gateway_ref") @db.VarChar(120)
+  gatewayPayload Json?   @map("gateway_payload")
 
   /// Cash/cheque reference the office writes on the counterfoil.
   reference  String?   @db.VarChar(100)
@@ -2722,12 +2795,12 @@ model PaymentRefund {
   paymentId String  @map("payment_id") @db.Uuid
   payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade, map: "fk_payment_refunds_payment")
 
-  amount     Decimal  @db.Decimal(12, 2)
-  reason     String   @db.VarChar(500)
-  approvedBy String   @map("approved_by") @db.Uuid
-  refundedAt DateTime @default(now()) @map("refunded_at") @db.Timestamptz(6)
+  amount          Decimal  @db.Decimal(12, 2)
+  reason          String   @db.VarChar(500)
+  approvedBy      String   @map("approved_by") @db.Uuid
+  refundedAt      DateTime @default(now()) @map("refunded_at") @db.Timestamptz(6)
   /// The gateway's refund handle, when it was an online payment.
-  gatewayRefundId String? @map("gateway_refund_id") @db.VarChar(120)
+  gatewayRefundId String?  @map("gateway_refund_id") @db.VarChar(120)
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -2852,4 +2925,127 @@ model LoginActivity {
 
   @@index([userId, createdAt], map: "idx_login_activities_user_created")
   @@map("login_activities")
+}
+
+// ── Module 17: Communication & Notifications ──────────────────────────
+
+/// A reusable message body per (code, channel, language). The single
+/// entry point `NotificationService.send(code, …)` resolves the active
+/// template here, so admins re-word every ABSENT_ALERT/RESULT_PUBLISHED
+/// without a deploy. Handlebars variables `{{student_name}}` are rendered
+/// against a per-code allow-list (`calc/template.engine.ts`).
+model NotificationTemplate {
+  id       String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String               @map("school_id") @db.Uuid
+  school   School               @relation(fields: [schoolId], references: [id], map: "fk_notification_templates_school")
+  code     String               @db.VarChar(40)
+  channel  NotificationChannel
+  language NotificationLanguage @default(EN)
+  /// Email subject line; NULL for SMS/IN_APP.
+  subject  String?              @db.VarChar(200)
+  body     String
+  isActive Boolean              @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Identity (school, code, channel, language) is a partial unique
+  // excluding soft-deleted rows — hand-written in the migration.
+  @@index([schoolId, code], map: "idx_notification_templates_code")
+  @@map("notification_templates")
+}
+
+/// One dispatched (or queued) message — the append-only delivery log
+/// (global rule §11: notifications are never soft-deleted). Also the
+/// in-app inbox: an IN_APP row with a NULL `read_at` is an unread badge.
+/// `cost`/`segments` are the SMS credit accounting; `dedupe_key` collapses
+/// two absent siblings into one guardian SMS.
+model Notification {
+  id            String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String                    @map("school_id") @db.Uuid
+  school        School                    @relation(fields: [schoolId], references: [id], map: "fk_notifications_school")
+  channel       NotificationChannel
+  recipientType NotificationRecipientType @map("recipient_type")
+  recipientId   String?                   @map("recipient_id") @db.Uuid
+  /// Phone number or email address actually dispatched to.
+  destination   String?                   @db.VarChar(200)
+  templateCode  String?                   @map("template_code") @db.VarChar(40)
+  /// Render variables, kept for audit and a resend.
+  payload       Json?
+  subject       String?                   @db.VarChar(200)
+  bodyRendered  String                    @map("body_rendered")
+  status        NotificationStatus        @default(QUEUED)
+  /// Priority messages (EMERGENCY) bypass quiet hours + rate spreading.
+  isEmergency   Boolean                   @default(false) @map("is_emergency")
+  providerMsgId String?                   @map("provider_msg_id") @db.VarChar(120)
+  error         String?                   @db.VarChar(500)
+  /// SMS parts and BDT cost, NULL for email/in-app.
+  segments      Int?
+  cost          Decimal?                  @db.Decimal(8, 4)
+  /// (destination + template) within the dedupe window — a partial unique.
+  dedupeKey     String?                   @map("dedupe_key") @db.VarChar(200)
+  /// Idempotency key of the bulk composer session that produced this row.
+  batchKey      String?                   @map("batch_key") @db.VarChar(80)
+  sentAt        DateTime?                 @map("sent_at") @db.Timestamptz(6)
+  deliveredAt   DateTime?                 @map("delivered_at") @db.Timestamptz(6)
+  readAt        DateTime?                 @map("read_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  @@index([schoolId, status], map: "idx_notifications_school_status")
+  @@index([schoolId, recipientType, recipientId, readAt], map: "idx_notifications_inbox")
+  @@index([schoolId, channel, createdAt], map: "idx_notifications_channel_created")
+  @@map("notifications")
+}
+
+/// A notice / circular targeted at an audience. Portal + website feeds
+/// read published rows; `publish_at` in the future lets the scheduled
+/// publisher job flip `is_published` at the right time.
+model Notice {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String         @map("school_id") @db.Uuid
+  school           School         @relation(fields: [schoolId], references: [id], map: "fk_notices_school")
+  title            String         @db.VarChar(200)
+  body             String
+  audience         NoticeAudience @default(ALL)
+  /// Class/section id list for CLASS/SECTION audiences.
+  audienceRef      Json?          @map("audience_ref")
+  attachmentUrls   Json?          @map("attachment_urls")
+  isPublished      Boolean        @default(false) @map("is_published")
+  publishAt        DateTime?      @map("publish_at") @db.Timestamptz(6)
+  isWebsiteVisible Boolean        @default(false) @map("is_website_visible")
+  pinned           Boolean        @default(false)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, isPublished, pinned], map: "idx_notices_published")
+  @@map("notices")
+}
+
+/// SMS-credit ledger (append-only). `balance_after` is the running total
+/// so the balance is one indexed read; the dispatcher writes a CONSUME
+/// row per sent message, decrementing by its part count.
+model SmsCredit {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String        @map("school_id") @db.Uuid
+  school       School        @relation(fields: [schoolId], references: [id], map: "fk_sms_credits_school")
+  type         SmsCreditType
+  /// Signed quantity of parts: +PURCHASE, -CONSUME, ±ADJUST.
+  qty          Int
+  balanceAfter Int           @map("balance_after")
+  ref          String?       @db.VarChar(200)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  @@index([schoolId, createdAt], map: "idx_sms_credits_school_created")
+  @@map("sms_credits")
 }

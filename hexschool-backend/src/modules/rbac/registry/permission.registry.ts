@@ -315,6 +315,26 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['fee.report', 'View collection, dues and defaulter reports'],
     ['fee.export', 'Download receipts, invoices and fee report files'],
   ]),
+
+  // ── Module 17: Communication & Notifications ────────────────────────
+  // Composing/sending, template authoring, notices and credit management
+  // are separate roles: the office writes notices, an operator runs bulk
+  // sends, and only a senior tops up (spends) the SMS balance.
+  ...define('communication', [
+    ['notification.view', 'View templates and the delivery log'],
+    ['notification.template.manage', 'Create/edit/delete notification templates'],
+    ['notification.send', 'Send an ad-hoc message and retry failed ones'],
+    ['notification.bulk', 'Run the bulk composer (audience blasts)'],
+    [
+      'notification.bulk.large',
+      'Send a bulk blast above the large-audience threshold',
+    ],
+    ['notice.view', 'View notices and the notice board feed'],
+    ['notice.manage', 'Create/edit/delete notices'],
+    ['notice.publish', 'Publish or unpublish a notice'],
+    ['sms.credit.view', 'View the SMS-credit balance and ledger'],
+    ['sms.credit.manage', 'Record SMS-credit purchases and adjustments'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

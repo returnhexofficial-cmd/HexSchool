@@ -1,22 +1,17 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ResultPublication, ResultStatus } from '@prisma/client';
-import type { Queue } from 'bullmq';
 import { ExamStatus } from '../../../common/constants';
-import {
-  NOTIFICATIONS_QUEUE,
-  NotificationJob,
-} from '../../../queues/queues.constants';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
+import { NotificationService } from '../../communication/services/notification.service';
 import { ExamsService } from '../../exam/services/exams.service';
+import { SchoolsRepository } from '../../school/repositories/schools.repository';
 import { StudentGuardiansRepository } from '../../student/repositories/student-guardians.repository';
 import { MarkCorrectionsRepository } from '../repositories/mark-corrections.repository';
 import { ResultPublicationsRepository } from '../repositories/result-publications.repository';
 import { ResultsRepository } from '../repositories/results.repository';
 import { PublishResultsDto, UnpublishResultsDto } from '../dto';
 import { ResultReadinessGate } from './result-readiness.gate';
-import { ResultSettingsService } from './result-settings.service';
 
 export interface PublicationSummary {
   publication: ResultPublication;
@@ -49,11 +44,10 @@ export class ResultPublicationService {
     private readonly corrections: MarkCorrectionsRepository,
     private readonly studentGuardians: StudentGuardiansRepository,
     private readonly exams: ExamsService,
-    private readonly config: ResultSettingsService,
     private readonly gate: ResultReadinessGate,
     private readonly auditContext: AuditContextService,
-    @InjectQueue(NOTIFICATIONS_QUEUE)
-    private readonly notifications: Queue<NotificationJob>,
+    private readonly notifications: NotificationService,
+    private readonly schools: SchoolsRepository,
   ) {}
 
   async history(examId: string, schoolId: string) {
@@ -220,10 +214,11 @@ export class ResultPublicationService {
   }
 
   /**
-   * The "GPA 4.83, Merit 3" SMS (roadmap §4). Queued, never awaited
-   * inline: a publication must not fail because a gateway is slow, and
-   * BullMQ with Redis down would otherwise buffer forever (the M07
-   * credential-notification precedent).
+   * The "GPA 4.83, Merit 3" SMS (roadmap §4). **Retro-wired to M17**:
+   * sends through `NotificationService.send` with the `RESULT_PUBLISHED`
+   * template — admin-editable body, credit accounting, delivery log —
+   * instead of a raw queue job. Still never awaited on the delivery, so a
+   * slow gateway cannot fail a publication (the M07 precedent).
    *
    * WITHHELD results are skipped — the whole point of withholding is
    * that the number does not go out.
@@ -233,10 +228,12 @@ export class ResultPublicationService {
     results: Awaited<ReturnType<ResultsRepository['findForExam']>>,
     schoolId: string,
   ): Promise<number> {
-    const config = await this.config.load(schoolId);
-    const primaries = await this.studentGuardians.findPrimaryForStudents(
-      results.map((r) => r.enrollment.student.id),
-    );
+    const [primaries, school] = await Promise.all([
+      this.studentGuardians.findPrimaryForStudents(
+        results.map((r) => r.enrollment.student.id),
+      ),
+      this.schools.findById(schoolId),
+    ]);
     const phoneByStudent = new Map(
       primaries.map((link) => [link.studentId, link.guardian.phone]),
     );
@@ -248,19 +245,23 @@ export class ResultPublicationService {
       const phone = phoneByStudent.get(result.enrollment.student.id);
       if (!phone) continue;
 
-      const text = config.smsTemplate
-        .replace(
-          '{name}',
-          `${result.enrollment.student.firstName} ${result.enrollment.student.lastName}`.trim(),
-        )
-        .replace('{exam}', examName)
-        .replace('{gpa}', Number(result.gpa).toFixed(2))
-        .replace('{grade}', result.grade)
-        .replace('{merit}', String(result.meritPositionClass ?? '—'));
-
       try {
-        await this.notifications.add('sms', { type: 'sms', to: phone, text });
-        queued += 1;
+        const row = await this.notifications.send({
+          schoolId,
+          code: 'RESULT_PUBLISHED',
+          channel: 'SMS',
+          recipient: { type: 'GUARDIAN', destination: phone },
+          vars: {
+            student_name:
+              `${result.enrollment.student.firstName} ${result.enrollment.student.lastName}`.trim(),
+            exam: examName,
+            gpa: Number(result.gpa).toFixed(2),
+            grade: result.grade,
+            merit: String(result.meritPositionClass ?? '—'),
+            school: school?.name ?? '',
+          },
+        });
+        if (row) queued += 1;
       } catch (error) {
         this.logger.warn(
           `Could not queue result SMS for ${result.enrollmentId}: ${

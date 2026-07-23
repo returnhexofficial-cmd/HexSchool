@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { QueuesModule } from '../../queues/queues.module';
 import { AcademicModule } from '../academic/academic.module';
 import { AcademicSessionsRepository } from '../academic/repositories/academic-sessions.repository';
 import { ClassesRepository } from '../academic/repositories/classes.repository';
 import { AuthModule } from '../auth/auth.module';
+import { CommunicationModule } from '../communication/communication.module';
 import { SchoolModule } from '../school/school.module';
 import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { SequenceModule } from '../sequence/sequence.module';
@@ -40,7 +40,7 @@ import { RecaptchaService } from './services/recaptcha.service';
 @Module({
   imports: [
     JwtModule.register({}), // phone-verification tokens (per-sign secret)
-    QueuesModule, // notifications queue (OTP + status SMS)
+    CommunicationModule, // M17: applicant status SMS via NotificationService
     AuthModule, // OtpService
     SchoolModule, // SettingsService
     AcademicModule,

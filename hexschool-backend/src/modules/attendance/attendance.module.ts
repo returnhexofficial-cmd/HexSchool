@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
-import { QueuesModule } from '../../queues/queues.module';
 import { AcademicModule } from '../academic/academic.module';
 import { AcademicSessionsRepository } from '../academic/repositories/academic-sessions.repository';
 import { SectionsRepository } from '../academic/repositories/sections.repository';
 import { ShiftsRepository } from '../academic/repositories/shifts.repository';
+import { CommunicationModule } from '../communication/communication.module';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { SchoolModule } from '../school/school.module';
@@ -53,7 +53,9 @@ import { StudentLeavesService } from './services/student-leaves.service';
     SchoolModule,
     RbacModule,
     StorageModule,
-    QueuesModule,
+    // M17: NotificationService — the absent-SMS job sends through the
+    // single entry point (ABSENT_ALERT template) instead of a raw queue job.
+    CommunicationModule,
     // M13: RoutineService.getCurrentPeriod + PeriodSlotsRepository turn
     // period-mode marking on. One-directional — TimetableModule knows
     // nothing about attendance.

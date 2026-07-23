@@ -41,11 +41,13 @@ graph TD
     M16 -. binds EXAM_DUES_GATE .-> M14
     M11 --> M16[16 Fees & Payments]
     M09 --> M16
-    M04 --> M17[17 Communication]
+    M04 --> M17[17 Communication ✅]
     M09 --> M17
-    M12 -. soft: absent SMS .-> M17
-    M15 -. soft: result SMS .-> M17
-    M16 -. soft: receipts SMS .-> M17
+    M02 --> M17
+    M12 -. absent SMS live via NotificationService .-> M17
+    M15 -. result SMS live via NotificationService .-> M17
+    M16 -. receipt SMS live via NotificationService .-> M17
+    M10 -. status SMS live via NotificationService .-> M17
     M10 -. soft: gateway wiring .-> M16
     M15 --> M18[18 Portals & Dashboards]
     M16 --> M18
@@ -97,7 +99,7 @@ graph TD
 | 14 Examination ✅ | 04, 05, 06, 11 | **13 turned out to be a pattern dependency, not a data one** — exam sittings keep their own wall-clock `start_time`+`duration_min` rather than reusing `period_slots` (a 3-hour paper does not fit a 40-minute bell); what M13 supplied was the clash-engine technique (compare wall-clock minutes, never slot ids) and the two-tier override split. Declares two DI hooks bound to no-ops: **`EXAM_RESULT_GATE`** (15 binds it — done) and **`EXAM_DUES_GATE`** (16 binds it — done). **`EXAM_RESULT_GATE` is live since 15**; **`EXAM_DUES_GATE` is live since 16** (reads real dues; `exam.admit_card_block_dues` turning that into a hard block is a UI toggle). Extended M11 with `EnrollmentsRepository.findClassRoster()` — a paper is set per class, so its candidates span every section. Exports `ExamsService`/`ExamsRepository`/`ExamSubjectsRepository`/`ExamRoutineService` for 15 and 18. Delete guards on `exam_classes`/`exam_subjects` were slots until 15 created the marks table — **now armed**. |
 | 15 Marks & Results ✅ | 14 | Result SMS becomes real with 17 (queued through the existing contract now); the public search **API is live**, 19 builds the page. **Binds `EXAM_RESULT_GATE` for real** — publication now refuses until results are processed and still describe the marks on file, which is a breaking change for any caller that walked an exam to PUBLISHED unprocessed. **Moved the grade-scale freeze from PUBLISH to the first processing run**, because results are computed before publication and were otherwise graded through a table that could still change. Armed five guards left as slots by earlier modules: M14 `exam_classes`/`exam_subjects` deletes, M06 subject removal, the M11 promotion rollback, and M09 `performance-history`. Publication visibility is the active `result_publications` row, **not** `exams.status` (the status machine cannot rewind past PUBLISHED). Exports `ResultsService`/`ResultsRepository`/`MarksRepository`/`ResultReportsService` for 18. |
 | 16 Fees & Payments ✅ | 09, 11 | **Binds `EXAM_DUES_GATE` for real** via `LedgerService.outstandingFor` — M14's admit-card flow now reads live dues (turning that into a hard *block* vs a warning is a UI/policy toggle). Armed the **M09 status-change dues warning** (stub text → real `warnings` array) and completed the **M10 gateway wiring** it had deferred (`PaymentGatewayService.openSession` is the admission-fee online path). Invoicing keys on `enrollment_id`, is idempotent per `(enrollment, month)` and prorates a mid-month joiner; a fully-waived invoice is `PAID` from birth so the fine job never charges it; online money is SUCCESS only after a server-side `verify()` whose amount matches (`chk_payments_success_evidence`). Exports `LedgerService`/`InvoiceService`/`CollectionService`/`PaymentGatewayService` for 18 (portal payment view) and 20 (accounting auto-posting). Leaves for later: receipt/dues **SMS** (17), the **Rocket** adapter, and an automatic result-withhold-on-dues (`ResultsService.setWithheld` hook + `outstandingFor`). |
-| 17 Communication | 02, 04, 09 | Retro-wires queued events from 10/12/15/16 |
+| 17 Communication ✅ | 02, 04, 09 | **`NotificationService.send()` is the single send entry point** — retro-wired the queued events from 10 (admission status), 12 (absent alert), 15 (result published) and 16 (fee receipt) off the raw queue onto the template pipeline, and made the M02 OTP/welcome raw jobs deliver for real (OTP-to-phone now real). The real BullMQ worker moved from QueuesModule into CommunicationModule (it needs the render/dispatch services). CommunicationModule is imported BY its producers and never the reverse (stateless re-provisions + a self-contained `AudienceRepository`), so the graph stays acyclic. Exports `NotificationService` for 18 (portal messages) and reuses `NotificationBell`. Defaulter-list audience deferred to 18 (fee data lives in FeeModule — resolving it here would cycle). |
 | 18 Portals & Dashboards | 02–17 | Contact-school → tickets (28) |
 | 19 Website CMS | 04, 05, 10, 15, 17 | Certificate verification page completed by 27 |
 | 20 Accounting | 16 | Payroll postings from 21; inventory postings from 24 |

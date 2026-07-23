@@ -92,7 +92,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 14 | Examination Management | ☑ |
 | 15 | Marks & Result Processing | ☑ |
 | 16 | Fees & Payments | ☑ |
-| 17 | Communication & Notifications (SMS/Email) | ☐ |
+| 17 | Communication & Notifications (SMS/Email) | ☑ |
 | 18 | Portals & Dashboards (Student, Parent, Teacher, Principal) + Reports v1 | ☐ |
 
 **Phase 2 — Operations (Modules 19–29)**
@@ -1279,11 +1279,11 @@ GET  /api/v1/sms-credits/balance | ledger      POST /adjust
 - [ ] Manual: real gateway sandbox with masking sender.
 
 ## 10. Completion Checklist
-- [ ] NotificationService adopted by Modules 10/12/15/16 (retro-wire their queued events)
-- [ ] SMS/Email/In-app all functional
-- [ ] Templates + bulk + credits
-- [ ] Tests passing
-- [ ] Docs: `docs/modules/17-communication.md`
+- [x] NotificationService adopted by Modules 10/12/15/16 (retro-wire their queued events)
+- [x] SMS/Email/In-app all functional
+- [x] Templates + bulk + credits
+- [x] Tests passing
+- [x] Docs: `docs/modules/17-communication.md`
 
 ---
 

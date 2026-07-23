@@ -6,7 +6,6 @@ import {
   RESULTS_QUEUE,
   SYSTEM_QUEUE,
 } from './queues.constants';
-import { NotificationsProcessor } from './notifications.processor';
 import { SystemProcessor } from './system.processor';
 
 /**
@@ -47,7 +46,10 @@ import { SystemProcessor } from './system.processor';
       { name: RESULTS_QUEUE },
     ),
   ],
-  providers: [SystemProcessor, NotificationsProcessor],
+  // The notifications worker moved to CommunicationModule (M17) — it needs
+  // the render/dispatch services. This module keeps only the root wiring
+  // and the demo `system` queue.
+  providers: [SystemProcessor],
   exports: [BullModule],
 })
 export class QueuesModule {}

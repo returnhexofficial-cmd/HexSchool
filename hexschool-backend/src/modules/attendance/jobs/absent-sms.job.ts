@@ -1,12 +1,11 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import type { Queue } from 'bullmq';
-import {
-  NOTIFICATIONS_QUEUE,
-  NotificationJob,
-} from '../../../queues/queues.constants';
 import { parseDate } from '../../academic/calendar/date.util';
+import {
+  mergeByDestination,
+  MergeableSend,
+} from '../../communication/calc/dedupe.util';
+import { NotificationService } from '../../communication/services/notification.service';
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
 import { StudentGuardiansRepository } from '../../student/repositories/student-guardians.repository';
 import {
@@ -17,15 +16,17 @@ import { StudentAttendancesRepository } from '../repositories/student-attendance
 import { AttendanceSettingsService } from '../services/attendance-settings.service';
 
 /**
- * Absent-guardian SMS (roadmap M12 §4). Enqueues onto the M02
- * `notifications` queue — log-only until M17 wires the BD gateway, so
- * this job is "done" in the sense the roadmap asks for (queued now,
- * really sent later).
+ * Absent-guardian SMS (roadmap M12 §4). **Retro-wired to M17**: instead of
+ * pushing a raw SMS job, it now goes through `NotificationService.send`
+ * with the `ABSENT_ALERT` template — so the body is admin-editable, the
+ * send is credit-accounted and logged, and quiet hours apply.
  *
- * Cost control (M12 §8): `absent_notified_at` on the attendance row is
- * the per-student-per-day dedupe, and `attendance.absent_sms_daily_cap`
- * bounds a runaway day (a mis-set auto-absent cutoff must not text every
- * guardian in the school twice).
+ * Two absent siblings on one guardian's number are merged into a single
+ * SMS (roadmap M17 §8) via `mergeByDestination` before dispatch — the
+ * guardian hears about both children in one message, not two.
+ *
+ * Cost control (M12 §8): `absent_notified_at` is still the per-student
+ * dedupe, and `attendance.absent_sms_daily_cap` bounds a runaway day.
  */
 @Injectable()
 export class AbsentSmsJob {
@@ -36,8 +37,7 @@ export class AbsentSmsJob {
     private readonly studentGuardians: StudentGuardiansRepository,
     private readonly schools: SchoolsRepository,
     private readonly config: AttendanceSettingsService,
-    @InjectQueue(NOTIFICATIONS_QUEUE)
-    private readonly notifications: Queue<NotificationJob>,
+    private readonly notifications: NotificationService,
   ) {}
 
   @Cron('*/15 * * * *')
@@ -71,39 +71,49 @@ export class AbsentSmsJob {
       primaries.map((link) => [link.studentId, link.guardian.phone]),
     );
 
+    // Every processed row is flagged notified — including those with no
+    // guardian phone, so the 15-minute job does not re-log them all day.
     const notified: string[] = [];
+    const sends: MergeableSend<string>[] = [];
     for (const row of rows) {
+      notified.push(row.id);
       const phone = phoneByStudent.get(row.enrollment.studentId);
       const student = row.enrollment.student;
       if (!phone) {
         this.logger.warn(
           `No primary guardian phone for ${student.studentUid} — absent SMS skipped`,
         );
-        // Still flagged: without a phone, retrying every 15 minutes for
-        // the rest of the day would only re-log the same warning.
-        notified.push(row.id);
         continue;
       }
-      await this.enqueue(
-        phone,
-        `${schoolName}: your child ${student.firstName} ${student.lastName} (roll ${row.enrollment.rollNo}) was absent today, ${today}.`,
-      );
-      notified.push(row.id);
+      sends.push({
+        destination: phone,
+        templateCode: 'ABSENT_ALERT',
+        vars: {
+          student_name: `${student.firstName} ${student.lastName}`.trim(),
+          roll: String(row.enrollment.rollNo),
+          date: today,
+          school: schoolName,
+        },
+        ref: row.id,
+      });
+    }
+
+    // Merge siblings on one number into a single SMS naming both children.
+    const merged = mergeByDestination(sends, ['student_name', 'roll']);
+    for (const item of merged) {
+      await this.notifications.send({
+        schoolId,
+        code: 'ABSENT_ALERT',
+        channel: 'SMS',
+        recipient: { type: 'GUARDIAN', destination: item.destination },
+        vars: item.vars,
+      });
     }
 
     await this.attendances.markNotified(notified);
     this.logger.log(
-      `Absent SMS: ${notified.length} guardian message(s) queued for ${today}`,
+      `Absent SMS: ${merged.length} message(s) for ${notified.length} student(s) on ${today}`,
     );
     return notified.length;
-  }
-
-  /** Fire-and-forget (M07 convention: delivery never blocks a mutation). */
-  private async enqueue(to: string, text: string): Promise<void> {
-    await this.notifications
-      .add('sms', { type: 'sms', to, text })
-      .catch((err: Error) =>
-        this.logger.error(`Failed to enqueue absent SMS: ${err.message}`),
-      );
   }
 }

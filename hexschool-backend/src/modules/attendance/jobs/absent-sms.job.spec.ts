@@ -5,7 +5,7 @@ describe('AbsentSmsJob', () => {
   let studentGuardians: Record<string, jest.Mock>;
   let schools: Record<string, jest.Mock>;
   let config: Record<string, jest.Mock>;
-  let queue: Record<string, jest.Mock>;
+  let notifications: Record<string, jest.Mock>;
   let job: AbsentSmsJob;
 
   const absentRows = [
@@ -53,30 +53,48 @@ describe('AbsentSmsJob', () => {
         absentSmsDailyCap: 500,
       }),
     };
-    queue = { add: jest.fn().mockResolvedValue(undefined) };
+    notifications = { send: jest.fn().mockResolvedValue({ id: 'n-1' }) };
 
     job = new AbsentSmsJob(
       attendances as never,
       studentGuardians as never,
       schools as never,
       config as never,
-      queue as never,
+      notifications as never,
     );
   });
 
   afterEach(() => jest.useRealTimers());
 
-  it('queues one SMS per absent student and flags them notified', async () => {
+  it('sends one ABSENT_ALERT per absent student and flags them notified', async () => {
     expect(await job.run()).toBe(2);
-    expect(queue.add).toHaveBeenCalledTimes(2);
-    const [jobName, payload] = queue.add.mock.calls[0] as [
-      string,
-      { type: string; to: string; text: string },
+    expect(notifications.send).toHaveBeenCalledTimes(2);
+    const [input] = notifications.send.mock.calls[0] as [
+      {
+        code: string;
+        channel: string;
+        recipient: { destination: string };
+        vars: { student_name: string };
+      },
     ];
-    expect(jobName).toBe('sms');
-    expect(payload.type).toBe('sms');
-    expect(payload.to).toBe('01712345678');
-    expect(payload.text).toContain('Ayesha');
+    expect(input.code).toBe('ABSENT_ALERT');
+    expect(input.channel).toBe('SMS');
+    expect(input.recipient.destination).toBe('01712345678');
+    expect(input.vars.student_name).toContain('Ayesha');
+    expect(attendances.markNotified).toHaveBeenCalledWith(['att-1', 'att-2']);
+  });
+
+  it('merges two absent siblings on one number into a single SMS', async () => {
+    studentGuardians.findPrimaryForStudents.mockResolvedValue([
+      { studentId: 'stu-1', guardian: { phone: '01712345678' } },
+      { studentId: 'stu-2', guardian: { phone: '01712345678' } },
+    ]);
+    expect(await job.run()).toBe(2); // 2 students flagged
+    expect(notifications.send).toHaveBeenCalledTimes(1); // one message
+    const [input] = notifications.send.mock.calls[0] as [
+      { vars: { student_name: string } },
+    ];
+    expect(input.vars.student_name).toBe('Ayesha R, Rakib H');
     expect(attendances.markNotified).toHaveBeenCalledWith(['att-1', 'att-2']);
   });
 
@@ -87,7 +105,7 @@ describe('AbsentSmsJob', () => {
       absentSmsDailyCap: 500,
     });
     expect(await job.run()).toBe(0);
-    expect(queue.add).not.toHaveBeenCalled();
+    expect(notifications.send).not.toHaveBeenCalled();
   });
 
   it('does nothing before the dispatch time', async () => {
@@ -114,15 +132,15 @@ describe('AbsentSmsJob', () => {
       { studentId: 'stu-1', guardian: { phone: '01712345678' } },
     ]);
     expect(await job.run()).toBe(2);
-    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(notifications.send).toHaveBeenCalledTimes(1);
     expect(attendances.markNotified).toHaveBeenCalledWith(['att-1', 'att-2']);
   });
 
   it('dedupes across runs — already-notified rows never come back', async () => {
     await job.run();
     attendances.findPendingAbsentNotifications.mockResolvedValue([]);
-    queue.add.mockClear();
+    notifications.send.mockClear();
     expect(await job.run()).toBe(0);
-    expect(queue.add).not.toHaveBeenCalled();
+    expect(notifications.send).not.toHaveBeenCalled();
   });
 });

@@ -163,6 +163,18 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'fee.refund',
       'fee.report',
       'fee.export',
+      // M17 — the Principal owns the school's voice: templates, notices,
+      // bulk sends (including large blasts) and the SMS balance.
+      'notification.view',
+      'notification.template.manage',
+      'notification.send',
+      'notification.bulk',
+      'notification.bulk.large',
+      'notice.view',
+      'notice.manage',
+      'notice.publish',
+      'sms.credit.view',
+      'sms.credit.manage',
     ],
   },
   {
@@ -335,8 +347,19 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
   {
     name: 'Office Staff',
     slug: 'office-staff',
-    description: 'General office staff — directory access.',
-    corePermissions: ['staff.view'],
+    description:
+      'General office staff — directory access, the notice board and day-to-day messaging.',
+    corePermissions: [
+      'staff.view',
+      // M17 — the office desk writes notices and runs routine sends.
+      'notification.view',
+      'notification.send',
+      'notification.bulk',
+      'notice.view',
+      'notice.manage',
+      'notice.publish',
+      'sms.credit.view',
+    ],
   },
 ];
 

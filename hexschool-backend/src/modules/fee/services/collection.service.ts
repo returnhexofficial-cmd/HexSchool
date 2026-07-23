@@ -1,4 +1,3 @@
-import { InjectQueue } from '@nestjs/bullmq';
 import {
   BadRequestException,
   ConflictException,
@@ -8,17 +7,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Payment, Prisma } from '@prisma/client';
-import type { Queue } from 'bullmq';
 import {
   InvoiceStatus,
-  PaymentMethod,
   PaymentStatus,
   UserType,
 } from '../../../common/constants';
-import {
-  NOTIFICATIONS_QUEUE,
-  NotificationJob,
-} from '../../../queues/queues.constants';
+import { NotificationService } from '../../communication/services/notification.service';
 import { isoDate, parseDate } from '../../academic/calendar/date.util';
 import { AuditContextService } from '../../audit/services/audit-context.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
@@ -83,13 +77,15 @@ export class CollectionService {
     private readonly permissions: PermissionsService,
     private readonly config: FeeSettingsService,
     private readonly auditContext: AuditContextService,
-    @InjectQueue(NOTIFICATIONS_QUEUE)
-    private readonly notifications: Queue<NotificationJob>,
+    private readonly notifications: NotificationService,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
 
-  async getPayment(id: string, schoolId: string): Promise<PaymentWithRelations> {
+  async getPayment(
+    id: string,
+    schoolId: string,
+  ): Promise<PaymentWithRelations> {
     const payment = await this.payments.findById(id, schoolId);
     if (!payment) throw new NotFoundException(`Payment ${id} not found`);
     return payment;
@@ -111,10 +107,7 @@ export class CollectionService {
     dto: RecordPaymentDto,
     actor: AccessTokenPayload,
   ): Promise<CollectionResult> {
-    return this.collect(
-      { ...dto, invoiceIds: [invoiceId] } as CollectPaymentDto,
-      actor,
-    );
+    return this.collect({ ...dto, invoiceIds: [invoiceId] }, actor);
   }
 
   /**
@@ -162,9 +155,7 @@ export class CollectionService {
       basket.reduce((sum, invoice) => sum + outstanding(invoice), 0),
     );
     if (totalDue <= 0) {
-      throw new ConflictException(
-        'Every selected invoice is already settled',
-      );
+      throw new ConflictException('Every selected invoice is already settled');
     }
 
     const result = allocatePayment(dto.amount, basket);
@@ -248,7 +239,7 @@ export class CollectionService {
     }
 
     if (config.receiptSmsEnabled) {
-      await this.queueReceiptSms(detailed, school.name, config.receiptSmsTemplate);
+      await this.queueReceiptSms(detailed, school.name);
     }
 
     return {
@@ -386,14 +377,14 @@ export class CollectionService {
   }
 
   /**
-   * Receipt SMS — queued, never awaited inline (the M07 rule: delivery
-   * must never delay or fail the mutation). Log-only until M17 wires the
-   * gateway.
+   * Receipt SMS — never awaited inline (the M07 rule: delivery must never
+   * delay or fail the mutation). **Retro-wired to M17**: sends through
+   * `NotificationService.send` with the `FEE_RECEIPT` template, so the
+   * body is admin-editable and the send is credit-accounted and logged.
    */
   private async queueReceiptSms(
     payments: PaymentWithRelations[],
     schoolName: string,
-    template: string,
   ): Promise<void> {
     const studentIds = payments
       .map((p) => p.invoice.enrollment.student.id)
@@ -414,15 +405,20 @@ export class CollectionService {
       const balance = money(
         Number(payment.invoice.payable) - Number(payment.invoice.paidTotal),
       );
-      const text = template
-        .replace('{school}', schoolName)
-        .replace('{name}', `${student.firstName} ${student.lastName}`.trim())
-        .replace('{amount}', formatMoney(Number(payment.amount)))
-        .replace('{invoice}', payment.invoice.invoiceNo)
-        .replace('{balance}', formatMoney(balance));
-
       await this.notifications
-        .add('sms', { type: 'sms', to: phone, text })
+        .send({
+          schoolId: payment.schoolId,
+          code: 'FEE_RECEIPT',
+          channel: 'SMS',
+          recipient: { type: 'GUARDIAN', destination: phone },
+          vars: {
+            school: schoolName,
+            student_name: `${student.firstName} ${student.lastName}`.trim(),
+            amount: formatMoney(Number(payment.amount)),
+            invoice: payment.invoice.invoiceNo,
+            balance: formatMoney(balance),
+          },
+        })
         .catch((error: Error) =>
           this.logger.warn(`Could not queue receipt SMS: ${error.message}`),
         );

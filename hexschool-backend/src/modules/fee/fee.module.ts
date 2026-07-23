@@ -1,8 +1,7 @@
-import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
-import { NOTIFICATIONS_QUEUE } from '../../queues/queues.constants';
 import { AcademicModule } from '../academic/academic.module';
 import { ClassesRepository } from '../academic/repositories/classes.repository';
+import { CommunicationModule } from '../communication/communication.module';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { SchoolModule } from '../school/school.module';
@@ -62,9 +61,8 @@ import { PaymentGatewayService } from './services/payment-gateway.service';
     SchoolModule,
     SequenceModule,
     RbacModule,
-    // `notifications` carries receipt and dues SMS (M02's shared queue,
-    // log-only until M17 wires the gateway).
-    BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
+    // M17: receipt SMS goes through NotificationService (FEE_RECEIPT template).
+    CommunicationModule,
   ],
   controllers: [
     FeeHeadsController,

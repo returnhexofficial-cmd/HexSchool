@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Can } from "@/components/shared/can";
+import { NotificationBell } from "@/components/shared/notification-bell";
 import { SessionSwitcher } from "@/components/shared/session-switcher";
 import { UserMenu } from "@/components/shared/user-menu";
 import { schoolApi } from "@/lib/api/school";
@@ -79,9 +80,10 @@ export default function AdminLayout({
         <header className="flex items-center gap-3 border-b p-3">
           {/* Global session switcher (M05) — session-scoped pages read it. */}
           <SessionSwitcher />
-          <div className="min-w-0 flex-1">
-            <UserMenu />
-          </div>
+          <div className="min-w-0 flex-1" />
+          {/* In-app notification bell (M17). */}
+          <NotificationBell />
+          <UserMenu />
         </header>
         <div className="flex-1">{children}</div>
       </div>

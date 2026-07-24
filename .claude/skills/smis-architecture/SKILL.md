@@ -6,8 +6,7 @@ description: Architectural guidance and convention review for SMIS/HexSchool —
 # SMIS architecture
 
 A single-school Bangladeshi school-management system built to become
-multi-tenant (M31) without schema surgery. Two repos, 32 planned modules,
-15 done, built strictly in dependency order.
+multi-tenant (M31) without schema surgery. Two repos, 32 planned modules, built strictly in dependency order.
 
 `PROJECT_CONTEXT.md` is the authority — §16 records every decision *with
 its rationale*, and it is where a proposed change must be checked before

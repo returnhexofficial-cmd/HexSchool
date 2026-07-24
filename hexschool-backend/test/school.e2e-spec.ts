@@ -263,7 +263,10 @@ describe('School Setup & Settings (e2e)', () => {
         .put('/api/v1/settings/email')
         .set(auth(adminToken))
         .send({
-          'email.smtp_host': 'localhost',
+          // 127.0.0.1, not "localhost": on Windows/Docker "localhost"
+          // resolves to IPv6 ::1 first and Mailpit's IPv6 SMTP listener
+          // can hang the greeting, timing out the test-email round-trip.
+          'email.smtp_host': '127.0.0.1',
           'email.smtp_port': 1025,
           'email.from_email': 'test@hexschool.local',
           'email.smtp_pass': 'super-secret',
@@ -297,7 +300,7 @@ describe('School Setup & Settings (e2e)', () => {
         .set(auth(adminToken))
         .send({
           'email.smtp_pass': '__SECRET__',
-          'email.smtp_host': 'localhost',
+          'email.smtp_host': '127.0.0.1',
         })
         .expect(200);
       const storedAfter = await prisma.schoolSetting.findUnique({

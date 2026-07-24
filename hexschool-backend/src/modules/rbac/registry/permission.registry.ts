@@ -335,6 +335,15 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['sms.credit.view', 'View the SMS-credit balance and ledger'],
     ['sms.credit.manage', 'Record SMS-credit purchases and adjustments'],
   ]),
+
+  // ── Module 18: Portals & Dashboards + Reports v1 ────────────────────
+  // Portal reads are authorized by OWNERSHIP, not a code — these gate the
+  // admin-side aggregates and the reports hub only.
+  ...define('dashboards', [
+    ['dashboard.admin', 'View the admin/principal dashboard'],
+    ['dashboard.accountant', 'View the accountant workspace dashboard'],
+    ['report.view', 'Browse the consolidated reports hub'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

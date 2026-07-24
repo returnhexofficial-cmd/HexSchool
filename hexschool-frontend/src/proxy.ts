@@ -33,8 +33,22 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
+  // Teachers operate from the portal but do a few tasks in admin pages
+  // they hold the permission for (attendance marking, mark entry, the
+  // routine) — the admin sidebar's <Can> gating and the API guards handle
+  // authorization; this only lets the shell render for them (M18 §5
+  // "Take Attendance / Mark Entry shortcuts").
+  const TEACHER_ADMIN_PATHS = ["/admin/attendance", "/admin/exams", "/admin/timetables"];
+  const teacherAllowed =
+    userType === UserType.TEACHER &&
+    TEACHER_ADMIN_PATHS.some((p) => pathname.startsWith(p));
+
   // Signed in but in the wrong area → send to their own home.
-  if (pathname.startsWith("/admin") && !ADMIN_TYPES.has(userType)) {
+  if (
+    pathname.startsWith("/admin") &&
+    !ADMIN_TYPES.has(userType) &&
+    !teacherAllowed
+  ) {
     return NextResponse.redirect(new URL(homePathFor(userType), request.url));
   }
   if (pathname.startsWith("/portal") && !PORTAL_TYPES.has(userType)) {

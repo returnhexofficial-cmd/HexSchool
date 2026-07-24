@@ -6,8 +6,14 @@ import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { DEFAULT_SCHOOL_ID, UserType } from '../src/common/constants';
+import {
+  DEFAULT_SCHOOL_ID,
+  SettingsGroup,
+  UserType,
+} from '../src/common/constants';
 import { PrismaService } from '../src/database/prisma/prisma.service';
+import { SettingsService } from '../src/modules/school/services/settings.service';
+import type { AccessTokenPayload } from '../src/modules/auth/interfaces/token-payload.interface';
 import {
   seedSystemRoles,
   syncPermissionRegistry,
@@ -104,6 +110,24 @@ describe('Attendance (e2e)', () => {
     await syncPermissionRegistry(prisma);
     await seedSystemRoles(prisma, DEFAULT_SCHOOL_ID);
     await cleanup();
+
+    // Marking uses the real "today"; without this the suite fails on
+    // Fridays (the default weekly holiday blocks TODAY). Clear the weekly
+    // off-day for the test school so every weekday is markable; restored
+    // in afterAll. The explicit-holiday test uses a `holidays` row, so it
+    // is unaffected.
+    const settings = app.get(SettingsService);
+    const sysActor: AccessTokenPayload = {
+      sub: '00000000-0000-4000-8000-000000000001',
+      schoolId: DEFAULT_SCHOOL_ID,
+      userType: UserType.SUPER_ADMIN,
+    };
+    await settings.updateGroup(
+      DEFAULT_SCHOOL_ID,
+      SettingsGroup.general,
+      { 'general.weekly_holidays': [] },
+      sysActor,
+    );
 
     const passwordHash = await argon2.hash(PASSWORD, { type: argon2.argon2id });
     const [adminUser, markerUser] = await Promise.all(
@@ -247,6 +271,18 @@ describe('Attendance (e2e)', () => {
   }, 180_000);
 
   afterAll(async () => {
+    // Restore the default weekly holiday for suites that run after this one.
+    const settings = app.get(SettingsService);
+    await settings.updateGroup(
+      DEFAULT_SCHOOL_ID,
+      SettingsGroup.general,
+      { 'general.weekly_holidays': ['FRIDAY'] },
+      {
+        sub: '00000000-0000-4000-8000-000000000001',
+        schoolId: DEFAULT_SCHOOL_ID,
+        userType: UserType.SUPER_ADMIN,
+      },
+    );
     await cleanup();
     await app.close();
   }, 120_000);

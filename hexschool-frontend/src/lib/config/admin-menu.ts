@@ -15,6 +15,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Network,
+  FileBarChart,
   MessageSquare,
   ScrollText,
   Settings,
@@ -167,6 +168,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/audit-logs",
     icon: ScrollText,
     permission: "audit.view",
+  },
+  {
+    label: "Reports",
+    href: "/admin/reports",
+    icon: FileBarChart,
+    permission: "report.view",
   },
   {
     label: "Settings",

@@ -93,7 +93,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 15 | Marks & Result Processing | ☑ |
 | 16 | Fees & Payments | ☑ |
 | 17 | Communication & Notifications (SMS/Email) | ☑ |
-| 18 | Portals & Dashboards (Student, Parent, Teacher, Principal) + Reports v1 | ☐ |
+| 18 | Portals & Dashboards (Student, Parent, Teacher, Principal) + Reports v1 | ☑ |
 
 **Phase 2 — Operations (Modules 19–29)**
 
@@ -1339,11 +1339,11 @@ GET /api/v1/dashboard/accountant        (today collection by method, pending inv
 - [ ] Load: admin dashboard aggregate < 500 ms cached.
 
 ## 10. Completion Checklist
-- [ ] All five experiences shipped
-- [ ] Ownership/IDOR audit complete
-- [ ] Reports hub
-- [ ] **Phase 1 MVP demo-ready end-to-end** (scripted demo: admission→enrollment→attendance→exam→result→fee→SMS)
-- [ ] Docs: `docs/modules/18-portals-dashboards.md`
+- [x] All five experiences shipped
+- [x] Ownership/IDOR audit complete
+- [x] Reports hub
+- [x] **Phase 1 MVP demo-ready end-to-end** (scripted demo: admission→enrollment→attendance→exam→result→fee→SMS)
+- [x] Docs: `docs/modules/18-portals-dashboards.md`
 
 ---
 

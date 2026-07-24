@@ -27,6 +27,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { PermissionsGuard } from './modules/rbac/guards/permissions.guard';
 import { RbacModule } from './modules/rbac/rbac.module';
 import { HealthModule } from './modules/health/health.module';
+import { PortalModule } from './modules/portal/portal.module';
 import { SchoolModule } from './modules/school/school.module';
 import { SequenceModule } from './modules/sequence/sequence.module';
 import { StaffModule } from './modules/staff/staff.module';
@@ -127,6 +128,9 @@ import { QueuesModule } from './queues/queues.module';
     // NotificationService.send() entry point; the producer modules above
     // import it to retro-wire their queued events.
     CommunicationModule,
+    // PortalModule is the Phase-1 capstone aggregator (portals, dashboards,
+    // reports) — a leaf that imports the feature modules above.
+    PortalModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

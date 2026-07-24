@@ -175,6 +175,9 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'notice.publish',
       'sms.credit.view',
       'sms.credit.manage',
+      // M18 — the principal's landing dashboard + the reports hub.
+      'dashboard.admin',
+      'report.view',
     ],
   },
   {
@@ -292,6 +295,9 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'fee.refund',
       'fee.report',
       'fee.export',
+      // M18 — the accountant workspace dashboard + reports hub.
+      'dashboard.accountant',
+      'report.view',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.

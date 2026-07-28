@@ -53,6 +53,7 @@ export interface PerformanceHistory {
   available: boolean;
   items: Array<{
     examId: string;
+    enrollmentId: string;
     examName: string;
     className: string;
     rollNo: number;
@@ -76,6 +77,16 @@ export interface AttendanceHistory {
   items: Array<{ date: string; status: string; sectionId: string; remarks: string | null }>;
 }
 
+export interface PayableInvoice {
+  id: string;
+  invoiceNo: string;
+  dueDate: string;
+  payable: number;
+  paidTotal: number;
+  outstanding: number;
+  status: string;
+}
+
 export interface StudentLedger {
   studentId: string;
   entries: Array<{
@@ -89,6 +100,115 @@ export interface StudentLedger {
   totalBilled: number;
   totalPaid: number;
   outstanding: number;
+  /** What Pay Now may be pointed at (M16 §5 portal payment). */
+  payableInvoices: PayableInvoice[];
+}
+
+/**
+ * The outcome of a gateway checkout. Read from our own payment rows — the
+ * M16 server-side `verify()` is the only thing that concludes SUCCESS, so
+ * the gateway's redirect parameters never influence what this says.
+ */
+export interface PaymentStatus {
+  reference: string;
+  outcome: "SUCCESS" | "PARTIAL" | "PENDING" | "FAILED";
+  total: number;
+  payments: Array<{
+    id: string;
+    paymentNo: string;
+    invoiceNo: string;
+    amount: number;
+    method: string;
+    status: string;
+    paidAt: string | null;
+  }>;
+}
+
+// ── routine / profile / documents / messages ────────────────────────────
+
+export interface PortalRoutine {
+  available: boolean;
+  reason?: string;
+  slots?: Array<{ id: string; name: string; startTime: string; endTime: string }>;
+  cells?: Array<{
+    day: string;
+    periodSlotId: string;
+    subject: { id: string; name: string };
+    teacher: { id: string; name: string };
+    roomNo: string | null;
+  }>;
+}
+
+export interface StudentProfile {
+  student: {
+    id: string;
+    name: string;
+    studentUid: string;
+    status: string;
+    dob: string;
+    gender: string;
+    religion: string | null;
+    bloodGroup: string | null;
+    admissionDate: string;
+    presentAddress: string | null;
+    permanentAddress: string | null;
+    photoUrl: string | null;
+  };
+  contact: { email: string | null; phone: string | null };
+  guardians: Array<{
+    id: string;
+    name: string;
+    relation: string;
+    phone: string;
+    isPrimary: boolean;
+  }>;
+  enrollment: StudentOverview["enrollment"];
+}
+
+export interface StudentDocuments {
+  documents: Array<{
+    id: string;
+    title: string;
+    type: string;
+    sizeBytes: number;
+    createdAt: string;
+    signedUrl: string;
+  }>;
+  /** Module 27 replaces this self-describing stub. */
+  certificates: { available: boolean; reason: string };
+}
+
+export interface MessageHistory {
+  items: Array<{
+    id: string;
+    channel: string;
+    destination: string;
+    templateCode: string | null;
+    body: string;
+    status: string;
+    sentAt: string | null;
+    createdAt: string;
+  }>;
+}
+
+// ── teacher leaves ──────────────────────────────────────────────────────
+
+export interface TeacherLeave {
+  id: string;
+  fromDate: string;
+  toDate: string;
+  type: string;
+  status: string;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface TeacherRoster {
+  enrollmentId: string;
+  studentId: string;
+  rollNo: number;
+  name: string;
+  studentUid: string;
 }
 
 // ── teacher overview ────────────────────────────────────────────────────
@@ -121,6 +241,19 @@ export interface AdminDashboard {
     passRate: number;
     averageGpa: number;
   } | null;
+  /** 30 days of daily attendance %; `null` on a day nobody marked. */
+  attendanceTrend: Array<{ date: string; percentage: number | null }>;
+  /** NCTB-banded GPA histogram for the latest active publication. */
+  gpaDistribution: { examName: string; buckets: Array<{ label: string; count: number }> } | null;
+  collectionTrend: Array<{ month: string; amount: number }>;
+  recentActivity: Array<{
+    id: string;
+    action: string;
+    entityType: string;
+    entityId: string | null;
+    actor: string;
+    createdAt: string;
+  }>;
   cached: boolean;
 }
 
@@ -145,6 +278,30 @@ export interface ReportDefinition {
   formats: string[];
 }
 
+/** Streams a portal PDF endpoint straight to a browser download (M15/M16 pattern). */
+async function download(path: string, fallback: string): Promise<void> {
+  const res = await api.get<Blob>(path, { responseType: "blob" });
+  const disposition = String(res.headers["content-disposition"] ?? "");
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const url = URL.createObjectURL(res.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = match?.[1] ?? fallback;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Where the gateway sends the payer back. The M16 callback concludes the
+ * payment server-side; this page only *reports* what happened, so a payer
+ * who never returns (closed the bKash app) still gets credited by the
+ * reconciliation sweep.
+ */
+function portalReturnUrl(): string {
+  if (typeof window === "undefined") return "";
+  return `${window.location.origin}/portal/payment`;
+}
+
 export const portalApi = {
   async me() {
     const res = await api.get<ApiEnvelope<PortalPrincipal>>("/portal/me");
@@ -167,7 +324,25 @@ export const portalApi = {
     return res.data.data;
   },
   async studentRoutine() {
-    const res = await api.get<ApiEnvelope<Record<string, unknown>>>("/portal/student/routine");
+    const res = await api.get<ApiEnvelope<PortalRoutine>>("/portal/student/routine");
+    return res.data.data;
+  },
+  async studentProfile() {
+    const res = await api.get<ApiEnvelope<StudentProfile>>("/portal/student/profile");
+    return res.data.data;
+  },
+  async studentDocuments() {
+    const res = await api.get<ApiEnvelope<StudentDocuments>>("/portal/student/documents");
+    return res.data.data;
+  },
+  studentReportCard(examId: string): Promise<void> {
+    return download(`/portal/student/report-card/${examId}`, "report-card.pdf");
+  },
+  async studentPay(invoiceIds: string[], gateway: string) {
+    const res = await api.post<ApiEnvelope<{ checkoutUrl: string; gatewayRef: string }>>(
+      "/portal/student/pay",
+      { invoiceIds, gateway, returnUrl: portalReturnUrl() },
+    );
     return res.data.data;
   },
 
@@ -201,9 +376,91 @@ export const portalApi = {
     );
     return res.data.data;
   },
+  async childRoutine(childId: string) {
+    const res = await api.get<ApiEnvelope<PortalRoutine>>(
+      `/portal/parent/child/${childId}/routine`,
+    );
+    return res.data.data;
+  },
+  async childProfile(childId: string) {
+    const res = await api.get<ApiEnvelope<StudentProfile>>(
+      `/portal/parent/child/${childId}/profile`,
+    );
+    return res.data.data;
+  },
+  async childDocuments(childId: string) {
+    const res = await api.get<ApiEnvelope<StudentDocuments>>(
+      `/portal/parent/child/${childId}/documents`,
+    );
+    return res.data.data;
+  },
+  childReportCard(childId: string, examId: string): Promise<void> {
+    return download(
+      `/portal/parent/child/${childId}/report-card/${examId}`,
+      "report-card.pdf",
+    );
+  },
+  async childPay(childId: string, invoiceIds: string[], gateway: string) {
+    const res = await api.post<ApiEnvelope<{ checkoutUrl: string; gatewayRef: string }>>(
+      `/portal/parent/child/${childId}/pay`,
+      { invoiceIds, gateway, returnUrl: portalReturnUrl() },
+    );
+    return res.data.data;
+  },
+
+  async paymentStatus(reference: string) {
+    const res = await api.get<ApiEnvelope<PaymentStatus>>("/portal/payment-status", {
+      params: { reference },
+    });
+    return res.data.data;
+  },
+
+  // ── messages (student + parent) ───────────────────────────────────────
+
+  async messages() {
+    const res = await api.get<ApiEnvelope<MessageHistory>>("/portal/messages");
+    return res.data.data;
+  },
+  async contactSchool(body: string, subject?: string) {
+    const res = await api.post<ApiEnvelope<{ message: string }>>(
+      "/portal/contact-school",
+      { body, ...(subject ? { subject } : {}) },
+    );
+    return res.data.data;
+  },
 
   async teacherOverview() {
     const res = await api.get<ApiEnvelope<TeacherOverview>>("/portal/teacher/overview");
+    return res.data.data;
+  },
+  async teacherRoutine() {
+    const res = await api.get<ApiEnvelope<PortalRoutine>>("/portal/teacher/routine");
+    return res.data.data;
+  },
+  async teacherRoster(sectionId: string) {
+    const res = await api.get<ApiEnvelope<TeacherRoster[]>>(
+      `/portal/teacher/section/${sectionId}/roster`,
+    );
+    return res.data.data;
+  },
+  async teacherLeaves() {
+    // Paginated handler, but the envelope lifts `meta` to the top level and
+    // leaves the rows in `data` — so this is one unwrap, not two.
+    const res = await api.get<ApiEnvelope<TeacherLeave[]>>(
+      "/portal/teacher/leaves",
+    );
+    return res.data.data;
+  },
+  async applyForLeave(input: {
+    fromDate: string;
+    toDate: string;
+    type?: string;
+    reason?: string;
+  }) {
+    const res = await api.post<ApiEnvelope<TeacherLeave>>(
+      "/portal/teacher/leaves",
+      input,
+    );
     return res.data.data;
   },
 

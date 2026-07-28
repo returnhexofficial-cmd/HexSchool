@@ -111,6 +111,46 @@ export class PortalResolverService {
     return principal;
   }
 
+  /**
+   * How this account should identify itself when it writes to the school
+   * (the M18 portal contact form). Taken from the profile and the user row,
+   * never from a request body — the sender does not get to choose who the
+   * office thinks is writing. A guardian's own `guardians.phone` wins over
+   * the login phone, because that is the number the office already knows
+   * them by.
+   */
+  async senderIdentity(actor: AccessTokenPayload): Promise<{
+    name: string;
+    phone: string | null;
+    email: string | null;
+  }> {
+    const [principal, user] = await Promise.all([
+      this.principal(actor),
+      this.prisma.user.findFirst({
+        where: { id: actor.sub, schoolId: actor.schoolId },
+        select: { phone: true, email: true },
+      }),
+    ]);
+
+    if (principal.guardianId) {
+      const guardian = await this.prisma.guardian.findFirst({
+        where: { id: principal.guardianId },
+        select: { name: true, phone: true },
+      });
+      return {
+        name: guardian?.name ?? 'Guardian',
+        phone: guardian?.phone ?? user?.phone ?? null,
+        email: user?.email ?? null,
+      };
+    }
+
+    return {
+      name: principal.children[0]?.name ?? 'Portal user',
+      phone: user?.phone ?? null,
+      email: user?.email ?? null,
+    };
+  }
+
   private childSelect() {
     return {
       id: true,

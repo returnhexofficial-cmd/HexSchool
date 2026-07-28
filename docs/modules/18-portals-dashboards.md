@@ -151,10 +151,131 @@ Rebuilding attendance-marking and mark-entry inside the portal would duplicate t
 
 ## Remaining TODOs
 
-- [ ] In-browser click-throughs: the parent child-switcher on a phone viewport, a student Pay-Now redirect to a sandbox gateway, and the teacher shortcuts into the admin grids.
+- [x] ~~The roadmap §5 pages the first pass did not build~~ — **closed 2026-07-28, see the addendum below.**
+- [ ] In-browser click-throughs: the parent child-switcher on a phone viewport, a Pay-Now redirect to a **real** sandbox gateway (the flow is e2e-tested through a stub), and the teacher shortcuts into the admin grids.
 - [ ] Reports hub in-place param runner (M29).
 - [ ] Teacher pending-mark-entry count.
 - [ ] Repo-level: still no `.gitattributes` (`* text=auto eol=lf`) — the CRLF/LF split continues to produce phantom prettier warnings.
+
+---
+
+# Addendum — §5 completed (2026-07-28)
+
+The first pass shipped the portal *spine* and left several roadmap §5 bullets
+unbuilt. A checklist sweep over M14–M19 closed them. The striking part is that
+**most of the backend already existed**: `GET /portal/student/routine`,
+`POST /portal/student/pay` and `GET /portal/teacher/section/:id/roster` were
+exported, tested and reachable, and **no UI ever called them**. Exported
+endpoints with no consumer are not features — they are a claim that a feature
+exists.
+
+## What was added
+
+| Area | Added |
+|---|---|
+| Student / parent | **Routine** (weekly grid), **Profile**, **Documents** panels; **report-card PDF** download; **Pay Now** + a `/portal/payment` return page |
+| Parent | **SMS/email history**; **Contact School** form |
+| Teacher | **My Students** (section roster), **Leaves** (own history + apply) |
+| Admin dashboard | **attendance trend 30 d**, **collection trend**, **GPA distribution**, **activity feed** (audit tail) |
+
+New endpoints: `GET /portal/student/profile | documents | report-card/:examId`,
+the same three under `parent/child/:childId`, `GET /portal/payment-status`,
+`GET /portal/messages`, `POST /portal/contact-school`,
+`GET|POST /portal/teacher/leaves`. **Still no new tables and no migration.**
+
+## Design decisions
+
+- **The profile is a projection, not a pass-through.** `getFull()` carries the
+  office's internal status trail (with the reason text an admin typed) and sits
+  next to permission-gated medical data. The portal payload therefore names its
+  fields explicitly — identity, contact, guardians, current enrollment — so
+  *the projection is the policy*, and a future column added to `students` cannot
+  quietly appear in a portal. An e2e case asserts `statusHistory` is absent.
+- **The report card is gated on publication, not on ownership alone.** Owning a
+  student is necessary but not sufficient: the exam must have an active
+  publication for that candidate, or the route 404s. Otherwise the PDF endpoint
+  would be a side door around the M15 publication state that the withheld-result
+  rules exist to enforce.
+- **Pay Now splits the browser return from the IPN.** M16 accepted a `returnUrl`
+  and ignored it, so every gateway URL pointed at the API callback and a payer
+  landed on raw JSON. `initiate()` now sends the *human* to `returnUrl` while
+  `ipnUrl` still points at the callback. The return page reads **our own payment
+  rows** — the server-side `verify()` remains the only thing that may conclude
+  SUCCESS — so editing the redirect proves nothing, and a payer who closed the
+  bKash app mid-flow sees an honest `PENDING` that the reconciliation sweep
+  settles.
+- **Contact School reuses the M19 office inbox.** The roadmap said "stub as a
+  message to admin inbox now"; M19 had already built that inbox, with a UI, a
+  NEW/READ/REPLIED flow and an in-app alert. A second table would have been a
+  second inbox for the office to forget to check. The three anonymous defences
+  (captcha, throttle, per-IP cap) are deliberately *not* applied — the sender is
+  authenticated, so the account is the rate limit — and the sender's name and
+  phone come **from their profile, never the request body**, so a signed-in user
+  cannot write to the office under someone else's name. An e2e case posts a
+  `name` field and asserts it is rejected.
+- **Teacher leave has no `teacherId` parameter.** The M08 DTO carries one;
+  accepting it here would let any teacher apply in a colleague's name. The id
+  comes from the resolved principal, so there is nothing to tamper with — and
+  all the M08 rules (inside the current session, no overlap with an approved
+  leave) still run, because it is the same service.
+- **An unmarked attendance day is a gap, not a zero.** `attendanceTrend` returns
+  `null` for a day nobody marked. Plotting it at the baseline would invent a
+  slump that never happened, which is worse than a hole in the line; the
+  `Sparkline` primitive breaks its path across nulls.
+- **Chart primitives were promoted, not copied.** When the M16 fee reports and
+  the M17 credit dashboard became the second and third consumers, the M18
+  `dashboard-charts.tsx` moved to `components/shared/charts.tsx`. They stay
+  dependency-free: single-series, one axis, thin marks, a recessive baseline
+  rather than a grid, labels only at the extremes, and text in ink tokens rather
+  than the series colour.
+
+## Graph note
+
+Four new import edges, all downward: `TeacherModule` (now exports
+`TeacherLeavesService`), `StudentModule` (`StudentDocumentsService`),
+`ResultModule` (`ResultExportService`), and — the interesting one —
+**`WebsiteModule` (M19) for `ContactService`**, so an *earlier* module imports a
+*later* one. That is safe precisely because both are leaves: nothing imports
+`PortalModule`, and `WebsiteModule` imports nothing that reaches back.
+`NotificationsRepository` is a stateless re-provision, since
+`CommunicationModule` does not export it.
+
+## Bugs found during verification
+
+### `NotificationsRepository` is not exported — and `tsc` cannot see that
+`PortalMessagesService` injected it, the backend compiled cleanly, and then
+**all 19 e2e suites failed to boot**. Nest's DI graph is resolved at runtime, so
+a missing export is invisible to the type checker and total at startup. This is
+the third time the project has re-provisioned a stateless repository (M07, M16,
+now M18) — the convention held, the omission was simply not caught until
+something actually started the app.
+
+### The paginated envelope was unwrapped twice
+`portalApi.teacherLeaves()` read `res.data.data.data`. The transform interceptor
+**lifts `meta` to the top level and leaves the rows in `data`**, so a paginated
+handler is one unwrap, not two. Caught by an e2e assertion on the response
+shape; worth remembering for every new client that hits a paginated route.
+
+### The student routine 404'd on a school mid-setup
+`routineFor` threw `NotFoundException('No current session')` where the *teacher*
+equivalent already degraded to a graceful zero-state. A portal landing page must
+not fail because the office has not finished configuring; it now returns
+`{available:false, reason}`.
+
+## Verification
+
+| Scenario | Result | Notes |
+|---|---|---|
+| Backend unit suite | ✅ **1041 passed (87 suites)** | Was 1030 — **11 new** (`portal-messages.service.spec`, `dashboard.repository.spec`) |
+| **Backend e2e suite** | ✅ **420 passed (19 suites)** | Was 406/19 — `portal.e2e-spec.ts` grew **14 → 28 cases**; green on two consecutive full runs |
+| Frontend tests (`vitest run`) | ✅ **258 passed (29 files)** | Was 238 — **20 new** (`charts.test.tsx`, `auth-provider.test.tsx`) |
+| `tsc --noEmit` both repos | ✅ clean | |
+| `next build` | ✅ compiled | `/portal/payment` emitted |
+| Migration chain | ✅ unchanged | no schema change |
+
+The e2e additions extend the **IDOR matrix to every new route** — a parent is
+403'd on a stranger's profile, documents, routine and report card, on the
+principle that a new portal endpoint is a new chance to leak a stranger's child.
 
 ## Links to Related Modules
 

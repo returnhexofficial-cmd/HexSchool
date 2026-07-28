@@ -12,9 +12,31 @@ import { SiteFooter, SiteHeader } from "./_components/site-chrome";
 export const revalidate = 60;
 
 /**
+ * The absolute origin every relative metadata URL is resolved against.
+ *
+ * `metadataBase` is not optional in practice: without it Next emits the
+ * canonical exactly as written (`/`), and a relative canonical is one a
+ * crawler rejects — which is how Lighthouse caught this. So the chain
+ * always ends somewhere absolute: the school's configured domain first,
+ * then the deploy-time env var, then localhost for a dev build.
+ */
+function resolveSiteOrigin(configured: string | null | undefined): URL {
+  for (const candidate of [configured, process.env.NEXT_PUBLIC_SITE_URL]) {
+    if (!candidate) continue;
+    try {
+      return new URL(candidate);
+    } catch {
+      // An admin can type anything into the settings field; a bad value
+      // must not take the whole site's metadata down with it.
+    }
+  }
+  return new URL("http://localhost:3000");
+}
+
+/**
  * Site-wide SEO defaults. Per-page `generateMetadata` overrides the title
- * and description; `metadataBase` makes every relative OpenGraph image
- * absolute, which is what a crawler needs.
+ * and description; `metadataBase` makes every relative canonical and
+ * OpenGraph image absolute, which is what a crawler needs.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const config = await publicSite.config();
@@ -23,10 +45,9 @@ export async function generateMetadata(): Promise<Metadata> {
     config?.site.metaDescription ||
     config?.site.tagline ||
     `${title} — notices, results, admission and news.`;
-  const siteUrl = config?.site.siteUrl;
 
   return {
-    ...(siteUrl ? { metadataBase: new URL(siteUrl) } : {}),
+    metadataBase: resolveSiteOrigin(config?.site.siteUrl),
     title: { default: title, template: `%s · ${title}` },
     description,
     alternates: { canonical: "/" },

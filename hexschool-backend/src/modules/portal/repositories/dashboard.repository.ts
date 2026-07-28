@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AttendanceStatus } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma/prisma.service';
 import {
   countByStatus,
@@ -152,6 +153,179 @@ export class DashboardRepository {
     return [...buckets.entries()].map(([month, amount]) => ({
       month,
       amount: Math.round(amount * 100) / 100,
+    }));
+  }
+
+  /**
+   * Daily attendance % for the last `days` days (roadmap M18 §5 "attendance
+   * trend 30d"). A day nobody marked yields `null` rather than 0 — an
+   * unmarked Friday is not a day everybody was absent, and plotting it as
+   * zero would invent a slump that never happened.
+   */
+  async attendanceTrend(schoolId: string, days = 30) {
+    const today = new Date(`${isoDate(new Date())}T00:00:00.000Z`);
+    const from = new Date(today);
+    from.setUTCDate(from.getUTCDate() - (days - 1));
+
+    const rows = await this.prisma.studentAttendance.findMany({
+      where: { schoolId, date: { gte: from, lte: today }, deletedAt: null },
+      select: { date: true, status: true },
+    });
+
+    const byDay = new Map<string, { status: AttendanceStatus }[]>();
+    for (const row of rows) {
+      const key = row.date.toISOString().slice(0, 10);
+      const bucket = byDay.get(key);
+      if (bucket) bucket.push({ status: row.status });
+      else byDay.set(key, [{ status: row.status }]);
+    }
+
+    const out: Array<{ date: string; percentage: number | null }> = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(from);
+      d.setUTCDate(from.getUTCDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      const dayRows = byDay.get(key);
+      if (!dayRows || dayRows.length === 0) {
+        out.push({ date: key, percentage: null });
+        continue;
+      }
+      const counts = countByStatus(dayRows);
+      const marked = dayRows.length - counts.HOLIDAY;
+      out.push({
+        date: key,
+        percentage:
+          marked === 0
+            ? null
+            : Math.round((presentEquivalent(counts) / marked) * 10000) / 100,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * GPA histogram for the latest active publication (roadmap M18 §5). The
+   * bands are the NCTB grade boundaries, not even fifths, so the chart
+   * matches how a Bangladeshi school actually reads a result sheet.
+   */
+  async gpaDistribution(schoolId: string) {
+    const publication = await this.prisma.resultPublication.findFirst({
+      where: { schoolId, isActive: true },
+      orderBy: { publishedAt: 'desc' },
+      select: { examId: true, exam: { select: { name: true } } },
+    });
+    if (!publication) return null;
+
+    const rows = await this.prisma.result.findMany({
+      where: { schoolId, examId: publication.examId },
+      select: { gpa: true, status: true },
+    });
+    if (rows.length === 0) return null;
+
+    const bands = [
+      { label: 'A+ (5.00)', min: 5, max: 5.01 },
+      { label: 'A (4.00–4.99)', min: 4, max: 5 },
+      { label: 'A− (3.50–3.99)', min: 3.5, max: 4 },
+      { label: 'B (3.00–3.49)', min: 3, max: 3.5 },
+      { label: 'C (2.00–2.99)', min: 2, max: 3 },
+      { label: 'D (1.00–1.99)', min: 1, max: 2 },
+      { label: 'F (0.00)', min: 0, max: 1 },
+    ];
+    const buckets = bands.map((b) => ({ label: b.label, count: 0 }));
+    for (const row of rows) {
+      const gpa = Number(row.gpa);
+      const index = bands.findIndex((b) => gpa >= b.min && gpa < b.max);
+      if (index >= 0) buckets[index].count += 1;
+    }
+    return { examName: publication.exam.name, buckets };
+  }
+
+  /**
+   * The activity feed (roadmap M18 §5) — the tail of the M03 audit log.
+   * The rows were redacted at write time, and only the action/entity is
+   * surfaced here (never `oldValues`/`newValues`), so a dashboard glance
+   * cannot become a data leak.
+   *
+   * `audit_logs.id` is a BIGSERIAL, stringified on the way out — the M03
+   * `AuditLogView` convention, since BigInt is not JSON-safe. There is no
+   * FK from the log to `users` (the log outlives the user), so the actor is
+   * resolved in a second query rather than a join — and `users` carries no
+   * name (names live on the profile tables), so the label is the login
+   * contact. Better a readable email than the raw UUID the M03 viewer shows.
+   */
+  async recentActivity(schoolId: string, take = 12) {
+    const rows = await this.prisma.auditLog.findMany({
+      where: { schoolId },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        createdAt: true,
+      },
+    });
+
+    const userIds = [
+      ...new Set(rows.map((r) => r.userId).filter((id): id is string => !!id)),
+    ];
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, email: true, phone: true },
+        })
+      : [];
+    const nameById = new Map(
+      users.map((u) => [u.id, u.email ?? u.phone ?? 'Unknown']),
+    );
+
+    return rows.map((r) => ({
+      id: r.id.toString(),
+      action: r.action,
+      entityType: r.entityType,
+      entityId: r.entityId,
+      actor: r.userId ? (nameById.get(r.userId) ?? 'Unknown') : 'System',
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /**
+   * The payments of one gateway checkout, with the student each belongs to
+   * — what the portal's payment-return page needs. The status is whatever
+   * the M16 server-side `verify()` concluded; nothing here reads the
+   * gateway's redirect parameters, so a payer cannot talk their way to
+   * SUCCESS by editing a URL.
+   */
+  async paymentsByReference(reference: string, schoolId: string) {
+    const rows = await this.prisma.payment.findMany({
+      where: { schoolId, reference },
+      select: {
+        id: true,
+        paymentNo: true,
+        amount: true,
+        method: true,
+        status: true,
+        paidAt: true,
+        invoice: {
+          select: {
+            invoiceNo: true,
+            enrollment: { select: { studentId: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((p) => ({
+      id: p.id,
+      paymentNo: p.paymentNo,
+      invoiceNo: p.invoice.invoiceNo,
+      studentId: p.invoice.enrollment.studentId,
+      amount: Number(p.amount),
+      method: p.method,
+      status: p.status,
+      paidAt: p.paidAt,
     }));
   }
 

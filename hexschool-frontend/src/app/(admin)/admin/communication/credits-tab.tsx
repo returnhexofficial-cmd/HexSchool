@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Can } from "@/components/shared/can";
+import { ColumnChart } from "@/components/shared/charts";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingBlock } from "@/components/shared/spinner";
 import { StatCard } from "@/components/shared/stat-card";
@@ -19,7 +20,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
-import { communicationApi } from "@/lib/api/communication";
+import { communicationApi, SmsCredit } from "@/lib/api/communication";
+
+/**
+ * Buckets CONSUME rows by calendar month. Only consumption is plotted —
+ * a purchase is not usage, and mixing the two on one axis would make a
+ * top-up look like a spike in spending.
+ */
+function monthlyUsage(
+  rows: SmsCredit[],
+): Array<{ label: string; value: number }> {
+  const byMonth = new Map<string, number>();
+  for (const row of rows) {
+    if (row.type !== "CONSUME") continue;
+    const month = row.createdAt.slice(0, 7);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + Math.abs(row.qty));
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-6)
+    .map(([month, value]) => ({ label: month.slice(5), value }));
+}
 
 export function CreditsTab() {
   const qc = useQueryClient();
@@ -96,6 +117,15 @@ export function CreditsTab() {
           </Button>
         </div>
       </Can>
+
+      {/* Monthly usage (roadmap M17 §5). CONSUME rows carry negative qty —
+          plotted as parts consumed, so the bars grow with usage. */}
+      {ledger.data && ledger.data.length > 0 && (
+        <div className="rounded-md border p-4">
+          <h3 className="mb-3 text-sm font-medium">Parts used per month</h3>
+          <ColumnChart data={monthlyUsage(ledger.data)} />
+        </div>
+      )}
 
       {ledger.data && ledger.data.length > 0 && (
         <Table>

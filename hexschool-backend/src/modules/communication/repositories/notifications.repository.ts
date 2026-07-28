@@ -134,6 +134,30 @@ export class NotificationsRepository extends BaseRepository<
     });
   }
 
+  /**
+   * Everything the school actually *sent* this recipient — the M18 parent
+   * portal's "SMS history". In-app rows are excluded on purpose: those are
+   * the bell, not a message the school dispatched, and showing them here
+   * would double-count every notice.
+   */
+  async sentHistoryFor(
+    schoolId: string,
+    recipientType: NotificationRecipientType,
+    recipientId: string,
+    take: number,
+  ): Promise<Notification[]> {
+    return this.prisma.notification.findMany({
+      where: {
+        schoolId,
+        recipientType,
+        recipientId,
+        channel: { not: 'IN_APP' },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+    });
+  }
+
   async markReadForUser(
     schoolId: string,
     userId: string,

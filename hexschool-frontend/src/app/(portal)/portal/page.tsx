@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { PageHeader } from "@/components/shared/page-header";
@@ -10,6 +11,16 @@ import { LoadingBlock } from "@/components/shared/spinner";
 import { StatCard } from "@/components/shared/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { portalApi } from "@/lib/api/portal";
 import { StudentPanels } from "./student-panels";
@@ -64,8 +75,15 @@ function StudentView() {
           attendance: portalApi.studentAttendance,
           results: portalApi.studentResults,
           dues: portalApi.studentDues,
+          routine: portalApi.studentRoutine,
+          profile: portalApi.studentProfile,
+          documents: portalApi.studentDocuments,
+          reportCard: (examId) => portalApi.studentReportCard(examId),
+          pay: (invoiceIds, gateway) => portalApi.studentPay(invoiceIds, gateway),
         }}
       />
+      <MessagesPanel />
+      <ContactSchoolCard />
     </>
   );
 }
@@ -114,10 +132,107 @@ function ParentView({
             attendance: () => portalApi.childAttendance(selected),
             results: () => portalApi.childResults(selected),
             dues: () => portalApi.childDues(selected),
+            routine: () => portalApi.childRoutine(selected),
+            profile: () => portalApi.childProfile(selected),
+            documents: () => portalApi.childDocuments(selected),
+            reportCard: (examId) => portalApi.childReportCard(selected, examId),
+            pay: (invoiceIds, gateway) =>
+              portalApi.childPay(selected, invoiceIds, gateway),
           }}
         />
       )}
+      <MessagesPanel />
+      <ContactSchoolCard />
     </>
+  );
+}
+
+// ── messages + contact (student & parent) ────────────────────────────────
+
+/**
+ * SMS/email history (roadmap M18 §5). Self-scoped server-side — there is
+ * no id in the request, so a parent sees only what was sent to them.
+ */
+function MessagesPanel() {
+  const q = useQuery({ queryKey: ["portal", "messages"], queryFn: portalApi.messages });
+  if (q.isLoading || q.isError) return null;
+  const items = q.data?.items ?? [];
+  if (items.length === 0) return null;
+
+  return (
+    <div className="rounded-md border p-4">
+      <h3 className="mb-3 font-medium">Messages from school</h3>
+      <ul className="space-y-3 text-sm">
+        {items.slice(0, 10).map((m) => (
+          <li key={m.id} className="border-b pb-2 last:border-0 last:pb-0">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">{m.channel}</Badge>
+              <span>{String(m.sentAt ?? m.createdAt).slice(0, 16).replace("T", " ")}</span>
+              <span>· {m.status}</span>
+            </div>
+            <p className="mt-1">{m.body}</p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * "Contact School" (roadmap M18 §5) — lands in the M19 office inbox, which
+ * already has a UI and a NEW/READ/REPLIED flow. Module 28's ticket system
+ * replaces this with a real thread.
+ */
+function ContactSchoolCard() {
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+
+  const send = useMutation({
+    mutationFn: () => portalApi.contactSchool(body, subject || undefined),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      setSubject("");
+      setBody("");
+    },
+    onError: () => toast.error("Could not send the message"),
+  });
+
+  return (
+    <div className="space-y-3 rounded-md border p-4">
+      <div>
+        <h3 className="font-medium">Contact the school</h3>
+        <p className="text-sm text-muted-foreground">
+          The office sees your name and phone from your account.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contact-subject">Subject</Label>
+        <Input
+          id="contact-subject"
+          value={subject}
+          maxLength={200}
+          placeholder="Optional"
+          onChange={(e) => setSubject(e.target.value)}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="contact-body">Message</Label>
+        <Textarea
+          id="contact-body"
+          value={body}
+          rows={4}
+          maxLength={5000}
+          onChange={(e) => setBody(e.target.value)}
+        />
+      </div>
+      <Button
+        size="sm"
+        disabled={body.trim().length < 5 || send.isPending}
+        onClick={() => send.mutate()}
+      >
+        {send.isPending ? "Sending…" : "Send"}
+      </Button>
+    </div>
   );
 }
 
@@ -197,6 +312,207 @@ function TeacherView() {
           </ul>
         </div>
       </div>
+
+      <MyStudentsPanel sections={d.sections} />
+      <MyLeavesPanel />
     </>
+  );
+}
+
+/**
+ * "My Students" (roadmap M18 §5) — the roster of a section the teacher
+ * actually teaches. The backend re-checks that from the published routine,
+ * so picking a section id they do not teach is a 403, not a listing.
+ */
+function MyStudentsPanel({ sections }: { sections: { id: string; label: string }[] }) {
+  const [sectionId, setSectionId] = useState<string | null>(sections[0]?.id ?? null);
+  const q = useQuery({
+    queryKey: ["portal", "teacher", "roster", sectionId],
+    queryFn: () => portalApi.teacherRoster(sectionId!),
+    enabled: !!sectionId,
+  });
+
+  if (sections.length === 0) {
+    return (
+      <EmptyState
+        title="No sections yet"
+        description="Once the office assigns you subjects and publishes a routine, your students appear here."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3 rounded-md border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-medium">My students</h3>
+        <Select value={sectionId ?? ""} onValueChange={setSectionId}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Pick a section" />
+          </SelectTrigger>
+          <SelectContent>
+            {sections.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {q.isLoading ? (
+        <LoadingBlock />
+      ) : q.isError ? (
+        <ErrorState onRetry={() => void q.refetch()} />
+      ) : (q.data?.length ?? 0) === 0 ? (
+        <p className="text-sm text-muted-foreground">No students enrolled.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b text-left text-muted-foreground">
+              <tr>
+                <th className="p-2">Roll</th>
+                <th className="p-2">Name</th>
+                <th className="p-2">Student ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {q.data!.map((r) => (
+                <tr key={r.enrollmentId} className="border-b last:border-0">
+                  <td className="p-2 tabular-nums">{r.rollNo}</td>
+                  <td className="p-2">{r.name}</td>
+                  <td className="p-2 font-mono text-xs">{r.studentUid}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const LEAVE_TYPES = ["CASUAL", "SICK", "EARNED", "MATERNITY", "UNPAID"] as const;
+
+/**
+ * Own leave history + apply form (roadmap M18 §5). The M08 rules still
+ * run server-side — inside the current session, no overlap with an already
+ * approved leave — so a rejected application says why.
+ */
+function MyLeavesPanel() {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ["portal", "teacher", "leaves"],
+    queryFn: portalApi.teacherLeaves,
+  });
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [type, setType] = useState<string>(LEAVE_TYPES[0]);
+  const [reason, setReason] = useState("");
+
+  const apply = useMutation({
+    mutationFn: () => portalApi.applyForLeave({ fromDate, toDate, type, reason: reason || undefined }),
+    onSuccess: () => {
+      toast.success("Leave application submitted");
+      setFromDate("");
+      setToDate("");
+      setReason("");
+      void qc.invalidateQueries({ queryKey: ["portal", "teacher", "leaves"] });
+    },
+    onError: (err: unknown) => {
+      const message =
+        (err as { response?: { data?: { error?: { message?: string } } } })
+          ?.response?.data?.error?.message ?? "Could not submit the application";
+      toast.error(message);
+    },
+  });
+
+  return (
+    <div className="space-y-4 rounded-md border p-4">
+      <h3 className="font-medium">My leaves</h3>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1">
+          <Label htmlFor="leave-from">From</Label>
+          <Input
+            id="leave-from"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="leave-to">To</Label>
+          <Input
+            id="leave-to"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="leave-type">Type</Label>
+          <Select value={type} onValueChange={setType}>
+            <SelectTrigger id="leave-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {LEAVE_TYPES.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="leave-reason">Reason</Label>
+          <Input
+            id="leave-reason"
+            value={reason}
+            maxLength={500}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+      </div>
+      <Button
+        size="sm"
+        disabled={!fromDate || !toDate || apply.isPending}
+        onClick={() => apply.mutate()}
+      >
+        {apply.isPending ? "Submitting…" : "Apply for leave"}
+      </Button>
+
+      {q.isLoading ? (
+        <LoadingBlock />
+      ) : q.isError ? (
+        <ErrorState onRetry={() => void q.refetch()} />
+      ) : (q.data?.length ?? 0) === 0 ? (
+        <p className="text-sm text-muted-foreground">No leave applications yet.</p>
+      ) : (
+        <ul className="divide-y text-sm">
+          {q.data!.map((l) => (
+            <li key={l.id} className="flex flex-wrap items-center gap-2 py-2">
+              <span className="tabular-nums">
+                {String(l.fromDate).slice(0, 10)} → {String(l.toDate).slice(0, 10)}
+              </span>
+              <Badge variant="outline">{l.type}</Badge>
+              <Badge
+                variant={
+                  l.status === "APPROVED"
+                    ? "secondary"
+                    : l.status === "REJECTED"
+                      ? "destructive"
+                      : "outline"
+                }
+              >
+                {l.status}
+              </Badge>
+              {l.reason && (
+                <span className="text-muted-foreground">{l.reason}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

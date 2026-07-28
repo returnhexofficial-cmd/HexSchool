@@ -90,6 +90,8 @@ import { TeachersService } from './services/teachers.service';
     // TeachersRepository, so the graph must not point back.
     TimetableEntriesRepository,
   ],
-  exports: [TeachersRepository],
+  // M18's teacher portal lets a teacher see and file their own leaves,
+  // so the leave service is exported alongside the repository.
+  exports: [TeachersRepository, TeacherLeavesService],
 })
 export class TeacherModule {}

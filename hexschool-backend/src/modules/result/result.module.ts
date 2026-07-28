@@ -118,12 +118,15 @@ import { ResultsService } from './services/results.service';
     StudentGuardiansRepository,
   ],
   // M18 portals render a student's results; M16 reads publication state
-  // to decide whether a dues block should hide one.
+  // to decide whether a dues block should hide one. `ResultExportService`
+  // is exported so the portal can stream a student their own report card
+  // without granting the `result.export` permission the admin route needs.
   exports: [
     ResultsService,
     ResultsRepository,
     MarksRepository,
     ResultReportsService,
+    ResultExportService,
   ],
 })
 export class ResultModule {}

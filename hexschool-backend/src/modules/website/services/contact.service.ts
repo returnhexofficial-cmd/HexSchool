@@ -87,6 +87,35 @@ export class ContactService {
     return { message: 'Thank you — the school has received your message.' };
   }
 
+  /**
+   * The portal "Contact School" form (roadmap M18 §5 — Module 28's ticket
+   * system replaces this). None of the three anonymous defences apply: the
+   * sender is an authenticated parent or student, so the account itself is
+   * the rate limit and a captcha would only punish them. It lands in the
+   * same office inbox, with the sender's own name and contact taken from
+   * their profile rather than from the request — a signed-in sender does
+   * not get to claim to be someone else.
+   */
+  async submitFromPortal(
+    schoolId: string,
+    sender: { name: string; phone: string | null; email: string | null },
+    input: { subject?: string; body: string },
+  ): Promise<{ message: string }> {
+    const created = await this.messages.create({
+      schoolId,
+      name: sender.name,
+      phone: sender.phone,
+      email: sender.email,
+      subject: htmlToText(input.subject ?? 'Message from the portal'),
+      body: htmlToText(input.body),
+      status: ContactMessageStatus.NEW,
+      ip: null,
+    });
+
+    await this.notifyOffice(schoolId, created).catch(() => undefined);
+    return { message: 'Thank you — the school has received your message.' };
+  }
+
   // ── inbox ───────────────────────────────────────────────────────────
 
   list(

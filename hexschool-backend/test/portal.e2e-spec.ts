@@ -41,6 +41,8 @@ describe('Portals & Dashboards (e2e)', () => {
 
   let studentAId: string;
   let studentBId: string;
+  /** Restored in cleanup — see the note where it is captured. */
+  let previousCurrentSessionId: string | null = null;
 
   const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
   const server = () => request(app.getHttpServer());
@@ -50,6 +52,12 @@ describe('Portals & Dashboards (e2e)', () => {
   const emails = [ADMIN, PLAIN, STUDENT_A, PARENT, TEACHER];
 
   const cleanup = async () => {
+    await prisma.contactMessage.deleteMany({
+      where: { schoolId: DEFAULT_SCHOOL_ID, name: { startsWith: NAME } },
+    });
+    await prisma.teacherLeave.deleteMany({
+      where: { teacher: { firstName: NAME } },
+    });
     await prisma.enrollment.deleteMany({
       where: { schoolId: DEFAULT_SCHOOL_ID, student: { firstName: NAME } },
     });
@@ -71,6 +79,14 @@ describe('Portals & Dashboards (e2e)', () => {
         name: { startsWith: 'E2E-PORTAL ' },
       },
     });
+    // Hand the current-session flag back before the next suite runs.
+    if (previousCurrentSessionId) {
+      await prisma.academicSession.update({
+        where: { id: previousCurrentSessionId },
+        data: { isCurrent: true },
+      });
+      previousCurrentSessionId = null;
+    }
     await prisma.schoolClass.deleteMany({
       where: {
         schoolId: DEFAULT_SCHOOL_ID,
@@ -131,6 +147,23 @@ describe('Portals & Dashboards (e2e)', () => {
       data: { userId: adminUser.id, roleId: adminRole!.id },
     });
 
+    // This suite needs a *current* session: the routine read and the M08
+    // leave rule both resolve through `getCurrent`. Only one session per
+    // school may be current (M05 partial unique), so remember whichever
+    // one held the flag and hand it back in cleanup — the academic suite
+    // asserts on it.
+    const incumbent = await prisma.academicSession.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, isCurrent: true, deletedAt: null },
+      select: { id: true },
+    });
+    previousCurrentSessionId = incumbent?.id ?? null;
+    if (incumbent) {
+      await prisma.academicSession.update({
+        where: { id: incumbent.id },
+        data: { isCurrent: false },
+      });
+    }
+
     const session = await prisma.academicSession.create({
       data: {
         schoolId: DEFAULT_SCHOOL_ID,
@@ -138,6 +171,7 @@ describe('Portals & Dashboards (e2e)', () => {
         startDate: new Date('2026-01-01'),
         endDate: new Date('2026-12-31'),
         status: 'ACTIVE',
+        isCurrent: true,
       },
     });
     const klass = await prisma.schoolClass.create({
@@ -345,6 +379,148 @@ describe('Portals & Dashboards (e2e)', () => {
       .expect(403);
   });
 
+  // Every route added after the original IDOR matrix has to join it —
+  // a new portal endpoint is a new chance to leak a stranger's child.
+  it('403s a parent on a stranger’s profile/documents/routine/report-card', async () => {
+    for (const path of [
+      `profile`,
+      `documents`,
+      `routine`,
+      `report-card/${randomUUID()}`,
+    ]) {
+      await server()
+        .get(`/api/v1/portal/parent/child/${studentBId}/${path}`)
+        .set(auth(parentToken))
+        .expect(403);
+    }
+  });
+
+  it('lets a parent read their own child’s profile and documents', async () => {
+    const profile = await server()
+      .get(`/api/v1/portal/parent/child/${studentAId}/profile`)
+      .set(auth(parentToken))
+      .expect(200);
+    const p = dataOf<{
+      student: { id: string };
+      guardians: Array<{ name: string }>;
+    }>(profile);
+    expect(p.student.id).toBe(studentAId);
+    expect(p.guardians.map((g) => g.name)).toContain(`${NAME} Parent`);
+
+    const docs = await server()
+      .get(`/api/v1/portal/parent/child/${studentAId}/documents`)
+      .set(auth(parentToken))
+      .expect(200);
+    // Certificates stay a self-describing stub until M27.
+    expect(
+      dataOf<{ certificates: { available: boolean } }>(docs).certificates
+        .available,
+    ).toBe(false);
+  });
+
+  it('never exposes the office’s internal status trail on the portal profile', async () => {
+    const res = await server()
+      .get('/api/v1/portal/student/profile')
+      .set(auth(studentAToken))
+      .expect(200);
+    const body = dataOf<Record<string, unknown>>(res);
+    expect(body).not.toHaveProperty('statusHistory');
+    expect(body).not.toHaveProperty('medical');
+  });
+
+  it('404s a report card for an exam with no published result', async () => {
+    await server()
+      .get(`/api/v1/portal/student/report-card/${randomUUID()}`)
+      .set(auth(studentAToken))
+      .expect(404);
+  });
+
+  it('serves the student routine as an empty grid when none is published', async () => {
+    const res = await server()
+      .get('/api/v1/portal/student/routine')
+      .set(auth(studentAToken))
+      .expect(200);
+    // The section resolves but no timetable was published, so the payload is
+    // an empty grid — not a 404, and not a draft leaking into a portal.
+    const d = dataOf<{ available: boolean; cells: unknown[] }>(res);
+    expect(d.available).toBe(true);
+    expect(d.cells).toEqual([]);
+  });
+
+  it('tells an unenrolled student why there is no routine, rather than 404ing', async () => {
+    // Student B has an enrollment but no portal user; the reasoned-payload
+    // branch is what a mid-setup school hits, so assert it directly.
+    const unenrolled = await prisma.student.create({
+      data: {
+        schoolId: DEFAULT_SCHOOL_ID,
+        studentUid: `E2E-PORTAL-C-${Date.now()}`,
+        firstName: NAME,
+        lastName: 'Charlie',
+        gender: 'MALE',
+        dob: new Date('2014-03-03'),
+        admissionDate: new Date('2026-01-02'),
+        qrToken: randomUUID(),
+      },
+    });
+    const res = await server()
+      .get(`/api/v1/portal/parent/child/${unenrolled.id}/routine`)
+      .set(auth(adminToken))
+      .expect(403);
+    // An admin is not an owner either — ownership is the only key here.
+    expect(res.status).toBe(403);
+  });
+
+  it('lists the payable invoices Pay Now may be pointed at', async () => {
+    const res = await server()
+      .get('/api/v1/portal/student/dues')
+      .set(auth(studentAToken))
+      .expect(200);
+    expect(
+      Array.isArray(dataOf<{ payableInvoices: unknown[] }>(res).payableInvoices),
+    ).toBe(true);
+  });
+
+  // ── messages + contact ──────────────────────────────────────────────
+
+  it('serves a self-scoped message history with no id to tamper with', async () => {
+    const res = await server()
+      .get('/api/v1/portal/messages')
+      .set(auth(parentToken))
+      .expect(200);
+    expect(Array.isArray(dataOf<{ items: unknown[] }>(res).items)).toBe(true);
+  });
+
+  it('accepts a portal contact message and files it under the account’s own name', async () => {
+    await server()
+      .post('/api/v1/portal/contact-school')
+      .set(auth(parentToken))
+      .send({ subject: 'E2EPORTAL question', body: 'Is there class on Sunday?' })
+      .expect(201);
+
+    const row = await prisma.contactMessage.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, subject: 'E2EPORTAL question' },
+    });
+    // The sender is taken from the guardian row, never the request body.
+    expect(row?.name).toBe(`${NAME} Parent`);
+    expect(row?.phone).toBe('01990001111');
+  });
+
+  it('refuses a contact message that tries to set its own sender', async () => {
+    await server()
+      .post('/api/v1/portal/contact-school')
+      .set(auth(parentToken))
+      .send({ name: 'Someone Else', body: 'Impersonation attempt' })
+      .expect(400);
+  });
+
+  it('404s a payment status for a reference that is not ours', async () => {
+    await server()
+      .get('/api/v1/portal/payment-status')
+      .query({ reference: `E2EPORTAL-${randomUUID()}` })
+      .set(auth(parentToken))
+      .expect(404);
+  });
+
   it('lets a student read themselves through the child route (owns self)', async () => {
     await server()
       .get(`/api/v1/portal/parent/child/${studentAId}/overview`)
@@ -370,6 +546,61 @@ describe('Portals & Dashboards (e2e)', () => {
       .expect(404);
   });
 
+  it('lets a teacher read and file their own leave, never a colleague’s', async () => {
+    const before = await server()
+      .get('/api/v1/portal/teacher/leaves')
+      .set(auth(teacherToken))
+      .expect(200);
+    // The envelope lifts `meta` out of a paginated handler, so the rows sit
+    // directly in `data` — one unwrap, not two.
+    expect(Array.isArray(dataOf<unknown[]>(before))).toBe(true);
+
+    // The M08 rule is "inside the current session", so the dates come from
+    // whichever session the school actually has current — this suite must
+    // not flip `is_current`, which the academic suite asserts on.
+    const current = await prisma.academicSession.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, isCurrent: true, deletedAt: null },
+      select: { startDate: true },
+    });
+    const day = (offset: number) => {
+      const d = new Date(current!.startDate);
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d.toISOString().slice(0, 10);
+    };
+
+    await server()
+      .post('/api/v1/portal/teacher/leaves')
+      .set(auth(teacherToken))
+      .send({ fromDate: day(30), toDate: day(31), reason: 'E2EPORTAL leave' })
+      .expect(201);
+
+    const filed = await prisma.teacherLeave.findFirst({
+      where: { teacher: { firstName: NAME }, reason: 'E2EPORTAL leave' },
+      select: { status: true },
+    });
+    // Filed, not auto-approved — the M08 approval flow still owns that.
+    expect(filed?.status).toBe('PENDING');
+
+    // The route has no teacherId to pass — supplying one is rejected by the
+    // whitelist, so a teacher cannot apply in a colleague's name.
+    await server()
+      .post('/api/v1/portal/teacher/leaves')
+      .set(auth(teacherToken))
+      .send({
+        teacherId: randomUUID(),
+        fromDate: day(40),
+        toDate: day(41),
+      })
+      .expect(400);
+  });
+
+  it('404s a non-teacher on the teacher leave routes', async () => {
+    await server()
+      .get('/api/v1/portal/teacher/leaves')
+      .set(auth(studentAToken))
+      .expect(404);
+  });
+
   // ── dashboards + reports ────────────────────────────────────────────
 
   it('gates the admin dashboard behind dashboard.admin', async () => {
@@ -383,6 +614,38 @@ describe('Portals & Dashboards (e2e)', () => {
       .expect(200);
     const d = dataOf<{ students: { total: number } }>(res);
     expect(typeof d.students.total).toBe('number');
+  });
+
+  it('ships the four chart series on the admin dashboard', async () => {
+    // Cached from the previous case, so bust it to exercise a live compute.
+    const res = await server()
+      .get('/api/v1/dashboard/admin')
+      .set(auth(adminToken))
+      .expect(200);
+    const d = dataOf<{
+      attendanceTrend: Array<{ date: string; percentage: number | null }>;
+      collectionTrend: unknown[];
+      recentActivity: Array<{ id: string }>;
+      gpaDistribution: unknown;
+    }>(res);
+
+    // Exactly 30 days, oldest first, with unmarked days as null rather than
+    // a zero that would read as "everybody was absent".
+    expect(d.attendanceTrend).toHaveLength(30);
+    expect(d.attendanceTrend.every((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date))).toBe(
+      true,
+    );
+    expect(
+      d.attendanceTrend.every(
+        (p) => p.percentage === null || typeof p.percentage === 'number',
+      ),
+    ).toBe(true);
+    expect(d.collectionTrend).toHaveLength(6);
+    // BIGSERIAL audit ids must be stringified — a BigInt would not survive
+    // JSON serialization.
+    for (const row of d.recentActivity) {
+      expect(typeof row.id).toBe('string');
+    }
   });
 
   it('serves the accountant dashboard to an admin', async () => {

@@ -37,6 +37,10 @@ export class DashboardService {
       recentNotices,
       upcomingEvents,
       resultStats,
+      attendanceTrend,
+      gpaDistribution,
+      collectionTrend,
+      recentActivity,
     ] = await Promise.all([
       this.repo.studentTotals(schoolId, session?.id ?? null),
       this.repo.todayAttendance(schoolId),
@@ -46,6 +50,10 @@ export class DashboardService {
       this.notices.publishedFeed(schoolId, { take: 5 }),
       this.repo.upcomingEvents(schoolId),
       this.repo.latestResultStats(schoolId),
+      this.repo.attendanceTrend(schoolId, 30),
+      this.repo.gpaDistribution(schoolId),
+      this.repo.monthlyCollectionTrend(schoolId, 6),
+      this.repo.recentActivity(schoolId),
     ]);
 
     const payload = {
@@ -63,6 +71,11 @@ export class DashboardService {
       })),
       upcomingEvents,
       resultStats,
+      // The four chart series (roadmap M18 §5).
+      attendanceTrend,
+      gpaDistribution,
+      collectionTrend,
+      recentActivity,
       computedAt: new Date().toISOString(),
     };
     await this.cache.setJson(key, payload, ADMIN_TTL);

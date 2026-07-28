@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { SessionsService } from '../../academic/services/sessions.service';
 import { NotificationService } from '../../communication/services/notification.service';
@@ -59,6 +64,55 @@ export class PortalActionsService {
     return {
       checkoutUrl: initiated.checkoutUrl,
       gatewayRef: initiated.gatewayRef,
+    };
+  }
+
+  /**
+   * What became of a checkout (roadmap M16 §5 "success/failure pages").
+   * Read strictly from our own `payments` rows — the outcome is whatever
+   * the M16 server-side `verify()` concluded, never what the gateway put
+   * in the redirect. A payer who is still PENDING is told to wait, which
+   * is the honest answer: the hourly reconciliation sweep will settle it.
+   *
+   * Ownership: every payment in the reference must belong to a student the
+   * caller owns, so someone else's reference is a 403.
+   */
+  async paymentStatus(
+    ownedStudentIds: string[],
+    reference: string,
+    schoolId: string,
+  ) {
+    const payments = await this.dashboard.paymentsByReference(
+      reference,
+      schoolId,
+    );
+    if (payments.length === 0) {
+      throw new NotFoundException('No payment for that reference');
+    }
+    for (const payment of payments) {
+      if (!ownedStudentIds.includes(payment.studentId)) {
+        throw new ForbiddenException('That payment is not yours to view');
+      }
+    }
+
+    const statuses = new Set(payments.map((p) => p.status));
+    const outcome = statuses.has('SUCCESS')
+      ? statuses.size === 1
+        ? 'SUCCESS'
+        : 'PARTIAL'
+      : statuses.has('PENDING')
+        ? 'PENDING'
+        : 'FAILED';
+
+    return {
+      reference,
+      outcome,
+      total: Math.round(
+        payments
+          .filter((p) => p.status === 'SUCCESS')
+          .reduce((sum, p) => sum + p.amount, 0) * 100,
+      ) / 100,
+      payments: payments.map(({ studentId: _studentId, ...rest }) => rest),
     };
   }
 

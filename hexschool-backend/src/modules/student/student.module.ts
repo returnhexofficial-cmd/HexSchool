@@ -92,6 +92,8 @@ import { StudentsService } from './services/students.service';
     StudentsService,
     StudentStatusHistoryRepository,
     IdCardService,
+    // M18's portal lists a student their own paperwork.
+    StudentDocumentsService,
   ],
 })
 export class StudentModule {}

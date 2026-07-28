@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Can } from "@/components/shared/can";
+import { BarRow, Sparkline } from "@/components/shared/charts";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingBlock } from "@/components/shared/spinner";
@@ -118,6 +119,25 @@ function DuesReport({ sessionId }: { sessionId: string }) {
         ))}
       </div>
 
+      {/* Aging shape (roadmap M16 §5) — the buckets are ordered, so the bar
+          lengths show at a glance whether the dues are fresh or stale. */}
+      {dues.data.buckets.length > 0 && (
+        <div className="rounded-md border p-4">
+          <h3 className="mb-3 text-sm font-medium">Dues aging</h3>
+          <div className="space-y-1.5">
+            {dues.data.buckets.map((b) => (
+              <BarRow
+                key={b.bucket}
+                label={`${b.bucket} days`}
+                value={b.amount}
+                max={Math.max(1, ...dues.data.buckets.map((x) => x.amount))}
+                format={formatBDT}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <h3 className="text-sm font-medium">Defaulters — largest first</h3>
       {dues.data.defaulters.length === 0 ? (
         <EmptyState title="Nobody owes anything" />
@@ -216,6 +236,40 @@ function DailyReport() {
             </strong>{" "}
             over {from} → {to}
           </p>
+          {/* Method split + collection trend (roadmap M16 §5). Two separate
+              charts rather than one dual-axis figure. */}
+          {daily.data.byMethod.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-md border p-4">
+                <h3 className="mb-3 text-sm font-medium">Method split</h3>
+                <div className="space-y-1.5">
+                  {daily.data.byMethod.map((m) => (
+                    <BarRow
+                      key={m.method}
+                      label={PAYMENT_METHOD_LABELS[m.method]}
+                      value={m.amount}
+                      max={Math.max(
+                        1,
+                        ...daily.data.byMethod.map((x) => x.amount),
+                      )}
+                      format={formatBDT}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-md border p-4">
+                <h3 className="mb-3 text-sm font-medium">Collection trend</h3>
+                <Sparkline
+                  data={daily.data.byDay.map((d) => ({
+                    label: d.date.slice(5, 10),
+                    value: d.amount,
+                  }))}
+                  format={formatBDT}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-md border">
               <div className="border-b px-4 py-2 text-sm font-medium">
@@ -305,6 +359,23 @@ function HeadWiseReport({ sessionId }: { sessionId: string }) {
           </Button>
         </Can>
       </div>
+
+      {head.data.rows.length > 0 && (
+        <div className="rounded-md border p-4">
+          <h3 className="mb-3 text-sm font-medium">Net income by head</h3>
+          <div className="space-y-1.5">
+            {head.data.rows.map((r) => (
+              <BarRow
+                key={r.feeHeadId ?? r.feeHeadName}
+                label={r.feeHeadName}
+                value={r.net}
+                max={Math.max(1, ...head.data.rows.map((x) => x.net))}
+                format={formatBDT}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>

@@ -265,6 +265,16 @@ export class PaymentGatewayService {
       date: now,
     });
 
+    const callbackUrl = `${baseUrl}/payments/callback/${dto.gateway.toLowerCase()}`;
+    // Where the payer's *browser* lands. When the caller supplies one (the
+    // M18 portal does), the human goes to a page that reads the outcome
+    // while the gateway's server-to-server IPN still hits our callback —
+    // which is the only thing allowed to conclude SUCCESS. Without a
+    // returnUrl (the admin desk) both point at the callback, as before.
+    const browserReturn = dto.returnUrl
+      ? `${dto.returnUrl}${dto.returnUrl.includes('?') ? '&' : '?'}reference=${encodeURIComponent(reference)}`
+      : callbackUrl;
+
     const session = await adapter.init(
       {
         reference,
@@ -272,10 +282,10 @@ export class PaymentGatewayService {
         currency: 'BDT',
         customerName:
           `${invoices[0].enrollment.student.firstName} ${invoices[0].enrollment.student.lastName}`.trim(),
-        successUrl: `${baseUrl}/payments/callback/${dto.gateway.toLowerCase()}`,
-        failUrl: `${baseUrl}/payments/callback/${dto.gateway.toLowerCase()}`,
-        cancelUrl: `${baseUrl}/payments/callback/${dto.gateway.toLowerCase()}`,
-        ipnUrl: `${baseUrl}/payments/callback/${dto.gateway.toLowerCase()}`,
+        successUrl: browserReturn,
+        failUrl: browserReturn,
+        cancelUrl: browserReturn,
+        ipnUrl: callbackUrl,
       },
       credentials,
     );

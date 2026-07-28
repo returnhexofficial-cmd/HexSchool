@@ -239,8 +239,9 @@ Committee, Careers, FAQ, Messages) and a `Website` sidebar entry gated on
   table carries `*_bn` columns and the API returns them, but the site
   renders the English field. `website.language_toggle` exists for the
   switch that will read them.
-- Lighthouse CI budgets (roadmap §9) and the k6 result-day load test are
-  **not run** — see Remaining TODOs.
+- Lighthouse CI budgets and the k6 result-day load test were **run on
+  2026-07-28** — see the addendum. A11y, SEO and best-practices all reach
+  100; **Performance 79 against a ≥ 90 target is the one budget missed.**
 - `PublicSiteRepository.adminUserIds` repeats a query
   `AudienceRepository` (M17) already has, because that repository is
   CommunicationModule-private.
@@ -306,10 +307,15 @@ None. Every route is additive. Two notes for existing deployments:
 
 ## Remaining TODOs
 
-- [ ] Lighthouse CI budget check (Performance ≥ 90, SEO ≥ 95, A11y ≥ 90
-      mobile) — roadmap §9.
-- [ ] k6 result-day load simulation (200 rps on result search) — roadmap
-      §9. The caching and CDN headers are in place; the test is not.
+- [x] ~~Lighthouse CI budget check~~ — **run 2026-07-28**, see the
+      addendum. A11y/SEO/best-practices 100; **Performance 79 vs ≥ 90 is
+      still open** (carried in PROJECT_CONTEXT §18).
+- [x] ~~k6 result-day load simulation~~ — **run 2026-07-28**, see the
+      addendum. Holds 150 rps; saturates at the roadmap's 200.
+- [ ] Raise public-site Performance to ≥ 90 by moving the app providers
+      out of the root layout (the diagnosis is in the addendum).
+- [ ] Re-run the k6 test on real infrastructure — the first run had the
+      generator co-resident with every server on one laptop.
 - [ ] In-browser click-throughs: the gallery lightbox on a phone, a real
       CV upload to MinIO, the contact form with live reCAPTCHA keys, and
       a draft preview link opened in a private window.
@@ -374,3 +380,97 @@ TTL expired: a silent failure, and precisely the one this cache exists to
 avoid. `SCAN` is not an option against a shared Redis. Naming the eight
 keys in a constant removes the failure mode entirely, at the cost of one
 line per new payload — which a unit test pins.
+
+---
+
+# Addendum — the two measurements, run 2026-07-28
+
+Roadmap §9 asked for a Lighthouse budget check and a k6 result-day load
+simulation. Both shipped as TODOs and were run in a later sweep. **Each
+found a real defect**, which is the argument for running them rather than
+reasoning about them.
+
+## Lighthouse (mobile emulation, `next start`)
+
+| Category | Before | After | Budget |
+|---|---|---|---|
+| Accessibility | 100 | **100** | ≥ 90 ✅ |
+| SEO | 92 | **100** | ≥ 95 ✅ |
+| Best practices | 96 | **100** | — ✅ |
+| Performance | 78 | **79** | ≥ 90 ❌ |
+
+### Defect 1 — every canonical was relative
+
+The head carried `<link rel="canonical" href="/">`. Next resolves relative
+metadata against `metadataBase`, and this layout set `metadataBase` **only
+when a school had filled in the `website.site_url` setting** — so on any
+site that had not, every canonical on every page was relative, which a
+crawler rejects. The resolution chain now always terminates somewhere
+absolute (configured domain → `NEXT_PUBLIC_SITE_URL` → localhost), and a
+malformed admin-entered URL is caught rather than taking the whole site's
+metadata down. This is the kind of bug **no unit or e2e test would have
+caught**: the page renders, the API is correct, and the damage is entirely
+in how a crawler reads the document.
+
+### Defect 2 — the public site called `/auth/refresh` on every visit
+
+`AuthProvider` sat in the **root** layout and bootstrapped a session on
+every route. An anonymous visitor has no refresh cookie, so the call could
+only ever 401 — a wasted round trip on the critical path of exactly the
+pages that most need to be fast, plus a console error on every marketing
+page. The bootstrap is now scoped to the authenticated route prefixes.
+
+It is deliberately an allow-list of **authenticated** areas rather than of
+public ones: the public site has a `[slug]` catch-all for CMS pages, so any
+top-level path can be public and no public list could stay complete. The
+failure mode is also the safer one — forget to add a new admin area and a
+hard refresh simply does not restore the session, which shows up at once
+and which the route guard still covers.
+
+### The open item — Performance 79
+
+The LCP element is a plain `<p>`, and its time is **89 % render delay**
+(LCP 4.2 s, TBT 310 ms, FCP 0.9 s, CLS 0). Nothing is waiting on the
+network; the main thread is busy. The cause is that `app/layout.tsx` wraps
+every route in `StoreProvider` + `QueryProvider` + `AuthProvider`, so a
+static marketing page downloads and hydrates the whole admin runtime.
+
+The fix is to push those providers down into the `(admin)`/`(portal)`
+layouts — but it is **not a pure move**: `result-search`, `contact-form`,
+`download-list`, `career-openings`, the gallery lightbox and the admission
+wizard are public client components that genuinely need the query client.
+Budget a proper pass. Carried in PROJECT_CONTEXT §18.
+
+## k6 — result-day load (`test/load/result-search.k6.js`)
+
+The script models a result-day spike: the SSR search page, the exam picker
+it populates from, and the search itself, in a realistic ratio.
+
+| Target rate | Search p95 | Exams p95 | Page p95 | Achieved | Verdict |
+|---|---|---|---|---|---|
+| 50 rps | 9.9 ms | 14.7 ms | 34.7 ms | 50 rps | ✅ |
+| 100 rps | 16.3 ms | 25.8 ms | 39.9 ms | 100 rps | ✅ |
+| 150 rps | 21.6 ms | 33.3 ms | 129.9 ms | 150 rps | ✅ |
+| **200 rps** | **7.8 s** | 16.8 s | — | 166 rps, 1 873 dropped | ❌ |
+
+Zero 5xx throughout; a search miss is a 404 by design (a withheld result
+and a non-existent one answer identically), so the script counts that as
+well-formed rather than as a failure.
+
+### The first run measured the throttler, not the server
+
+It reported ~85 % failures and *flattering* latencies. Both were artefacts:
+the public API allows **100 requests per minute per IP**, so after the
+first second nearly everything was a fast 429. A load test sourced from one
+address cannot say anything about a spike made of tens of thousands of
+different households. The script now varies `X-Forwarded-For` — the API
+runs `trust proxy` because it sits behind Nginx in production — which
+reproduces the real shape.
+
+**Caveat on every number above:** one developer laptop hosted Postgres,
+Redis, the API, Next **and** the 800-VU generator. The generator competes
+with the server for CPU, so 150 rps is a floor, not a production verdict.
+Re-run on real infrastructure before sizing. The local dataset also had no
+published results, so the search arm exercised the miss path — which is
+most of result-day traffic anyway (parents mistype rolls), but not the
+cached-payload path.

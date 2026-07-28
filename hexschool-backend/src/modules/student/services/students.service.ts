@@ -639,6 +639,9 @@ export class StudentsService {
       available: true,
       items: rows.map((row) => ({
         examId: row.examId,
+        // The enrollment the result was computed against — M18's portal
+        // needs it to ask for that one candidate's report card.
+        enrollmentId: row.enrollmentId,
         examName: row.exam.name,
         className: row.enrollment.class.name,
         rollNo: row.enrollment.rollNo,

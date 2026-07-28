@@ -6,17 +6,24 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { SkipEnvelope } from '../../../common/decorators/skip-envelope.decorator';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { InitOnlinePaymentDto } from '../../fee/dto';
+import type { ExportFile } from '../../result/services/result-export.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
+import { PortalContactDto, PortalLeaveDto } from '../dto';
 import { OwnershipGuard } from '../guards/ownership.guard';
 import { PortalActionsService } from '../services/portal-actions.service';
+import { PortalMessagesService } from '../services/portal-messages.service';
 import { PortalResolverService } from '../services/portal-resolver.service';
 import { StudentPortalService } from '../services/student-portal.service';
 import { TeacherPortalService } from '../services/teacher-portal.service';
@@ -38,6 +45,7 @@ export class PortalController {
     private readonly studentPortal: StudentPortalService,
     private readonly teacherPortal: TeacherPortalService,
     private readonly actions: PortalActionsService,
+    private readonly messages: PortalMessagesService,
   ) {}
 
   @Get('me')
@@ -76,6 +84,33 @@ export class PortalController {
   async studentRoutine(@CurrentUser() user: AccessTokenPayload) {
     const id = await this.selfStudentId(user);
     return this.studentPortal.routineFor(id, user.schoolId);
+  }
+
+  @Get('student/profile')
+  async studentProfile(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.selfStudentId(user);
+    return this.studentPortal.profile(id, user.schoolId);
+  }
+
+  @Get('student/documents')
+  async studentDocuments(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.selfStudentId(user);
+    return this.studentPortal.documents(id, user.schoolId);
+  }
+
+  @Get('student/report-card/:examId')
+  @SkipEnvelope()
+  @ApiOperation({ summary: 'Own report card PDF for a published exam' })
+  async studentReportCard(
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const id = await this.selfStudentId(user);
+    return stream(
+      res,
+      await this.studentPortal.reportCard(id, examId, user.schoolId),
+    );
   }
 
   @Post('student/pay')
@@ -159,6 +194,76 @@ export class PortalController {
     return this.actions.payDues(childId, dto, user, this.baseUrl(req));
   }
 
+  @Get('parent/child/:childId/profile')
+  @OwnsStudent('childId')
+  childProfile(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.studentPortal.profile(childId, user.schoolId);
+  }
+
+  @Get('parent/child/:childId/documents')
+  @OwnsStudent('childId')
+  childDocuments(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.studentPortal.documents(childId, user.schoolId);
+  }
+
+  @Get('parent/child/:childId/report-card/:examId')
+  @OwnsStudent('childId')
+  @SkipEnvelope()
+  @ApiOperation({ summary: "A child's report card PDF for a published exam" })
+  async childReportCard(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @Param('examId', ParseUUIDPipe) examId: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    return stream(
+      res,
+      await this.studentPortal.reportCard(childId, examId, user.schoolId),
+    );
+  }
+
+  // ── payment return (student + parent) ───────────────────────────────
+
+  @Get('payment-status')
+  @ApiOperation({
+    summary: 'What the M16 server-side verify concluded for a checkout',
+  })
+  async paymentStatus(
+    @Query('reference') reference: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    if (!reference) throw new NotFoundException('reference is required');
+    const principal = await this.resolver.principal(user);
+    return this.actions.paymentStatus(
+      principal.children.map((c) => c.studentId),
+      reference,
+      user.schoolId,
+    );
+  }
+
+  // ── messages (student + parent) ─────────────────────────────────────
+
+  @Get('messages')
+  @ApiOperation({ summary: 'SMS/email the school has sent this account' })
+  messageHistory(@CurrentUser() user: AccessTokenPayload) {
+    return this.messages.history(user);
+  }
+
+  @Post('contact-school')
+  @ApiOperation({ summary: 'Write to the office inbox (M28 replaces this)' })
+  contactSchool(
+    @Body() dto: PortalContactDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.messages.contactSchool(user, dto);
+  }
+
   // ── teacher ─────────────────────────────────────────────────────────
 
   @Get('teacher/overview')
@@ -182,6 +287,23 @@ export class PortalController {
     return this.teacherPortal.sectionRoster(id, sectionId, user.schoolId);
   }
 
+  @Get('teacher/leaves')
+  @ApiOperation({ summary: 'My own leave history' })
+  async teacherLeaves(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.teacherId(user);
+    return this.teacherPortal.myLeaves(id, user.schoolId);
+  }
+
+  @Post('teacher/leaves')
+  @ApiOperation({ summary: 'Apply for leave (M08 rules still apply)' })
+  async teacherApplyLeave(
+    @Body() dto: PortalLeaveDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    const id = await this.teacherId(user);
+    return this.teacherPortal.applyForLeave(id, dto, user);
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────
 
   private async selfStudentId(user: AccessTokenPayload): Promise<string> {
@@ -203,4 +325,14 @@ export class PortalController {
   private baseUrl(req: Request): string {
     return `${req.protocol}://${req.get('host')}/api/v1`;
   }
+}
+
+/** Same download contract as the M15 export routes. */
+function stream(res: Response, file: ExportFile): StreamableFile {
+  res.setHeader('Content-Type', file.contentType);
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${file.filename}"`,
+  );
+  return new StreamableFile(file.buffer);
 }

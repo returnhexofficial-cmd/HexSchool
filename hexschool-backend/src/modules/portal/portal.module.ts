@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AcademicModule } from '../academic/academic.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { NoticesRepository } from '../communication/repositories/notices.repository';
+import { NotificationsRepository } from '../communication/repositories/notifications.repository';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { FeeModule } from '../fee/fee.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -9,7 +10,9 @@ import { ResultModule } from '../result/result.module';
 import { SchoolModule } from '../school/school.module';
 import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StudentModule } from '../student/student.module';
+import { TeacherModule } from '../teacher/teacher.module';
 import { TimetableModule } from '../timetable/timetable.module';
+import { WebsiteModule } from '../website/website.module';
 import { DashboardController } from './controllers/dashboard.controller';
 import { PortalController } from './controllers/portal.controller';
 import { ReportsController } from './controllers/reports.controller';
@@ -17,6 +20,7 @@ import { OwnershipGuard } from './guards/ownership.guard';
 import { DashboardRepository } from './repositories/dashboard.repository';
 import { DashboardService } from './services/dashboard.service';
 import { PortalActionsService } from './services/portal-actions.service';
+import { PortalMessagesService } from './services/portal-messages.service';
 import { PortalResolverService } from './services/portal-resolver.service';
 import { ReportsService } from './services/reports.service';
 import { StudentPortalService } from './services/student-portal.service';
@@ -32,9 +36,12 @@ import { TeacherPortalService } from './services/teacher-portal.service';
  * + `PortalResolverService` rather than a permission code.
  *
  * PortalModule is a leaf (nothing imports it), so importing this many
- * modules is cycle-free. The two stateless repositories it needs directly
- * (`NoticesRepository`, `SchoolsRepository`) are re-provisions, the
- * established M07/M16 convention.
+ * modules is cycle-free. The three stateless repositories it needs directly
+ * (`NoticesRepository`, `NotificationsRepository`, `SchoolsRepository`) are
+ * re-provisions, the established M07/M16 convention.
+ *
+ * `WebsiteModule` is imported for one thing: the portal "Contact School"
+ * form files into the M19 office inbox rather than a second one.
  */
 @Module({
   imports: [
@@ -47,12 +54,15 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     CommunicationModule,
     RbacModule,
     SchoolModule,
+    TeacherModule,
+    WebsiteModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [
     PortalResolverService,
     StudentPortalService,
     TeacherPortalService,
+    PortalMessagesService,
     DashboardService,
     DashboardRepository,
     ReportsService,
@@ -60,6 +70,7 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     OwnershipGuard,
     // Stateless re-provisions (only need PrismaService).
     NoticesRepository,
+    NotificationsRepository,
     SchoolsRepository,
   ],
 })

@@ -54,6 +54,10 @@ import { WebsiteSettingsService } from './services/website-settings.service';
  * (ConfigService / PrismaService only) — the M17 convention for reusing
  * another module's un-exported provider without an import edge.
  *
+ * `ContactService` is the one export: M18's portal "Contact School" form
+ * lands in the same office inbox rather than inventing a second one, so
+ * PortalModule (a leaf) imports this module. The edge points one way.
+ *
  * **Left for Module 27:** `GET /public/verify/certificate` answers
  * `{ available: false, reason }` today (the M09 self-describing-stub
  * pattern); M27 replaces the body with real certificate verification.
@@ -96,5 +100,6 @@ import { WebsiteSettingsService } from './services/website-settings.service';
     RecaptchaService,
     SchoolsRepository,
   ],
+  exports: [ContactService],
 })
 export class WebsiteModule {}

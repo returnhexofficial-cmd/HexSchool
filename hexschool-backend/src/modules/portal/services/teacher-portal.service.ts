@@ -1,11 +1,13 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Weekday } from '@prisma/client';
+import { LeaveType, Weekday } from '@prisma/client';
 import { dhakaToday } from '../../../common/utils/clock.util';
 import { PrismaService } from '../../../database/prisma/prisma.service';
+import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
 import { EnrollmentsService } from '../../enrollment/services/enrollments.service';
 import { NoticesRepository } from '../../communication/repositories/notices.repository';
 import { RoutineService } from '../../timetable/services/routine.service';
 import { SessionsService } from '../../academic/services/sessions.service';
+import { TeacherLeavesService } from '../../teacher/services/teacher-leaves.service';
 
 // Indexed by JS getUTCDay() (0 = Sunday). The PG enum uses 3-letter codes.
 const WEEKDAYS: Weekday[] = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -24,6 +26,7 @@ export class TeacherPortalService {
     private readonly enrollments: EnrollmentsService,
     private readonly sessions: SessionsService,
     private readonly notices: NoticesRepository,
+    private readonly leaves: TeacherLeavesService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -102,6 +105,30 @@ export class TeacherPortalService {
 
   routineFor(teacherId: string, schoolId: string) {
     return this.routine.teacherRoutine(teacherId, {}, schoolId);
+  }
+
+  /**
+   * A teacher's own leave history (roadmap M18 §5). The admin inbox route
+   * carries `teacher.view`; here the `teacherId` is not a parameter at all
+   * — it comes from the resolved principal, so there is no id to tamper
+   * with and no permission to grant.
+   */
+  myLeaves(teacherId: string, schoolId: string) {
+    return this.leaves.list({ teacherId, page: 1, limit: 50 }, schoolId);
+  }
+
+  /**
+   * File a leave request from the portal. Forces `teacherId` to the caller
+   * — the DTO carries one, and accepting it would let any teacher apply in
+   * a colleague's name. All the M08 rules (session window, no overlap with
+   * an approved leave) still run, because this is the same service.
+   */
+  applyForLeave(
+    teacherId: string,
+    dto: { fromDate: string; toDate: string; type?: LeaveType; reason?: string },
+    actor: AccessTokenPayload,
+  ) {
+    return this.leaves.create({ ...dto, teacherId }, actor);
   }
 
   /** Roster of a section this teacher teaches (ownership-checked). */

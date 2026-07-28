@@ -11,7 +11,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/lib/hooks/use-permissions";
 import { formatBDT, portalApi } from "@/lib/api/portal";
-import { BarRow } from "./dashboard-charts";
+import { BarRow, ColumnChart, Sparkline } from "@/components/shared/charts";
 
 /**
  * Admin / principal dashboard (Module 18) — the panel's landing page.
@@ -143,20 +143,92 @@ export default function AdminHomePage() {
               </div>
             </div>
 
-            <div className="rounded-md border p-4">
-              <h3 className="mb-2 font-medium">Recent notices</h3>
-              {q.data.recentNotices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No notices.</p>
-              ) : (
-                <ul className="space-y-1 text-sm">
-                  {q.data.recentNotices.map((n) => (
-                    <li key={n.id}>
-                      {n.pinned && <Badge variant="secondary" className="mr-2">Pinned</Badge>}
-                      {n.title}
-                    </li>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-md border p-4">
+                <h3 className="mb-3 font-medium">Attendance, last 30 days</h3>
+                <Sparkline
+                  data={q.data.attendanceTrend.map((d) => ({
+                    label: d.date.slice(5),
+                    value: d.percentage,
+                  }))}
+                  format={(n) => `${n}%`}
+                />
+              </div>
+
+              <div className="rounded-md border p-4">
+                <h3 className="mb-3 font-medium">Collection, last 6 months</h3>
+                <ColumnChart
+                  data={q.data.collectionTrend.map((m) => ({
+                    label: m.month.slice(5),
+                    value: m.amount,
+                  }))}
+                  format={formatBDT}
+                />
+              </div>
+            </div>
+
+            {q.data.gpaDistribution && (
+              <div className="rounded-md border p-4">
+                <h3 className="mb-1 font-medium">GPA distribution</h3>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {q.data.gpaDistribution.examName}
+                </p>
+                <div className="space-y-1.5">
+                  {q.data.gpaDistribution.buckets.map((b) => (
+                    <BarRow
+                      key={b.label}
+                      label={b.label}
+                      value={b.count}
+                      max={Math.max(
+                        1,
+                        ...q.data!.gpaDistribution!.buckets.map((x) => x.count),
+                      )}
+                    />
                   ))}
-                </ul>
-              )}
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-md border p-4">
+                <h3 className="mb-2 font-medium">Recent notices</h3>
+                {q.data.recentNotices.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notices.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {q.data.recentNotices.map((n) => (
+                      <li key={n.id}>
+                        {n.pinned && <Badge variant="secondary" className="mr-2">Pinned</Badge>}
+                        {n.title}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Activity feed — the audit tail (M18 §5). Action + entity
+                  only; the diffs stay in the M03 audit viewer. */}
+              <div className="rounded-md border p-4">
+                <h3 className="mb-2 font-medium">Recent activity</h3>
+                {q.data.recentActivity.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nothing yet.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {q.data.recentActivity.map((a) => (
+                      <li key={a.id} className="flex justify-between gap-2">
+                        <span className="truncate">
+                          <span className="font-medium">{a.action}</span>{" "}
+                          {a.entityType}
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">
+                          {a.actor} ·{" "}
+                          {a.createdAt.slice(5, 16).replace("T", " ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <Can permission="report.view">

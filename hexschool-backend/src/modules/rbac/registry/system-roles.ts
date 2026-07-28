@@ -190,6 +190,19 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'website.committee.manage',
       'website.message.view',
       'website.message.manage',
+      // M20 — the head signs the accounts: they may post, cancel and,
+      // uniquely, reopen a closed period.
+      'accounting.view',
+      'account.manage',
+      'voucher.create',
+      'voucher.post',
+      'voucher.cancel',
+      'accounting.posting-map.manage',
+      'accounting.report',
+      'accounting.export',
+      'budget.manage',
+      'accounting.period.manage',
+      'accounting.period.reopen',
     ],
   },
   {
@@ -291,7 +304,7 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
     name: 'Accountant',
     slug: 'accountant',
     description:
-      'Fees and finance — fee setup, invoicing, the collection desk and the money reports (Module 16). Accounting vouchers arrive with Module 20.',
+      'Fees and finance — fee setup, invoicing, the collection desk and the money reports (Module 16), plus the chart of accounts, vouchers and the accounting statements (Module 20).',
     corePermissions: [
       'session.view',
       'structure.view',
@@ -310,9 +323,24 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // M18 — the accountant workspace dashboard + reports hub.
       'dashboard.accountant',
       'report.view',
+      // M20 — the accountant keeps the books: the chart of accounts,
+      // vouchers, budgets, the posting map and every report.
+      'accounting.view',
+      'account.manage',
+      'voucher.create',
+      'voucher.post',
+      'accounting.posting-map.manage',
+      'accounting.report',
+      'accounting.export',
+      'budget.manage',
+      'accounting.period.manage',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.
+      // For the same reason, NOT `voucher.cancel` (reversing a posted
+      // voucher is the head's call) and NOT `accounting.period.reopen`
+      // — the person who closed the books must not be able to quietly
+      // reopen them.
     ],
   },
   {

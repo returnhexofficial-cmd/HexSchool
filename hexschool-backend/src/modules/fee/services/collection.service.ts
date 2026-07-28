@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Payment, Prisma } from '@prisma/client';
 import {
   InvoiceStatus,
@@ -33,6 +34,7 @@ import {
   RecordPaymentDto,
   RefundPaymentDto,
 } from '../dto';
+import { FEE_EVENTS } from '../events/fee.events';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import {
   PaymentsRepository,
@@ -78,6 +80,9 @@ export class CollectionService {
     private readonly config: FeeSettingsService,
     private readonly auditContext: AuditContextService,
     private readonly notifications: NotificationService,
+    // M20: money that concludes SUCCESS is announced, never posted to
+    // the ledger from here — see `events/fee.events.ts` for the direction.
+    private readonly events: EventEmitter2,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
@@ -242,6 +247,16 @@ export class CollectionService {
       await this.queueReceiptSms(detailed, school.name);
     }
 
+    // M20 auto-posting. Offline money is SUCCESS the moment it is taken,
+    // so this is the point the ledger learns about it.
+    for (const payment of created) {
+      this.events.emit(FEE_EVENTS.PAYMENT_SUCCESS, {
+        schoolId,
+        paymentId: payment.id,
+        actorId: actor.sub,
+      });
+    }
+
     return {
       payments: detailed,
       totalCollected: result.totalAllocated,
@@ -295,8 +310,9 @@ export class CollectionService {
       );
     }
 
+    let refundId = '';
     await this.payments.withTransaction(async (tx) => {
-      await this.payments.createRefund(
+      const refund = await this.payments.createRefund(
         {
           schoolId,
           paymentId,
@@ -306,6 +322,7 @@ export class CollectionService {
         },
         tx,
       );
+      refundId = refund.id;
 
       // Fully refunded ⇒ the payment itself is REFUNDED; a partial
       // refund leaves it SUCCESS with the balance still credited.
@@ -330,6 +347,15 @@ export class CollectionService {
         amount: dto.amount,
         reason: dto.reason,
       },
+    });
+
+    // M20: the ledger reverses what it posted for this payment.
+    this.events.emit(FEE_EVENTS.PAYMENT_REFUNDED, {
+      schoolId,
+      paymentId,
+      refundId,
+      amount: money(dto.amount),
+      actorId: actor.sub,
     });
 
     return this.getPayment(paymentId, schoolId);

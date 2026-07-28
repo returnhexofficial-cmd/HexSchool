@@ -598,6 +598,84 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       5,
     ],
   ]),
+  // M20 — the ledger's knobs: voucher numbering per type, whether fee
+  // money posts itself, and the two safety checks the roadmap makes
+  // configurable (§6 cash-negative, §7 future dating, §8 backdating).
+  ...g(SettingsGroup.accounting, [
+    ['accounting.enabled', 'boolean', 'Accounting module enabled', true],
+    [
+      'accounting.auto_post_fees',
+      'boolean',
+      'Post fee receipts and refunds to the ledger automatically',
+      true,
+    ],
+    [
+      'accounting.auto_post_status',
+      'string',
+      'Auto-posted vouchers land as POSTED or DRAFT (for review)',
+      'POSTED',
+    ],
+    [
+      'accounting.voucher_no_pattern_debit',
+      'string',
+      'Payment (debit) voucher number pattern',
+      'DV-{YY}-{SEQ5}',
+    ],
+    [
+      'accounting.voucher_no_pattern_credit',
+      'string',
+      'Receipt (credit) voucher number pattern',
+      'CV-{YY}-{SEQ5}',
+    ],
+    [
+      'accounting.voucher_no_pattern_journal',
+      'string',
+      'Journal voucher number pattern',
+      'JV-{YY}-{SEQ5}',
+    ],
+    [
+      'accounting.voucher_no_pattern_contra',
+      'string',
+      'Contra voucher number pattern',
+      'CN-{YY}-{SEQ5}',
+    ],
+    [
+      'accounting.future_voucher_days',
+      'number',
+      'Days a voucher may be dated ahead (0 = no future dating)',
+      0,
+    ],
+    [
+      'accounting.cash_negative_check',
+      'string',
+      'Cash going negative: HARD (refuse), SOFT (warn) or OFF',
+      'SOFT',
+    ],
+    [
+      'accounting.backdate_after_close',
+      'boolean',
+      'A payment dated inside a closed period posts to the next open one with a note (BD practice)',
+      true,
+    ],
+    [
+      'accounting.require_narration',
+      'boolean',
+      'Every voucher must carry a narration',
+      true,
+    ],
+    [
+      'accounting.fiscal_year_start_month',
+      'number',
+      'Month the accounting year starts (1–12)',
+      1,
+    ],
+    [
+      'accounting.report_footer',
+      'string',
+      'Footer line printed on accounting statements',
+      '',
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

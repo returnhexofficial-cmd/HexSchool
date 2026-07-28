@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import {
   InvoiceStatus,
@@ -26,6 +27,7 @@ import { BkashAdapter } from '../gateways/bkash.adapter';
 import { NagadAdapter } from '../gateways/nagad.adapter';
 import { SslcommerzAdapter } from '../gateways/sslcommerz.adapter';
 import { InitOnlinePaymentDto, OnlineGateway } from '../dto';
+import { FEE_EVENTS } from '../events/fee.events';
 import { InvoicesRepository } from '../repositories/invoices.repository';
 import { PaymentsRepository } from '../repositories/payments.repository';
 import { CollectionService } from './collection.service';
@@ -87,6 +89,9 @@ export class PaymentGatewayService {
     private readonly settings: SettingsService,
     private readonly config: FeeSettingsService,
     private readonly auditContext: AuditContextService,
+    // M20: only `verify()` may conclude SUCCESS, so this is the only
+    // place online money is announced to the ledger.
+    private readonly events: EventEmitter2,
     sslcommerz: SslcommerzAdapter,
     bkash: BkashAdapter,
     nagad: NagadAdapter,
@@ -96,6 +101,20 @@ export class PaymentGatewayService {
       [bkash.name, bkash],
       [nagad.name, nagad],
     ]);
+  }
+
+  /** Tell the ledger (M20) about money a server-side verify concluded. */
+  private announcePosted(
+    schoolId: string,
+    payments: Array<{ id: string }>,
+  ): void {
+    for (const payment of payments) {
+      this.events.emit(FEE_EVENTS.PAYMENT_SUCCESS, {
+        schoolId,
+        paymentId: payment.id,
+        actorId: null,
+      });
+    }
   }
 
   adapterFor(gateway: string): PaymentGatewayAdapter {
@@ -409,6 +428,7 @@ export class PaymentGatewayService {
       for (const invoiceId of new Set(pending.map((p) => p.invoiceId))) {
         await this.collection.settle(invoiceId);
       }
+      this.announcePosted(schoolId, pending);
     }
 
     this.auditContext.set({
@@ -473,6 +493,10 @@ export class PaymentGatewayService {
       for (const invoiceId of new Set(siblings.map((p) => p.invoiceId))) {
         await this.collection.settle(invoiceId);
       }
+      // A swept payment took the identical path, so it posts identically
+      // — and `uq_vouchers_source_ref` makes a sweep that races the
+      // original callback land one voucher, not two.
+      this.announcePosted(schoolId, siblings);
     }
 
     return {

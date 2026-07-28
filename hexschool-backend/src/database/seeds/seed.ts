@@ -11,6 +11,7 @@ import {
 import { seedNctbGradingSystem } from '../../modules/school/seed/school.seeder';
 import { seedStandardGroups } from '../../modules/academic/seed/structure.seeder';
 import { seedNotificationTemplates } from '../../modules/communication/seed/communication.seeder';
+import { seedChartOfAccounts } from '../../modules/accounting/seed/accounting.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -109,6 +110,18 @@ const seeders: Seeder[] = [
         DEFAULT_SCHOOL_ID,
       );
       process.stdout.write(`${created} created; `);
+    },
+  },
+  {
+    // Module 20: the default BD-school chart of accounts. Skipped
+    // entirely when the school already keeps accounts, so a reshaped
+    // chart never has the defaults pushed back on top of it.
+    name: 'chart-of-accounts (M20)',
+    run: async (prisma) => {
+      const created = await seedChartOfAccounts(prisma, DEFAULT_SCHOOL_ID);
+      process.stdout.write(
+        created > 0 ? `${created} accounts created; ` : 'already present; ',
+      );
     },
   },
 ];

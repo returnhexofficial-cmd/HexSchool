@@ -64,4 +64,12 @@ export {
   GalleryItemType,
   ContactMessageStatus,
   CareerApplicationStatus,
+  AccountGroup,
+  AccountType,
+  VoucherType,
+  VoucherSource,
+  VoucherStatus,
+  BudgetPeriod,
+  FiscalPeriodStatus,
+  PostingMapKind,
 } from '@prisma/client';

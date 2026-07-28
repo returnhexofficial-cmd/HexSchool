@@ -1479,9 +1479,16 @@ describe('Marks & Results (e2e)', () => {
    * Poll until the queued run finishes. Processing goes through BullMQ,
    * so the POST returns before the work is done — which is the whole
    * reason the run's progress is durable in Postgres.
+   *
+   * The 60-second budget is deliberate. It used to be 15 s, which was
+   * implicitly calibrated against Prisma's 5-second transaction default:
+   * a run either finished quickly or died inside it. Now that the bulk
+   * passes carry a real budget (M20 — see `ResultsRepository`), a busy
+   * machine's run legitimately takes longer than 15 s, and the old
+   * ceiling turned a slow-but-correct run into a red test.
    */
   async function waitForRun(exam: string): Promise<void> {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
       const run = await prisma.resultRun.findFirst({
         where: { examId: exam },
         orderBy: { createdAt: 'desc' },

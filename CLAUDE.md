@@ -2,7 +2,7 @@
 
 School Management Information System for Bangladeshi schools. Two repos in
 this workspace, built module by module against a 32-module roadmap.
-**15 modules complete.**
+*20 modules complete.**
 
 - `hexschool-backend` — NestJS 11, Prisma 7, Postgres 16, Redis/BullMQ, S3
 - `hexschool-frontend` — Next.js 16 (App Router), React 19, TanStack Query,

@@ -363,6 +363,35 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['website.message.view', 'Read contact-form messages'],
     ['website.message.manage', 'Change a contact message’s status or delete it'],
   ]),
+
+  // ── Module 20: Accounting & Finance ─────────────────────────────────
+  // Raising a voucher, approving it and cancelling it are three codes on
+  // purpose — the same separation of duties the M16 collection desk uses.
+  // A school where one person does all three grants all three; a school
+  // with an accountant and a head does not, and the system encodes that
+  // rather than assuming it.
+  ...define('accounting', [
+    ['accounting.view', 'View the chart of accounts, vouchers and reports'],
+    ['account.manage', 'Create/edit/delete accounts in the chart of accounts'],
+    ['voucher.create', 'Raise and edit draft vouchers'],
+    ['voucher.post', 'Post a voucher to the ledger (and record settlements)'],
+    [
+      'voucher.cancel',
+      'Cancel a posted voucher (writes a reversal, never a delete)',
+    ],
+    [
+      'accounting.posting-map.manage',
+      'Change the fee-head → income and method → funds account mappings',
+    ],
+    ['accounting.report', 'Run the cash book, ledgers and the three statements'],
+    ['accounting.export', 'Download accounting reports and printable vouchers'],
+    ['budget.manage', 'Create/edit/delete budget lines'],
+    ['accounting.period.manage', 'Create fiscal periods and close them'],
+    [
+      'accounting.period.reopen',
+      'Reopen a closed accounting period (reason mandatory, audited)',
+    ],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

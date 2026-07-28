@@ -100,7 +100,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | # | Module | Status |
 |---|--------|--------|
 | 19 | Website CMS (Public Site) | ☑ |
-| 20 | Accounting & Finance | ☐ |
+| 20 | Accounting & Finance | ☑ |
 | 21 | HR & Payroll | ☐ |
 | 22 | Assignments & Homework | ☐ |
 | 23 | Library Management | ☐ |
@@ -1428,11 +1428,11 @@ Double-entry accounting: chart of accounts, vouchers (debit/credit/journal/contr
 - `fiscal_periods`: `id, school_id, name, start_date, end_date, status ENUM('OPEN','CLOSED')`.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] COA CRUD with seeded BD-school default tree (Tuition Income, Exam Fee Income, Salary Expense, Utilities, Bank accounts, Cash in Hand…).
-- [ ] Voucher service: create/post (validates Σdebit = Σcredit, period OPEN), cancel (reversal voucher, never delete POSTED), numbering per type.
-- [ ] Auto-posting listeners: `payment.success` → Dr Cash/Bank-or-Gateway, Cr Fee Income (per head→account mapping table); `payment.refunded` reversal; payroll disbursed (Module 21) → Dr Salary Expense, Cr Bank; mapping config UI-driven.
-- [ ] Reports (all: date-range, PDF/XLSX): Cash Book, Bank Book (per bank account), General Ledger (per account, running balance), Trial Balance, Income Statement, Balance Sheet, Receipts & Payments, Budget vs Actual.
-- [ ] Period close: locks vouchers ≤ end_date; closing entries optional.
+- [x] COA CRUD with seeded BD-school default tree (Tuition Income, Exam Fee Income, Salary Expense, Utilities, Bank accounts, Cash in Hand…).
+- [x] Voucher service: create/post (validates Σdebit = Σcredit, period OPEN), cancel (reversal voucher, never delete POSTED), numbering per type.
+- [x] Auto-posting listeners: `payment.success` → Dr Cash/Bank-or-Gateway, Cr Fee Income (per head→account mapping table); `payment.refunded` reversal; payroll disbursed (Module 21) → Dr Salary Expense, Cr Bank; mapping config UI-driven.
+- [x] Reports (all: date-range, PDF/XLSX): Cash Book, Bank Book (per bank account), General Ledger (per account, running balance), Trial Balance, Income Statement, Balance Sheet, Receipts & Payments, Budget vs Actual.
+- [x] Period close: locks vouchers ≤ end_date; closing entries optional.
 ### APIs
 ```
 CRUD /api/v1/accounts        GET /api/v1/accounts/tree
@@ -1443,11 +1443,11 @@ CRUD /api/v1/budgets | fiscal-periods (+ /:id/close)
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] COA tree manager (drag nesting, code auto-suggest).
-- [ ] Voucher entry screen: date, type, dynamic Dr/Cr rows with account autocomplete, live balance indicator (must hit 0 to post), attachment upload, print voucher.
-- [ ] Posting-map settings page (fee head → income account; gateway → bank/clearing account).
-- [ ] Report pages: parameter bar + tabular results + drill-down (trial balance row → ledger → voucher), export/print.
-- [ ] Budget editor + variance dashboard.
+- [x] COA tree manager (code auto-suggest; re-parenting is a field, not a drag — see the completion doc).
+- [x] Voucher entry screen: date, type, dynamic Dr/Cr rows with account autocomplete, live balance indicator (must hit 0 to post), attachment upload, print voucher.
+- [x] Posting-map settings page (fee head → income account; gateway → bank/clearing account).
+- [x] Report pages: parameter bar + tabular results + drill-down (trial balance row → ledger → voucher), export/print.
+- [x] Budget editor + variance dashboard.
 
 ## 6. Business Rules
 - Every POSTED voucher balances exactly; unbalanced cannot post (DB-level trigger safety net + service check).
@@ -1465,15 +1465,15 @@ CRUD /api/v1/budgets | fiscal-periods (+ /:id/close)
 - Opening balances mid-year adoption → opening balance journal wizard.
 
 ## 9. Testing Checklist
-- [ ] Unit: balance validation, reversal integrity, report math (fixtures with known trial balance).
-- [ ] e2e: payment event → auto voucher → appears in cash book & income statement.
-- [ ] Frontend: voucher grid UX, drill-down chain.
+- [x] Unit: balance validation, reversal integrity, report math (fixtures with known trial balance).
+- [x] e2e: payment event → auto voucher → appears in cash book & income statement.
+- [x] Frontend: voucher grid UX, drill-down chain.
 
 ## 10. Completion Checklist
-- [ ] COA + vouchers + auto-posting
-- [ ] All seven reports reconcile on fixture data
-- [ ] Period close
-- [ ] Docs: `docs/modules/20-accounting.md`
+- [x] COA + vouchers + auto-posting
+- [x] All eight reports reconcile on fixture data
+- [x] Period close
+- [x] Docs: `docs/modules/20-accounting.md`
 
 ---
 

@@ -95,6 +95,7 @@ enum SettingsGroup {
   fees
   communication
   website
+  accounting
 
   @@map("settings_group_enum")
 }
@@ -673,6 +674,96 @@ enum CareerApplicationStatus {
   @@map("career_application_status_enum")
 }
 
+/// The five top-level buckets of the chart of accounts. The roadmap M20
+/// §3 calls this a fixed tree of `account_groups`; a fixed tree of five
+/// rows per school is an enum, not a table — a school may add branches
+/// under them but may never invent a sixth root, because the three
+/// statements (trial balance, income statement, balance sheet) are
+/// defined over exactly these five.
+enum AccountGroup {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+
+  @@map("account_group_enum")
+}
+
+/// What kind of thing an account *is*, within its group — the reports
+/// key on this (cash book reads CASH, bank book reads BANK) where the
+/// group alone is too coarse.
+enum AccountType {
+  CASH
+  BANK
+  RECEIVABLE
+  PAYABLE
+  INCOME
+  EXPENSE
+  EQUITY
+  OTHER
+
+  @@map("account_type_enum")
+}
+
+/// Voucher kinds a BD school's cash book uses: a DEBIT voucher records a
+/// payment out, a CREDIT voucher money in, a CONTRA a move between the
+/// school's own cash and bank, and a JOURNAL everything else.
+enum VoucherType {
+  DEBIT
+  CREDIT
+  JOURNAL
+  CONTRA
+
+  @@map("voucher_type_enum")
+}
+
+/// Who raised the voucher. Anything other than MANUAL was written by an
+/// auto-posting listener and may not be hand-edited (roadmap M20 §6) —
+/// the correction path is cancel-and-reverse.
+enum VoucherSource {
+  MANUAL
+  FEES
+  PAYROLL
+  INVENTORY
+  ADMISSION
+
+  @@map("voucher_source_enum")
+}
+
+/// DRAFT is editable, POSTED is immutable, CANCELLED carries a reversal.
+enum VoucherStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+
+  @@map("voucher_status_enum")
+}
+
+enum BudgetPeriod {
+  YEARLY
+  MONTHLY
+
+  @@map("budget_period_enum")
+}
+
+enum FiscalPeriodStatus {
+  OPEN
+  CLOSED
+
+  @@map("fiscal_period_status_enum")
+}
+
+/// What a posting-map row keys on. Append-only, so M21 payroll and M24
+/// inventory can register their own mappings without a migration.
+enum PostingMapKind {
+  FEE_HEAD
+  PAYMENT_METHOD
+  SYSTEM
+
+  @@map("posting_map_kind_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -848,6 +939,12 @@ model School {
   faqs                     Faq[]
   committeeMembers         CommitteeMember[]
   contactMessages          ContactMessage[]
+  accounts                 Account[]
+  vouchers                 Voucher[]
+  voucherEntries           VoucherEntry[]
+  budgets                  Budget[]
+  fiscalPeriods            FiscalPeriod[]
+  postingMaps              PostingMap[]
 
   @@map("schools")
 }
@@ -952,6 +1049,7 @@ model AcademicSession {
   combinedResults          CombinedResult[]
   feeStructures            FeeStructure[]
   invoices                 Invoice[]
+  budgets                  Budget[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -3393,4 +3491,243 @@ model ContactMessage {
 
   @@index([schoolId, status, createdAt], map: "idx_contact_messages_status")
   @@map("contact_messages")
+}
+
+// ── Module 20: Accounting & Finance ───────────────────────────────────
+
+/// One node of the chart of accounts. `parent_id` makes it a tree inside
+/// its `group`, and `is_group` says whether it is a heading or a place
+/// money may actually land: **only leaves take entries** (roadmap M20 §7).
+/// The distinction is a column rather than "has no children" because a
+/// heading with no children yet must already refuse a posting — otherwise
+/// the first entry lands on it and the node can never become a heading.
+///
+/// `is_system` marks the accounts auto-posting resolves to. They may be
+/// renamed but never deleted or deactivated, because a school that
+/// deleted "Cash in Hand" would silently stop being able to bank a fee.
+model Account {
+  id       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String    @map("school_id") @db.Uuid
+  school   School    @relation(fields: [schoolId], references: [id], map: "fk_accounts_school")
+  parentId String?   @map("parent_id") @db.Uuid
+  /// Restrict, not SetNull: an account that silently lost its parent
+  /// would jump to the root of a statement and quietly restate it.
+  parent   Account?  @relation("AccountTree", fields: [parentId], references: [id], onDelete: Restrict, map: "fk_accounts_parent")
+  children Account[] @relation("AccountTree")
+
+  group  AccountGroup
+  type   AccountType  @default(OTHER)
+  code   String       @db.VarChar(20)
+  name   String       @db.VarChar(150)
+  nameBn String?      @map("name_bn") @db.VarChar(150)
+
+  /// Balance carried in when the school adopted the system, in the
+  /// account's own natural direction (a debit-normal account's opening
+  /// balance is a debit). Headings must carry 0 — a CHECK enforces it.
+  openingBalance Decimal @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  /// Bank-book identity for a BANK account; NULL everywhere else.
+  bankAccountNo  String? @map("bank_account_no") @db.VarChar(60)
+  bankName       String? @map("bank_name") @db.VarChar(150)
+  branchName     String? @map("branch_name") @db.VarChar(150)
+
+  isGroup      Boolean @default(false) @map("is_group")
+  isSystem     Boolean @default(false) @map("is_system")
+  isActive     Boolean @default(true) @map("is_active")
+  description  String? @db.VarChar(500)
+  displayOrder Int     @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  entries     VoucherEntry[]
+  budgets     Budget[]
+  postingMaps PostingMap[]
+
+  // `uq_accounts_code` is partial (live rows only) and hand-written —
+  // deleting an account frees its code for reuse, unlike a document
+  // number, because a code is a filing position and not a receipt.
+  @@index([schoolId, group, code], map: "idx_accounts_group_code")
+  @@index([parentId], map: "idx_accounts_parent")
+  @@map("accounts")
+}
+
+/// The document. A POSTED voucher is immutable (roadmap M20 §6) —
+/// correcting one means cancelling it, which writes a mirror-image
+/// reversal voucher linked back through `reversal_of_voucher_id`, so the
+/// ledger keeps both sides and the trial balance never rewinds.
+///
+/// `source_ref` is the machine idempotency key for auto-posting
+/// (`payment:<uuid>`, `refund:<uuid>`, later `payroll:<uuid>`). A partial
+/// unique over it is what makes a replayed event, a reconciliation sweep
+/// and a double-clicked callback all land one voucher instead of three.
+model Voucher {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String @map("school_id") @db.Uuid
+  school    School @relation(fields: [schoolId], references: [id], map: "fk_vouchers_school")
+  voucherNo String @map("voucher_no") @db.VarChar(30)
+
+  type   VoucherType
+  source VoucherSource @default(MANUAL)
+  status VoucherStatus @default(DRAFT)
+
+  date          DateTime @db.Date
+  narration     String   @db.VarChar(500)
+  /// Human-facing pointer (an invoice number, a receipt number).
+  reference     String?  @db.VarChar(120)
+  /// Machine idempotency key — see the model doc.
+  sourceRef     String?  @map("source_ref") @db.VarChar(120)
+  attachmentUrl String?  @map("attachment_url") @db.VarChar(500)
+
+  fiscalPeriodId String?       @map("fiscal_period_id") @db.Uuid
+  fiscalPeriod   FiscalPeriod? @relation(fields: [fiscalPeriodId], references: [id], onDelete: Restrict, map: "fk_vouchers_fiscal_period")
+
+  postedBy String?   @map("posted_by") @db.Uuid
+  postedAt DateTime? @map("posted_at") @db.Timestamptz(6)
+
+  cancelledBy         String?   @map("cancelled_by") @db.Uuid
+  cancelledAt         DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason        String?   @map("cancel_reason") @db.VarChar(500)
+  /// Set on the reversal voucher, pointing at what it reverses.
+  reversalOfVoucherId String?   @map("reversal_of_voucher_id") @db.Uuid
+  reversalOf          Voucher?  @relation("VoucherReversal", fields: [reversalOfVoucherId], references: [id], onDelete: Restrict, map: "fk_vouchers_reversal_of")
+  reversedBy          Voucher[] @relation("VoucherReversal")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  entries VoucherEntry[]
+
+  // Voucher numbers are never reused, so this unique deliberately
+  // IGNORES `deleted_at` (the M07 employee-ID / M16 invoice precedent).
+  // The `source_ref` idempotency unique is partial and hand-written.
+  @@unique([schoolId, voucherNo], map: "uq_vouchers_no")
+  @@index([schoolId, date, status], map: "idx_vouchers_school_date_status")
+  @@index([schoolId, source, status], map: "idx_vouchers_source")
+  @@map("vouchers")
+}
+
+/// One line of a voucher. Hard-deleted with its voucher and replaced as a
+/// set while the voucher is a DRAFT (the M13 `timetable_entries` / M19
+/// `gallery_items` precedent) — a half-edited voucher is worse than none,
+/// and once POSTED the lines never move again.
+///
+/// A line is one-sided by CHECK (`debit = 0 OR credit = 0`) and non-zero
+/// (`debit + credit > 0`): a line that is both, or neither, is not an
+/// entry a ledger can read.
+model VoucherEntry {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], map: "fk_voucher_entries_school")
+  voucherId String  @map("voucher_id") @db.Uuid
+  voucher   Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade, map: "fk_voucher_entries_voucher")
+  accountId String  @map("account_id") @db.Uuid
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Restrict, map: "fk_voucher_entries_account")
+
+  debit        Decimal @default(0) @db.Decimal(12, 2)
+  credit       Decimal @default(0) @db.Decimal(12, 2)
+  narration    String? @db.VarChar(300)
+  displayOrder Int     @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([voucherId, displayOrder], map: "idx_voucher_entries_voucher")
+  @@index([accountId], map: "idx_voucher_entries_account")
+  @@map("voucher_entries")
+}
+
+/// What a school planned to earn or spend on one account for a session.
+/// Keyed on the session rather than a fiscal period because that is the
+/// unit a school budgets in; `month` narrows a MONTHLY row and is NULL on
+/// a YEARLY one (a CHECK pins the pair, and the identity index maps NULL
+/// to 0 — the M06 COALESCE trick).
+model Budget {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String          @map("school_id") @db.Uuid
+  school    School          @relation(fields: [schoolId], references: [id], map: "fk_budgets_school")
+  sessionId String          @map("session_id") @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_budgets_session")
+  accountId String          @map("account_id") @db.Uuid
+  account   Account         @relation(fields: [accountId], references: [id], onDelete: Restrict, map: "fk_budgets_account")
+
+  period BudgetPeriod @default(YEARLY)
+  /// 1–12 for a MONTHLY row, NULL for a YEARLY one.
+  month  Int?
+  amount Decimal      @db.Decimal(12, 2)
+  note   String?      @db.VarChar(300)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, sessionId], map: "idx_budgets_scope")
+  @@index([accountId], map: "idx_budgets_account")
+  @@map("budgets")
+}
+
+/// The accounting year (or the months inside it). CLOSED locks every
+/// voucher dated inside it — the whole point of a close is that last
+/// year's trial balance stops moving. Reopening is a permission
+/// (`accounting.period.reopen`) and an audit entry, never a quiet edit.
+model FiscalPeriod {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_fiscal_periods_school")
+
+  name      String             @db.VarChar(100)
+  startDate DateTime           @map("start_date") @db.Date
+  endDate   DateTime           @map("end_date") @db.Date
+  status    FiscalPeriodStatus @default(OPEN)
+
+  closedBy    String?   @map("closed_by") @db.Uuid
+  closedAt    DateTime? @map("closed_at") @db.Timestamptz(6)
+  reopenedBy  String?   @map("reopened_by") @db.Uuid
+  reopenedAt  DateTime? @map("reopened_at") @db.Timestamptz(6)
+  closingNote String?   @map("closing_note") @db.VarChar(500)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  vouchers Voucher[]
+
+  @@index([schoolId, startDate, endDate], map: "idx_fiscal_periods_range")
+  @@map("fiscal_periods")
+}
+
+/// The bridge between operations and the ledger: which account a fee
+/// head's income lands in, which cash/bank/clearing account a payment
+/// method settles to, and the handful of system slots (receivable,
+/// discount, late fine, gateway charges, opening equity) auto-posting
+/// needs by name. Kind + key rather than a column per mapping, so M21
+/// payroll and M24 inventory register their own without a migration.
+model PostingMap {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String         @map("school_id") @db.Uuid
+  school    School         @relation(fields: [schoolId], references: [id], map: "fk_posting_maps_school")
+  kind      PostingMapKind
+  /// A fee-head UUID, a `payment_method_enum` value, or a system slug.
+  refKey    String         @map("ref_key") @db.VarChar(80)
+  accountId String         @map("account_id") @db.Uuid
+  account   Account        @relation(fields: [accountId], references: [id], onDelete: Restrict, map: "fk_posting_maps_account")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_posting_maps_key` is partial (live rows) and hand-written.
+  @@index([schoolId, kind], map: "idx_posting_maps_kind")
+  @@index([accountId], map: "idx_posting_maps_account")
+  @@map("posting_maps")
 }

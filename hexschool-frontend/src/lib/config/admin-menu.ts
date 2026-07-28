@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowUpNarrowWide,
   Award,
+  BookOpenCheck,
   BookUser,
   BriefcaseBusiness,
   CalendarCheck,
@@ -133,6 +134,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/fees",
     icon: Wallet,
     permission: "fee.view",
+  },
+  {
+    label: "Accounting",
+    href: "/admin/accounting",
+    icon: BookOpenCheck,
+    permission: "accounting.view",
   },
   {
     label: "Communication",

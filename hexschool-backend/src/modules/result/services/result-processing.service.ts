@@ -71,6 +71,19 @@ export interface ProcessingStatus {
  * be assigned once every candidate has a GPA; the upsert deliberately
  * NULLs them first so a re-run can never leave a stale rank behind.
  */
+
+/**
+ * Transaction budget for the two bulk passes.
+ *
+ * Prisma's interactive-transaction defaults are 5 s wait / 5 s run —
+ * sized for a handful of statements, not for a loop over every candidate
+ * × every paper. Crossing the default does not fail loudly: Prisma kills
+ * the transaction mid-flight and the run is recorded FAILED with a Prisma
+ * internal message, which reads like a data problem. Two minutes is well
+ * clear of a whole school's exam and still bounded.
+ */
+const BULK_TX = { timeout: 120_000, maxWait: 15_000 } as const;
+
 @Injectable()
 export class ResultProcessingService {
   private readonly logger = new Logger(ResultProcessingService.name);
@@ -316,6 +329,8 @@ export class ResultProcessingService {
     const resultIdByEnrollment = new Map<string, string>();
     let processed = 0;
 
+    // A whole exam's candidates in one transaction — well past Prisma's
+    // 5 s default; see `ResultsRepository.withTransaction`.
     await this.results.withTransaction(async (tx) => {
       for (const enrollment of scoped) {
         const theirPapers = this.candidates.papersForCandidate(
@@ -415,7 +430,7 @@ export class ResultProcessingService {
           });
         }
       }
-    });
+    }, BULK_TX);
 
     await this.assignMerit(
       exam,
@@ -478,7 +493,7 @@ export class ResultProcessingService {
           tx,
         );
       }
-    });
+    }, BULK_TX);
   }
 
   /**

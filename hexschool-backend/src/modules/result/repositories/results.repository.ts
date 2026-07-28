@@ -274,10 +274,23 @@ export class ResultsRepository {
     return count;
   }
 
-  /** Unit-of-work helper (BaseRepository's, re-exposed for this repo). */
+  /**
+   * Unit-of-work helper (BaseRepository's, re-exposed for this repo).
+   *
+   * `options` exists for the **bulk** paths. Prisma's interactive
+   * transaction defaults (5 s wait, 5 s run) are sized for a handful of
+   * statements; a processing run loops over every candidate × every paper
+   * and writes a grade per mark, so on a busy machine it crosses 5 s and
+   * Prisma kills the transaction mid-flight — reported as a FAILED run
+   * with a Prisma internal message, which reads like a data problem and
+   * is not one. Found by the M20 e2e run, where a 20th suite's contention
+   * pushed a 5.5 s run past the default. The budget belongs to how much
+   * work the operation genuinely does, not to a library default.
+   */
   async withTransaction<R>(
     fn: (tx: Prisma.TransactionClient) => Promise<R>,
+    options?: { timeout?: number; maxWait?: number },
   ): Promise<R> {
-    return this.prisma.$transaction(fn);
+    return this.prisma.$transaction(fn, options);
   }
 }

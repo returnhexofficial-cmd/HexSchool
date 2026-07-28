@@ -24,6 +24,40 @@ export class ResultPublicationsRepository {
     });
   }
 
+  /**
+   * Every school exam with a live publication, and the classes that sat
+   * it — the picker behind the Module 19 website result-search page.
+   * Channel filtering stays with the caller, which owns `isChannelOn`.
+   */
+  async findActivePublications(schoolId: string): Promise<
+    Array<
+      ResultPublication & {
+        exam: {
+          id: string;
+          name: string;
+          examClasses: Array<{ class: { id: string; name: string } }>;
+        };
+      }
+    >
+  > {
+    return this.prisma.resultPublication.findMany({
+      where: { schoolId, isActive: true },
+      include: {
+        exam: {
+          select: {
+            id: true,
+            name: true,
+            // `exam_classes` is a join table with no soft delete (M14).
+            examClasses: {
+              select: { class: { select: { id: true, name: true } } },
+            },
+          },
+        },
+      },
+      orderBy: { publishedAt: 'desc' },
+    });
+  }
+
   async findHistory(examId: string): Promise<ResultPublication[]> {
     return this.prisma.resultPublication.findMany({
       where: { examId },

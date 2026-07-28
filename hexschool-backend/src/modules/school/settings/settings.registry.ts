@@ -500,6 +500,104 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       true,
     ],
   ]),
+  // M19 — the public website: identity, the home-page furniture (hero
+  // slides, quick links, footer, socials, map), SEO/analytics, and the
+  // privacy switches on the public verification endpoints. reCAPTCHA
+  // deliberately stays in env (`RECAPTCHA_SECRET_KEY`, the M10 decision)
+  // rather than joining this group.
+  ...g(SettingsGroup.website, [
+    ['website.enabled', 'boolean', 'Public website enabled', true],
+    [
+      'website.site_url',
+      'string',
+      'Public site base URL (absolute, used in sitemap/RSS/canonical links)',
+      '',
+    ],
+    ['website.site_title', 'string', 'Site title (falls back to school name)', ''],
+    ['website.site_title_bn', 'string', 'Site title (Bangla)', ''],
+    ['website.tagline', 'string', 'Tagline shown under the site title', ''],
+    [
+      'website.meta_description',
+      'string',
+      'Default meta description for pages that declare none',
+      '',
+    ],
+    ['website.og_image_url', 'string', 'Default OpenGraph share image URL', ''],
+    [
+      'website.indexable',
+      'boolean',
+      'Allow search engines to index the site (off ⇒ robots.txt disallows all)',
+      true,
+    ],
+    ['website.analytics_id', 'string', 'Analytics measurement ID', ''],
+    [
+      'website.hero_slides',
+      'json',
+      'Home hero slides ([{ imageUrl, title, subtitle, ctaLabel, ctaHref }])',
+      [],
+    ],
+    [
+      'website.quick_links',
+      'json',
+      'Quick links block ([{ label, href }])',
+      [],
+    ],
+    ['website.footer_text', 'string', 'Footer note', ''],
+    ['website.social_facebook', 'string', 'Facebook page URL', ''],
+    ['website.social_youtube', 'string', 'YouTube channel URL', ''],
+    ['website.social_linkedin', 'string', 'LinkedIn page URL', ''],
+    ['website.social_x', 'string', 'X (Twitter) profile URL', ''],
+    ['website.map_embed_url', 'string', 'Google Maps embed URL', ''],
+    [
+      'website.contact_email',
+      'string',
+      'Address contact-form notifications are emailed to (blank = in-app only)',
+      '',
+    ],
+    [
+      'website.default_language',
+      'string',
+      'Default site language (en|bn)',
+      'en',
+    ],
+    [
+      'website.language_toggle',
+      'boolean',
+      'Offer the Bangla/English toggle (content fields are dual)',
+      true,
+    ],
+    [
+      'website.cache_ttl_seconds',
+      'number',
+      'Server-side cache TTL for public composite endpoints',
+      60,
+    ],
+    ['website.news_page_size', 'number', 'Posts per page on the news feed', 9],
+    [
+      'website.teacher_directory_enabled',
+      'boolean',
+      'Publish the teacher & staff directory (never exposes phone/email)',
+      true,
+    ],
+    [
+      'website.student_verification_enabled',
+      'boolean',
+      'Allow public student verification by UID / QR token',
+      true,
+    ],
+    [
+      'website.student_verification_fields',
+      'json',
+      'Fields a verification result may reveal (name, class, status, photo)',
+      ['name', 'class', 'status', 'photo'],
+    ],
+    [
+      'website.career_cv_max_mb',
+      'number',
+      'Maximum CV upload size for a career application (MB)',
+      5,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

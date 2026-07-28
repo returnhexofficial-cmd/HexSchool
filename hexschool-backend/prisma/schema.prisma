@@ -94,6 +94,7 @@ enum SettingsGroup {
   exam
   fees
   communication
+  website
 
   @@map("settings_group_enum")
 }
@@ -617,6 +618,61 @@ enum SmsCreditType {
   @@map("sms_credit_type_enum")
 }
 
+/// Publication state shared by every piece of website content (pages,
+/// news, galleries, downloads, careers, FAQs, committee members). One
+/// enum rather than seven keeps the public rule uniform: the public API
+/// serves PUBLISHED rows and nothing else.
+enum WebContentStatus {
+  DRAFT
+  PUBLISHED
+
+  @@map("web_content_status_enum")
+}
+
+/// Layout a CMS page renders with on the public site.
+enum CmsPageTemplate {
+  DEFAULT
+  LANDING
+  CONTACT
+
+  @@map("cms_page_template_enum")
+}
+
+/// News-feed bucket. ACHIEVEMENT powers the separate achievements page.
+enum NewsCategory {
+  NEWS
+  BLOG
+  ACHIEVEMENT
+
+  @@map("news_category_enum")
+}
+
+/// A gallery item is either an uploaded image or an embedded video URL.
+enum GalleryItemType {
+  IMAGE
+  VIDEO_URL
+
+  @@map("gallery_item_type_enum")
+}
+
+/// Contact-form inbox lifecycle.
+enum ContactMessageStatus {
+  NEW
+  READ
+  REPLIED
+
+  @@map("contact_message_status_enum")
+}
+
+/// Career application review state.
+enum CareerApplicationStatus {
+  RECEIVED
+  SHORTLISTED
+  REJECTED
+
+  @@map("career_application_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -782,6 +838,16 @@ model School {
   notifications            Notification[]
   notices                  Notice[]
   smsCredits               SmsCredit[]
+  cmsPages                 CmsPage[]
+  newsPosts                NewsPost[]
+  galleries                Gallery[]
+  galleryItems             GalleryItem[]
+  downloads                Download[]
+  careers                  Career[]
+  careerApplications       CareerApplication[]
+  faqs                     Faq[]
+  committeeMembers         CommitteeMember[]
+  contactMessages          ContactMessage[]
 
   @@map("schools")
 }
@@ -3048,4 +3114,283 @@ model SmsCredit {
 
   @@index([schoolId, createdAt], map: "idx_sms_credits_school_created")
   @@map("sms_credits")
+}
+
+// ── Module 19: Website CMS (Public Site) ──────────────────────────────
+
+/// A static CMS page (about, history, mission, principal message …). The
+/// slug is the public URL segment and is unique per school among live
+/// rows (partial unique, hand-written); reserved segments (`admin`,
+/// `api`, `portal`, …) are refused by `calc/slug.util.ts`. `content` is
+/// HTML sanitized against an allow-list on every write, so the public
+/// renderer can inject it without trusting the author.
+model CmsPage {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  school          School           @relation(fields: [schoolId], references: [id], map: "fk_cms_pages_school")
+  slug            String           @db.VarChar(120)
+  title           String           @db.VarChar(200)
+  titleBn         String?          @map("title_bn") @db.VarChar(200)
+  /// Sanitized HTML.
+  content         String
+  contentBn       String?          @map("content_bn")
+  excerpt         String?          @db.VarChar(500)
+  metaTitle       String?          @map("meta_title") @db.VarChar(200)
+  metaDescription String?          @map("meta_description") @db.VarChar(320)
+  ogImageUrl      String?          @map("og_image_url") @db.VarChar(500)
+  status          WebContentStatus @default(DRAFT)
+  template        CmsPageTemplate  @default(DEFAULT)
+  /// Render in the site's primary navigation.
+  showInMenu      Boolean          @default(false) @map("show_in_menu")
+  displayOrder    Int              @default(0) @map("display_order")
+  publishedAt     DateTime?        @map("published_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Slug identity is a partial unique WHERE deleted_at IS NULL.
+  @@index([schoolId, status], map: "idx_cms_pages_status")
+  @@map("cms_pages")
+}
+
+/// News / blog / achievement post. `published_at` is the feed sort key
+/// and the RSS date; a PUBLISHED row must carry one (CHECK).
+model NewsPost {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  school          School           @relation(fields: [schoolId], references: [id], map: "fk_news_posts_school")
+  slug            String           @db.VarChar(120)
+  title           String           @db.VarChar(200)
+  titleBn         String?          @map("title_bn") @db.VarChar(200)
+  excerpt         String?          @db.VarChar(500)
+  /// Sanitized HTML.
+  content         String
+  contentBn       String?          @map("content_bn")
+  coverUrl        String?          @map("cover_url") @db.VarChar(500)
+  category        NewsCategory     @default(NEWS)
+  metaTitle       String?          @map("meta_title") @db.VarChar(200)
+  metaDescription String?          @map("meta_description") @db.VarChar(320)
+  status          WebContentStatus @default(DRAFT)
+  publishedAt     DateTime?        @map("published_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, category, status, publishedAt], map: "idx_news_posts_feed")
+  @@map("news_posts")
+}
+
+/// A photo/video album for one event.
+model Gallery {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_galleries_school")
+  title        String           @db.VarChar(200)
+  titleBn      String?          @map("title_bn") @db.VarChar(200)
+  description  String?          @db.VarChar(1000)
+  eventDate    DateTime?        @map("event_date") @db.Date
+  coverUrl     String?          @map("cover_url") @db.VarChar(500)
+  status       WebContentStatus @default(DRAFT)
+  displayOrder Int              @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  items GalleryItem[]
+
+  @@index([schoolId, status, displayOrder], map: "idx_galleries_status")
+  @@map("galleries")
+}
+
+/// One image or embedded video inside a gallery. Paginated on the public
+/// side (roadmap §8 — a very large album loads its items in pages).
+///
+/// HARD-deleted, unlike every other content table here: an album's items
+/// are edited as a set (the incoming list replaces what is there), so a
+/// tombstone would only ever be dead weight — the M13 `timetable_entries`
+/// / M14 `seat_plan_entries` precedent for wholesale-replaced child rows.
+model GalleryItem {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String          @map("school_id") @db.Uuid
+  school       School          @relation(fields: [schoolId], references: [id], map: "fk_gallery_items_school")
+  galleryId    String          @map("gallery_id") @db.Uuid
+  gallery      Gallery         @relation(fields: [galleryId], references: [id], onDelete: Cascade, map: "fk_gallery_items_gallery")
+  type         GalleryItemType @default(IMAGE)
+  url          String          @db.VarChar(500)
+  caption      String?         @db.VarChar(300)
+  displayOrder Int             @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([galleryId, displayOrder], map: "idx_gallery_items_gallery")
+  @@map("gallery_items")
+}
+
+/// A downloadable file (syllabus, form, routine PDF). `download_count`
+/// is incremented by an unauthenticated hit endpoint, so it is the one
+/// column a public visitor may move — and only upward (CHECK >= 0).
+model Download {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String           @map("school_id") @db.Uuid
+  school        School           @relation(fields: [schoolId], references: [id], map: "fk_downloads_school")
+  title         String           @db.VarChar(200)
+  titleBn       String?          @map("title_bn") @db.VarChar(200)
+  category      String?          @db.VarChar(80)
+  fileUrl       String           @map("file_url") @db.VarChar(500)
+  /// S3 object key when the file was uploaded through us (NULL for links).
+  fileKey       String?          @map("file_key") @db.VarChar(500)
+  sizeBytes     Int?             @map("size_bytes")
+  downloadCount Int              @default(0) @map("download_count")
+  status        WebContentStatus @default(DRAFT)
+  displayOrder  Int              @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status, displayOrder], map: "idx_downloads_status")
+  @@map("downloads")
+}
+
+/// A job opening on the career page.
+model Career {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_careers_school")
+  title        String           @db.VarChar(200)
+  /// Sanitized HTML.
+  description  String
+  location     String?          @db.VarChar(200)
+  vacancies    Int?
+  deadline     DateTime?        @db.Date
+  status       WebContentStatus @default(DRAFT)
+  displayOrder Int              @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  applications CareerApplication[]
+
+  @@index([schoolId, status, deadline], map: "idx_careers_status")
+  @@map("careers")
+}
+
+/// A public application against a job opening (name/phone/email + CV).
+model CareerApplication {
+  id       String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String                  @map("school_id") @db.Uuid
+  school   School                  @relation(fields: [schoolId], references: [id], map: "fk_career_applications_school")
+  careerId String                  @map("career_id") @db.Uuid
+  career   Career                  @relation(fields: [careerId], references: [id], map: "fk_career_applications_career")
+  name     String                  @db.VarChar(150)
+  phone    String                  @db.VarChar(20)
+  email    String?                 @db.VarChar(150)
+  cvUrl    String                  @map("cv_url") @db.VarChar(500)
+  cvKey    String?                 @map("cv_key") @db.VarChar(500)
+  note     String?                 @db.VarChar(1000)
+  status   CareerApplicationStatus @default(RECEIVED)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, careerId, status], map: "idx_career_applications_career")
+  @@map("career_applications")
+}
+
+/// A frequently-asked question. Carries the shared publication status so
+/// the "only PUBLISHED content is public" rule needs no exceptions.
+model Faq {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_faqs_school")
+  question     String           @db.VarChar(300)
+  questionBn   String?          @map("question_bn") @db.VarChar(300)
+  answer       String
+  answerBn     String?          @map("answer_bn")
+  category     String?          @db.VarChar(80)
+  status       WebContentStatus @default(PUBLISHED)
+  displayOrder Int              @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status, displayOrder], map: "idx_faqs_status")
+  @@map("faqs")
+}
+
+/// Managing-committee / governing-body member. `message` carries the
+/// chairman's or principal's message when they have one.
+model CommitteeMember {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_committee_members_school")
+  name         String           @db.VarChar(150)
+  nameBn       String?          @map("name_bn") @db.VarChar(150)
+  designation  String           @db.VarChar(150)
+  photoUrl     String?          @map("photo_url") @db.VarChar(500)
+  /// Sanitized HTML when present (the principal-message page renders it).
+  message      String?
+  status       WebContentStatus @default(PUBLISHED)
+  displayOrder Int              @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status, displayOrder], map: "idx_committee_members_status")
+  @@map("committee_members")
+}
+
+/// A contact-form submission. Anonymous writes are reCAPTCHA-verified and
+/// rate-limited; the office reads them in the CMS inbox. A REPLIED row
+/// must record when it was replied to (CHECK — the "evidence, not a bare
+/// flag" rule M16/M17 established).
+model ContactMessage {
+  id        String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String               @map("school_id") @db.Uuid
+  school    School               @relation(fields: [schoolId], references: [id], map: "fk_contact_messages_school")
+  name      String               @db.VarChar(150)
+  phone     String?              @db.VarChar(20)
+  email     String?              @db.VarChar(150)
+  subject   String?              @db.VarChar(200)
+  body      String
+  status    ContactMessageStatus @default(NEW)
+  ip        String?              @db.VarChar(64)
+  readAt    DateTime?            @map("read_at") @db.Timestamptz(6)
+  repliedAt DateTime?            @map("replied_at") @db.Timestamptz(6)
+  replyNote String?              @map("reply_note") @db.VarChar(1000)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status, createdAt], map: "idx_contact_messages_status")
+  @@map("contact_messages")
 }

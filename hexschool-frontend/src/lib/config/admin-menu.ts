@@ -12,6 +12,7 @@ import {
   ClipboardList,
   FileClock,
   FileSpreadsheet,
+  Globe,
   GraduationCap,
   LayoutDashboard,
   Network,
@@ -138,6 +139,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/communication",
     icon: MessageSquare,
     anyOf: ["notification.view", "notice.view"],
+  },
+  {
+    label: "Website",
+    href: "/admin/website",
+    icon: Globe,
+    permission: "website.view",
   },
   {
     label: "Teachers",

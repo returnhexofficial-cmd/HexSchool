@@ -36,6 +36,7 @@ import { StudentModule } from './modules/student/student.module';
 import { TeacherModule } from './modules/teacher/teacher.module';
 import { TimetableModule } from './modules/timetable/timetable.module';
 import { VersionModule } from './modules/version/version.module';
+import { WebsiteModule } from './modules/website/website.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -131,6 +132,9 @@ import { QueuesModule } from './queues/queues.module';
     // PortalModule is the Phase-1 capstone aggregator (portals, dashboards,
     // reports) — a leaf that imports the feature modules above.
     PortalModule,
+    // WebsiteModule (M19) is the public face: the CMS admin API and the
+    // @Public() site API. Also a leaf — nothing imports it.
+    WebsiteModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

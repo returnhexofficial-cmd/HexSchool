@@ -142,6 +142,26 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody: '{{school}}: {{title}} — {{body}}',
     defaultSubject: '{{school}}: {{title}}',
   },
+  // ── Module 19 — website ──────────────────────────────────────────────
+  {
+    code: 'CONTACT_MESSAGE',
+    module: 'Website',
+    description: 'A visitor submitted the public contact form',
+    channels: [C.IN_APP, C.EMAIL],
+    variables: ['name', 'phone', 'email', 'subject', 'body', 'school'],
+    defaultBody:
+      'New website message from {{name}} ({{phone}}): {{subject}} — {{body}}',
+    defaultSubject: '{{school}} — website contact from {{name}}',
+  },
+  {
+    code: 'CAREER_APPLICATION',
+    module: 'Website',
+    description: 'A candidate applied to a job opening on the career page',
+    channels: [C.IN_APP],
+    variables: ['name', 'phone', 'position', 'school'],
+    defaultBody:
+      'New career application: {{name}} ({{phone}}) applied for {{position}}.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

@@ -116,6 +116,15 @@ export class PublicResultsController {
   constructor(private readonly results: ResultsService) {}
 
   @Public()
+  @Get('exams')
+  @ApiOperation({
+    summary: 'Exams a visitor may search, with the classes that sat them',
+  })
+  async searchableExams() {
+    return this.results.publicSearchableExams(DEFAULT_SCHOOL_ID);
+  }
+
+  @Public()
   @Get('search')
   @ApiOperation({
     summary: 'Look a published result up by roll or student UID',

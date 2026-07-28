@@ -178,6 +178,18 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // M18 — the principal's landing dashboard + the reports hub.
       'dashboard.admin',
       'report.view',
+      // M19 — the public site is the school's face; the principal owns
+      // every part of it, including the careers pipeline and the inbox.
+      'website.view',
+      'website.page.manage',
+      'website.news.manage',
+      'website.gallery.manage',
+      'website.download.manage',
+      'website.career.manage',
+      'website.faq.manage',
+      'website.committee.manage',
+      'website.message.view',
+      'website.message.manage',
     ],
   },
   {
@@ -365,6 +377,18 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'notice.manage',
       'notice.publish',
       'sms.credit.view',
+      // M19 — the office keeps the website's day-to-day content current
+      // (news, gallery, downloads, FAQs) and works the contact inbox.
+      // Deliberately NOT granted: `website.page.manage` (the institutional
+      // pages — about, mission, principal's message — are the head's
+      // words) and `website.committee.manage`.
+      'website.view',
+      'website.news.manage',
+      'website.gallery.manage',
+      'website.download.manage',
+      'website.faq.manage',
+      'website.message.view',
+      'website.message.manage',
     ],
   },
 ];

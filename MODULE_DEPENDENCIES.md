@@ -54,9 +54,12 @@ graph TD
     M17 --> M18
     M12 --> M18
     M13 --> M18
-    M18 --> M19[19 Website CMS]
+    M18 --> M19[19 Website CMS ✅]
     M10 --> M19
     M15 --> M19
+    M05 -. is_public events consumed .-> M19
+    M17 -. website-visible notices consumed .-> M19
+    M19 -. binds certificate verifier .-> M27
     M16 --> M20[20 Accounting]
     M20 --> M21[21 HR & Payroll]
     M08 --> M21
@@ -101,7 +104,7 @@ graph TD
 | 16 Fees & Payments ✅ | 09, 11 | **Binds `EXAM_DUES_GATE` for real** via `LedgerService.outstandingFor` — M14's admit-card flow now reads live dues (turning that into a hard *block* vs a warning is a UI/policy toggle). Armed the **M09 status-change dues warning** (stub text → real `warnings` array) and completed the **M10 gateway wiring** it had deferred (`PaymentGatewayService.openSession` is the admission-fee online path). Invoicing keys on `enrollment_id`, is idempotent per `(enrollment, month)` and prorates a mid-month joiner; a fully-waived invoice is `PAID` from birth so the fine job never charges it; online money is SUCCESS only after a server-side `verify()` whose amount matches (`chk_payments_success_evidence`). Exports `LedgerService`/`InvoiceService`/`CollectionService`/`PaymentGatewayService` for 18 (portal payment view) and 20 (accounting auto-posting). Leaves for later: receipt/dues **SMS** (17), the **Rocket** adapter, and an automatic result-withhold-on-dues (`ResultsService.setWithheld` hook + `outstandingFor`). |
 | 17 Communication ✅ | 02, 04, 09 | **`NotificationService.send()` is the single send entry point** — retro-wired the queued events from 10 (admission status), 12 (absent alert), 15 (result published) and 16 (fee receipt) off the raw queue onto the template pipeline, and made the M02 OTP/welcome raw jobs deliver for real (OTP-to-phone now real). The real BullMQ worker moved from QueuesModule into CommunicationModule (it needs the render/dispatch services). CommunicationModule is imported BY its producers and never the reverse (stateless re-provisions + a self-contained `AudienceRepository`), so the graph stays acyclic. Exports `NotificationService` for 18 (portal messages) and reuses `NotificationBell`. Defaulter-list audience deferred to 18 (fee data lives in FeeModule — resolving it here would cycle). |
 | 18 Portals & Dashboards ✅ | 02–17 | **Phase 1 capstone.** A pure aggregator (`PortalModule`, a leaf): portal reads are authorized by **ownership** (`OwnershipGuard` + `PortalResolverService`, IDOR-safe), not permissions. Admin/accountant dashboards cached in Redis; a `GET /reports` registry. **No new tables/migration.** Closed the M15/M16 **result-withhold-on-dues**, the M16 **portal Pay-Now**, and the M17 **dues-reminder blast**. Fixed two pre-existing cross-suite e2e flakes (attendance-on-Friday, Mailpit IPv6 `localhost`). Contact-school → tickets stays deferred to 28. |
-| 19 Website CMS | 04, 05, 10, 15, 17 | Certificate verification page completed by 27 |
+| 19 Website CMS ✅ | 04, 05, 10, 15, 17 | **Phase 2 opener.** Near-leaf like `PortalModule`: imports only SchoolModule / CommunicationModule / StorageModule, and nothing imports it back — the five feature modules whose data the site shows are deliberately *not* imported, because those reads are privacy-shaped and live in a narrow `PublicSiteRepository` (the M17 `AudienceRepository` / M18 `DashboardRepository` precedent). **Closed three hooks**: M05's `calendar_events.is_public` and M17's `notices.is_website_visible` finally have public readers, and M15's `@Public` result search finally has its page — which needed a picker M15 never shipped, so `GET /public/results/exams` was added there. Reuses M10's `RecaptchaService` (stateless re-provision) and M17's `NotificationService` for the contact-form / career-application alerts. **Leaves for 27:** `GET /public/verify/certificate` answers `{available:false, reason}` and `/verify/certificate` says so on the page — M27 replaces the body, binding into WebsiteModule the way M15 bound `EXAM_RESULT_GATE` into ExamModule. Also leaves: a media library (content images are pasted URLs today) and the Bangla toggle over the `*_bn` columns the schema already carries. |
 | 20 Accounting | 16 | Payroll postings from 21; inventory postings from 24 |
 | 21 HR & Payroll | 07, 08, 12, 20 | — |
 | 22 Assignments | 08, 11, 17, 18 | LMS extension (32c) |
@@ -109,8 +112,8 @@ graph TD
 | 24 Inventory | 07 | Purchase posting (20 optional) |
 | 25 Transport | 09, 16 | Expense posting (20 optional) |
 | 26 Hostel | 09, 16 | Deposit voucher (20 optional) |
-| 27 Documents & Certificates | 09, 15, 16, 19 | Clearance aggregates 16/23/26 |
-| 28 Complaint / Visitor / Alumni | 07, 09, 17, 19 | Donation posting (20 optional) |
+| 27 Documents & Certificates | 09, 15, 16, 19 | Clearance aggregates 16/23/26; **replaces the M19 certificate-verification stub** (`/public/verify/certificate`, today `{available:false}`) |
+| 28 Complaint / Visitor / Alumni | 07, 09, 17, 19 | Donation posting (20 optional); the public contact form (M19) is the front door a complaint ticket will hang off |
 | 29 Reports & Analytics v2 | 18, 20, 21 (all Phase 1–2 data) | — |
 | 30 SysAdmin & Hardening | all prior | — |
 | 31 Multi-School SaaS | 30 | — |
@@ -120,7 +123,7 @@ graph TD
 
 - After 07: **08 (Teachers)** ∥ **09 (Students)**.
 - After 11: **12 (Attendance)** ∥ **13 (Timetable)** ∥ **16 (Fees)**.
-- After 18: **19 (Website)** ∥ **20 (Accounting)**; later **22–26** are mutually independent.
+- After 18: ~~**19 (Website)** ∥ **20 (Accounting)**~~ — 19 is done; **20 (Accounting)** is next and independent of 19. Later **22–26** are mutually independent.
 
 ## Critical Path
 

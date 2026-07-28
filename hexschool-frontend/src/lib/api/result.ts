@@ -561,6 +561,61 @@ export const resultApi = {
   },
 };
 
+/**
+ * The unauthenticated website result search (Module 15's `@Public` API,
+ * Module 19's page). Kept beside the rest of the result client rather
+ * than in `website.ts` because it is result data, not CMS content.
+ */
+export interface PublicSearchableExam {
+  examId: string;
+  examName: string;
+  publishedAt: string;
+  classes: Array<{ id: string; name: string }>;
+}
+
+export interface PublicResultCard {
+  student: {
+    name: string;
+    uid: string;
+    rollNo: number;
+    className: string;
+    sectionName: string;
+  };
+  exam: { id: string; name: string };
+  gpa: number;
+  grade: string;
+  status: string;
+  meritPositionClass: number | null;
+  subjects: Array<{
+    subjectName: string;
+    grade: string;
+    gradePoint: number;
+  }>;
+}
+
+export const publicResultApi = {
+  async searchableExams(): Promise<PublicSearchableExam[]> {
+    const res =
+      await api.get<ApiEnvelope<PublicSearchableExam[]>>(
+        "/public/results/exams",
+      );
+    return res.data.data;
+  },
+
+  async search(params: {
+    examId: string;
+    classId: string;
+    rollNo?: number;
+    studentUid?: string;
+  }): Promise<PublicResultCard> {
+    const res = await api.get<ApiEnvelope<PublicResultCard>>(
+      "/public/results/search",
+      { params },
+    );
+    return res.data.data;
+  },
+};
+
 export const combinedResultApi = {
   async batches(
     sessionId?: string,

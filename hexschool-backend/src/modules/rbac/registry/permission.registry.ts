@@ -344,6 +344,25 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['dashboard.accountant', 'View the accountant workspace dashboard'],
     ['report.view', 'Browse the consolidated reports hub'],
   ]),
+
+  // ── Module 19: Website CMS (Public Site) ────────────────────────────
+  // The public site is content, not operations: one read code for the CMS
+  // workspace, then a manage code per content type because a school hands
+  // the notice board, the gallery and the careers page to different people.
+  // The contact inbox is split view/manage — reading a parent's message is
+  // not the same right as replying to it or deleting it.
+  ...define('website', [
+    ['website.view', 'Open the Website CMS workspace and preview drafts'],
+    ['website.page.manage', 'Create/edit/publish/delete CMS pages'],
+    ['website.news.manage', 'Create/edit/publish/delete news, blog and achievement posts'],
+    ['website.gallery.manage', 'Create/edit/publish/delete galleries and their items'],
+    ['website.download.manage', 'Create/edit/publish/delete downloadable files'],
+    ['website.career.manage', 'Manage job openings and read their applications'],
+    ['website.faq.manage', 'Create/edit/delete FAQs'],
+    ['website.committee.manage', 'Manage managing-committee members'],
+    ['website.message.view', 'Read contact-form messages'],
+    ['website.message.manage', 'Change a contact message’s status or delete it'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

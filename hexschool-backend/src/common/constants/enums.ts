@@ -58,4 +58,10 @@ export {
   NotificationStatus,
   NoticeAudience,
   SmsCreditType,
+  WebContentStatus,
+  CmsPageTemplate,
+  NewsCategory,
+  GalleryItemType,
+  ContactMessageStatus,
+  CareerApplicationStatus,
 } from '@prisma/client';

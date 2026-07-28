@@ -268,6 +268,37 @@ export class ResultsService {
 
   // ── public search (roadmap M15 §4, the website endpoint) ────────────
 
+  /**
+   * The exams a website visitor may search, and the classes that sat
+   * each — the picker the Module 19 result-search page needs before it
+   * can call `publicSearch`. Only exams whose ACTIVE publication has the
+   * `website` channel on appear, which is the same visibility rule the
+   * search itself applies.
+   */
+  async publicSearchableExams(schoolId: string): Promise<
+    Array<{
+      examId: string;
+      examName: string;
+      publishedAt: Date;
+      classes: Array<{ id: string; name: string }>;
+    }>
+  > {
+    const config = await this.config.load(schoolId);
+    if (!config.publicSearchEnabled) return [];
+
+    const publications =
+      await this.publications.findActivePublications(schoolId);
+    return publications
+      .filter((publication) => isChannelOn(publication.channels, 'website'))
+      .map((publication) => ({
+        examId: publication.exam.id,
+        examName: publication.exam.name,
+        publishedAt: publication.publishedAt,
+        classes: publication.exam.examClasses.map((row) => row.class),
+      }))
+      .filter((exam) => exam.classes.length > 0);
+  }
+
   async publicSearch(
     dto: PublicResultSearchDto,
     schoolId: string,

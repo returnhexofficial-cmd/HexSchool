@@ -10,8 +10,19 @@ import { TokenService } from './token.service';
 /**
  * Unit tests for the M02 business rules: lockout counter, refresh
  * rotation, and reuse detection. Repositories are mocked; Password/Token
- * services are real (argon2 + crypto are fast enough and higher-fidelity).
+ * services are real (argon2 + crypto are higher-fidelity than a stub, and
+ * these rules are exactly the ones a stubbed hash would stop proving).
+ *
+ * argon2id is deliberately memory-hard, and several cases here hash more
+ * than once. Jest's 5-second default is a generous budget on an idle
+ * machine and a tight one when the other 84 suites are competing for the
+ * same cores — which made this file fail intermittently as the suite
+ * grew. The budget below is about the cost of the KDF, not about the code
+ * under test.
  */
+const ARGON2_TIMEOUT_MS = 30_000;
+jest.setTimeout(ARGON2_TIMEOUT_MS);
+
 describe('AuthService', () => {
   const passwordService = new PasswordService();
   const tokenService = new TokenService(new JwtService(), {

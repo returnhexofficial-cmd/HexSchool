@@ -33,6 +33,24 @@ export const SYSTEM_SLOTS = {
   GATEWAY_CHARGES: 'GATEWAY_CHARGES',
   /** The balancing side of the opening-balance journal (§8). */
   OPENING_EQUITY: 'OPENING_EQUITY',
+  // ── M21 payroll ─────────────────────────────────────────────────────
+  // Registered here rather than in a payroll-owned registry because the
+  // posting map is the ledger's contract with the rest of the system, and
+  // `PostingMapKind.SYSTEM` was designed append-only for exactly this.
+  /** Salaries and allowances actually earned. */
+  SALARY_EXPENSE: 'SALARY_EXPENSE',
+  /** Festival/performance bonus, kept off the salary line so a school can
+   *  see what a festival cost it. */
+  BONUS_EXPENSE: 'BONUS_EXPENSE',
+  /** The school's own provident-fund contribution — an expense. */
+  PF_EXPENSE: 'PF_EXPENSE',
+  /** Both sides of the provident fund, owed until it is remitted. */
+  PF_PAYABLE: 'PF_PAYABLE',
+  /** Tax deducted at source, owed to the revenue board. */
+  TAX_PAYABLE: 'TAX_PAYABLE',
+  /** Unpaid salary — where a HELD payslip's money waits, if a school
+   *  chooses to accrue it rather than simply not post it. */
+  SALARY_PAYABLE: 'SALARY_PAYABLE',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

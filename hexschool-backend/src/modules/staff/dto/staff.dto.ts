@@ -119,6 +119,19 @@ export class UpdateStaffStatusDto {
   @IsString()
   @Length(3, 500)
   reason!: string;
+
+  /**
+   * The last working day, for an exit status (M21). Defaults to today.
+   * Payroll prorates the leaver's final month against it, so a
+   * resignation processed on the 3rd for a 30th-of-last-month exit does
+   * not pay a full extra month.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'effectiveDate must be YYYY-MM-DD',
+  })
+  effectiveDate?: string;
 }
 
 export class UploadStaffDocumentDto {

@@ -123,8 +123,9 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'teacher.assign.override',
       'Assign a subject outside the teacher’s expertise set',
     ],
-    ['teacher.leave.manage', 'Record/edit/delete leave requests'],
-    ['teacher.leave.approve', 'Approve or reject leave requests'],
+    // `teacher.leave.manage` / `teacher.leave.approve` were retired in
+    // M21: leave is no longer a teacher-only concern, and the codes are
+    // now `leave.apply` / `leave.approve` over the unified HR table.
     ['teacher.evaluation.manage', 'Create/edit/delete evaluations'],
   ]),
 
@@ -287,12 +288,12 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'Process results before every paper is locked (produces INCOMPLETE rows)',
     ],
     ['result.publish', 'Publish or unpublish an exam’s results'],
-    [
-      'result.withhold',
-      'Withhold or release an individual candidate’s result',
-    ],
+    ['result.withhold', 'Withhold or release an individual candidate’s result'],
     ['result.combine', 'Generate weighted combined/final results'],
-    ['result.export', 'Download report cards, tabulation sheets and transcripts'],
+    [
+      'result.export',
+      'Download report cards, tabulation sheets and transcripts',
+    ],
   ]),
 
   // ── Module 16: Fees & Payments ──────────────────────────────────────
@@ -322,7 +323,10 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
   // sends, and only a senior tops up (spends) the SMS balance.
   ...define('communication', [
     ['notification.view', 'View templates and the delivery log'],
-    ['notification.template.manage', 'Create/edit/delete notification templates'],
+    [
+      'notification.template.manage',
+      'Create/edit/delete notification templates',
+    ],
     ['notification.send', 'Send an ad-hoc message and retry failed ones'],
     ['notification.bulk', 'Run the bulk composer (audience blasts)'],
     [
@@ -354,14 +358,29 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
   ...define('website', [
     ['website.view', 'Open the Website CMS workspace and preview drafts'],
     ['website.page.manage', 'Create/edit/publish/delete CMS pages'],
-    ['website.news.manage', 'Create/edit/publish/delete news, blog and achievement posts'],
-    ['website.gallery.manage', 'Create/edit/publish/delete galleries and their items'],
-    ['website.download.manage', 'Create/edit/publish/delete downloadable files'],
-    ['website.career.manage', 'Manage job openings and read their applications'],
+    [
+      'website.news.manage',
+      'Create/edit/publish/delete news, blog and achievement posts',
+    ],
+    [
+      'website.gallery.manage',
+      'Create/edit/publish/delete galleries and their items',
+    ],
+    [
+      'website.download.manage',
+      'Create/edit/publish/delete downloadable files',
+    ],
+    [
+      'website.career.manage',
+      'Manage job openings and read their applications',
+    ],
     ['website.faq.manage', 'Create/edit/delete FAQs'],
     ['website.committee.manage', 'Manage managing-committee members'],
     ['website.message.view', 'Read contact-form messages'],
-    ['website.message.manage', 'Change a contact message’s status or delete it'],
+    [
+      'website.message.manage',
+      'Change a contact message’s status or delete it',
+    ],
   ]),
 
   // ── Module 20: Accounting & Finance ─────────────────────────────────
@@ -383,13 +402,58 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'accounting.posting-map.manage',
       'Change the fee-head → income and method → funds account mappings',
     ],
-    ['accounting.report', 'Run the cash book, ledgers and the three statements'],
+    [
+      'accounting.report',
+      'Run the cash book, ledgers and the three statements',
+    ],
     ['accounting.export', 'Download accounting reports and printable vouchers'],
     ['budget.manage', 'Create/edit/delete budget lines'],
     ['accounting.period.manage', 'Create fiscal periods and close them'],
     [
       'accounting.period.reopen',
       'Reopen a closed accounting period (reason mandatory, audited)',
+    ],
+  ]),
+
+  // ── Module 21: HR & Payroll ─────────────────────────────────────────
+  // Leave and payroll are two different desks. The office runs leave; the
+  // accountant generates payroll; a senior approves it; and disbursing —
+  // the moment money actually leaves — is a third right again, because
+  // that is the M16/M20 separation of duties applied to salaries.
+  ...define('hr', [
+    ['hr.view', 'Open the HR workspace: employees, leave and payroll reads'],
+    ['leave.type.manage', 'Create/edit/delete leave types and their quotas'],
+    ['leave.apply', 'File a leave application (own or on someone’s behalf)'],
+    ['leave.approve', 'Approve, reject or cancel a leave application'],
+    [
+      'leave.approve.override',
+      'Approve a leave that exceeds the employee’s remaining balance',
+    ],
+    ['leave.balance.manage', 'Allocate and adjust yearly leave balances'],
+  ]),
+  ...define('payroll', [
+    ['salary.structure.manage', 'Create/edit/delete salary structures'],
+    ['salary.assign', 'Assign a salary structure to an employee'],
+    ['salary.view', 'View salary structures and employee salary history'],
+    ['payroll.view', 'View payroll runs and payslips'],
+    ['payroll.generate', 'Create a payroll run and generate its payslips'],
+    [
+      'payroll.generate.force',
+      'Generate payroll for a month whose attendance is not finalized',
+    ],
+    ['payroll.approve', 'Approve a generated payroll run (freezes payslips)'],
+    ['payroll.disburse', 'Mark salaries disbursed (posts the salary voucher)'],
+    [
+      'payroll.payslip.edit',
+      'Override a figure on a draft payslip (with a reason)',
+    ],
+    ['payroll.payslip.hold', 'Hold or release an individual payslip'],
+    ['bonus.manage', 'Create/edit/delete bonus runs (festival, performance)'],
+    ['pf.manage', 'Record provident-fund withdrawals and adjustments'],
+    ['payroll.report', 'Run the payroll register, PF, tax and YTD reports'],
+    [
+      'payroll.export',
+      'Download payslips, the bank advice and payroll reports',
     ],
   ]),
 ];

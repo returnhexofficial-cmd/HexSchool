@@ -13,7 +13,6 @@ import { SchoolModule } from '../school/school.module';
 import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { SequenceModule } from '../sequence/sequence.module';
 import { TeacherAssignmentsController } from './controllers/teacher-assignments.controller';
-import { TeacherLeavesController } from './controllers/teacher-leaves.controller';
 import { TeachersController } from './controllers/teachers.controller';
 import { TeacherListener } from './events/teacher.listener';
 import { TIMETABLE_CONFLICT_CHECKER } from './interfaces/timetable-conflict.interface';
@@ -22,14 +21,12 @@ import { RoutineConflictChecker } from '../timetable/services/routine-conflict-c
 import { TeacherAssignmentsRepository } from './repositories/teacher-assignments.repository';
 import { TeacherDocumentsRepository } from './repositories/teacher-documents.repository';
 import { TeacherEvaluationsRepository } from './repositories/teacher-evaluations.repository';
-import { TeacherLeavesRepository } from './repositories/teacher-leaves.repository';
 import { TeacherQualificationsRepository } from './repositories/teacher-qualifications.repository';
 import { TeacherSubjectsRepository } from './repositories/teacher-subjects.repository';
 import { TeachersRepository } from './repositories/teachers.repository';
 import { TeacherAssignmentsService } from './services/teacher-assignments.service';
 import { TeacherDocumentsService } from './services/teacher-documents.service';
 import { TeacherEvaluationsService } from './services/teacher-evaluations.service';
-import { TeacherLeavesService } from './services/teacher-leaves.service';
 import { TeachersService } from './services/teachers.service';
 
 /**
@@ -53,15 +50,10 @@ import { TeachersService } from './services/teachers.service';
     SequenceModule,
     QueuesModule, // notifications queue (welcome message)
   ],
-  controllers: [
-    TeachersController,
-    TeacherAssignmentsController,
-    TeacherLeavesController,
-  ],
+  controllers: [TeachersController, TeacherAssignmentsController],
   providers: [
     TeachersService,
     TeacherAssignmentsService,
-    TeacherLeavesService,
     TeacherEvaluationsService,
     TeacherDocumentsService,
     TeacherListener,
@@ -73,7 +65,6 @@ import { TeachersService } from './services/teachers.service';
     TeacherQualificationsRepository,
     TeacherSubjectsRepository,
     TeacherAssignmentsRepository,
-    TeacherLeavesRepository,
     TeacherEvaluationsRepository,
     TeacherDocumentsRepository,
     // Stateless re-provisions (see class doc).
@@ -92,6 +83,6 @@ import { TeachersService } from './services/teachers.service';
   ],
   // M18's teacher portal lets a teacher see and file their own leaves,
   // so the leave service is exported alongside the repository.
-  exports: [TeachersRepository, TeacherLeavesService],
+  exports: [TeachersRepository],
 })
 export class TeacherModule {}

@@ -432,54 +432,11 @@ describe('Teacher Management (e2e)', () => {
     });
   });
 
-  describe('leaves', () => {
-    let leaveId: string;
-
-    it('creates and approves a leave (emits the M12 hook)', async () => {
-      const res = await server()
-        .post('/api/v1/teacher-leaves')
-        .set(auth(adminToken))
-        .send({
-          teacherId: teacherAId,
-          fromDate: '2026-08-03',
-          toDate: '2026-08-05',
-          type: 'CASUAL',
-          reason: 'E2E family event',
-        })
-        .expect(201);
-      leaveId = dataOf<{ id: string }>(res).id;
-
-      await server()
-        .post(`/api/v1/teacher-leaves/${leaveId}/approve`)
-        .set(auth(adminToken))
-        .expect(201);
-    });
-
-    it('overlapping range with the APPROVED leave → 409 on approve', async () => {
-      const res = await server()
-        .post('/api/v1/teacher-leaves')
-        .set(auth(adminToken))
-        .send({
-          teacherId: teacherAId,
-          fromDate: '2026-08-05',
-          toDate: '2026-08-07',
-        })
-        .expect(409); // blocked at create already (overlaps approved)
-      expect(res.body).toBeDefined();
-    });
-
-    it('approved leave cannot be edited or deleted', async () => {
-      await server()
-        .put(`/api/v1/teacher-leaves/${leaveId}`)
-        .set(auth(adminToken))
-        .send({ reason: 'nope' })
-        .expect(400);
-      await server()
-        .delete(`/api/v1/teacher-leaves/${leaveId}`)
-        .set(auth(adminToken))
-        .expect(400);
-    });
-  });
+  // The M08 leave surface (`/teacher-leaves`) was RETIRED in M21: leave is
+  // now one table covering teachers and staff, served by
+  // `/leave-applications`, and its rules are exercised in
+  // `hr.e2e-spec.ts`. The M12 attendance hook moved with it, from
+  // `teacher.leave.approved` to `hr.leave.approved`.
 
   describe('class teacher (deferred M06 FK now live)', () => {
     it('sets a class teacher; the cap (default 1) blocks a second section', async () => {

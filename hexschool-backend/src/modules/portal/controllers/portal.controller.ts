@@ -25,6 +25,7 @@ import { OwnershipGuard } from '../guards/ownership.guard';
 import { PortalActionsService } from '../services/portal-actions.service';
 import { PortalMessagesService } from '../services/portal-messages.service';
 import { PortalResolverService } from '../services/portal-resolver.service';
+import { EmployeePortalService } from '../services/employee-portal.service';
 import { StudentPortalService } from '../services/student-portal.service';
 import { TeacherPortalService } from '../services/teacher-portal.service';
 
@@ -46,6 +47,7 @@ export class PortalController {
     private readonly teacherPortal: TeacherPortalService,
     private readonly actions: PortalActionsService,
     private readonly messages: PortalMessagesService,
+    private readonly employeePortal: EmployeePortalService,
   ) {}
 
   @Get('me')
@@ -295,13 +297,71 @@ export class PortalController {
   }
 
   @Post('teacher/leaves')
-  @ApiOperation({ summary: 'Apply for leave (M08 rules still apply)' })
+  @ApiOperation({ summary: 'Apply for leave (every M21 rule still applies)' })
   async teacherApplyLeave(
     @Body() dto: PortalLeaveDto,
     @CurrentUser() user: AccessTokenPayload,
   ) {
     const id = await this.teacherId(user);
     return this.teacherPortal.applyForLeave(id, dto, user);
+  }
+
+  // ── employee self-service (M21 §5) ──────────────────────────────────
+  //
+  // Authorized by ownership like every other portal route: the person is
+  // resolved from the logged-in user, never from a parameter, so there is
+  // no id to tamper with and no permission code to grant. That matters
+  // more here than anywhere else in the portal — a payslip is the most
+  // sensitive per-person document the system holds.
+
+  @Get('employee/me')
+  @ApiOperation({ summary: 'The employee record behind this account' })
+  async employeeMe(@CurrentUser() user: AccessTokenPayload) {
+    return this.employeePortal.me(user);
+  }
+
+  @Get('employee/leave-balances')
+  @ApiOperation({ summary: 'My remaining leave entitlement, per type' })
+  async employeeLeaveBalances(@CurrentUser() user: AccessTokenPayload) {
+    return this.employeePortal.myBalances(user);
+  }
+
+  @Get('employee/leaves')
+  @ApiOperation({ summary: 'My leave applications (teacher or staff)' })
+  async employeeLeaves(@CurrentUser() user: AccessTokenPayload) {
+    return this.employeePortal.myLeaves(user);
+  }
+
+  @Post('employee/leaves')
+  @ApiOperation({ summary: 'Apply for leave from the portal' })
+  async employeeApplyLeave(
+    @Body() dto: PortalLeaveDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.employeePortal.applyForLeave(dto, user);
+  }
+
+  @Get('employee/payslips')
+  @ApiOperation({ summary: 'My payslip history (disbursed months only)' })
+  async employeePayslips(@CurrentUser() user: AccessTokenPayload) {
+    return this.employeePortal.myPayslips(user);
+  }
+
+  @Get('employee/payslips/:id/pdf')
+  @SkipEnvelope()
+  @ApiOperation({ summary: 'My own payslip as a PDF' })
+  async employeePayslipPdf(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AccessTokenPayload,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const file = await this.employeePortal.myPayslipPdf(id, user);
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${file.filename}"`,
+    );
+    return new StreamableFile(file.buffer);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────

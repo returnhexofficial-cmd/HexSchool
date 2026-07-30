@@ -372,7 +372,12 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Late fine per overdue month (flat BDT)',
       0,
     ],
-    ['fees.fine_grace_days', 'number', 'Days after the due date before a fine', 5],
+    [
+      'fees.fine_grace_days',
+      'number',
+      'Days after the due date before a fine',
+      5,
+    ],
     [
       'fees.fine_cap',
       'number',
@@ -444,10 +449,30 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
   // cost + credit, dedupe, bulk gating, scheduled jobs, DLR secret). The
   // gateway credentials themselves stay in the `sms.*` / `email.*` groups.
   ...g(SettingsGroup.communication, [
-    ['communication.quiet_hours_enabled', 'boolean', 'Hold SMS during quiet hours', false],
-    ['communication.quiet_hours_start', 'string', 'Quiet hours start (HH:mm)', '21:00'],
-    ['communication.quiet_hours_end', 'string', 'Quiet hours end (HH:mm)', '08:00'],
-    ['communication.sms_rate_per_part', 'number', 'SMS cost per part (BDT)', 0.5],
+    [
+      'communication.quiet_hours_enabled',
+      'boolean',
+      'Hold SMS during quiet hours',
+      false,
+    ],
+    [
+      'communication.quiet_hours_start',
+      'string',
+      'Quiet hours start (HH:mm)',
+      '21:00',
+    ],
+    [
+      'communication.quiet_hours_end',
+      'string',
+      'Quiet hours end (HH:mm)',
+      '08:00',
+    ],
+    [
+      'communication.sms_rate_per_part',
+      'number',
+      'SMS cost per part (BDT)',
+      0.5,
+    ],
     [
       'communication.sms_unicode_rate_per_part',
       'number',
@@ -478,8 +503,18 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'SMS-credit balance that triggers a low-balance alert',
       100,
     ],
-    ['communication.default_language', 'string', 'Default template language (EN|BN)', 'EN'],
-    ['communication.sms_masking', 'boolean', 'Use a masked (branded) sender id', true],
+    [
+      'communication.default_language',
+      'string',
+      'Default template language (EN|BN)',
+      'EN',
+    ],
+    [
+      'communication.sms_masking',
+      'boolean',
+      'Use a masked (branded) sender id',
+      true,
+    ],
     [
       'communication.birthday_wish_enabled',
       'boolean',
@@ -513,7 +548,12 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Public site base URL (absolute, used in sitemap/RSS/canonical links)',
       '',
     ],
-    ['website.site_title', 'string', 'Site title (falls back to school name)', ''],
+    [
+      'website.site_title',
+      'string',
+      'Site title (falls back to school name)',
+      '',
+    ],
     ['website.site_title_bn', 'string', 'Site title (Bangla)', ''],
     ['website.tagline', 'string', 'Tagline shown under the site title', ''],
     [
@@ -673,6 +713,142 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'accounting.report_footer',
       'string',
       'Footer line printed on accounting statements',
+      '',
+    ],
+  ]),
+  // M21 — every number the payroll engine cannot invent for itself: what
+  // an absent day costs, the provident-fund percentages, the income-tax
+  // slabs, the rounding a school prints on a payslip, and the leave-year
+  // rules. The engines take these as arguments and stay dependency-free.
+  ...g(SettingsGroup.payroll, [
+    ['payroll.enabled', 'boolean', 'HR & Payroll module enabled', true],
+    [
+      'payroll.absent_deduction_enabled',
+      'boolean',
+      'Deduct pay for unexcused absent days',
+      true,
+    ],
+    [
+      'payroll.absent_deduction_base',
+      'string',
+      'Absent deduction divides BASIC or GROSS by working days',
+      'BASIC',
+    ],
+    [
+      'payroll.unpaid_leave_deduction_enabled',
+      'boolean',
+      'Deduct pay for approved leave on an unpaid leave type',
+      true,
+    ],
+    [
+      'payroll.working_days_source',
+      'string',
+      'Working days per month: CALENDAR (holidays + weekly off) or FIXED',
+      'CALENDAR',
+    ],
+    [
+      'payroll.fixed_working_days',
+      'number',
+      'Working days per month when the source is FIXED',
+      26,
+    ],
+    ['payroll.pf_enabled', 'boolean', 'Operate a provident fund', false],
+    [
+      'payroll.pf_employee_percent',
+      'number',
+      'Employee provident-fund contribution (% of the PF base)',
+      10,
+    ],
+    [
+      'payroll.pf_employer_percent',
+      'number',
+      'Employer provident-fund contribution (% of the PF base)',
+      10,
+    ],
+    [
+      'payroll.pf_base',
+      'string',
+      'PF base: BASIC, or BASIC plus components flagged as PF base',
+      'BASIC',
+    ],
+    [
+      'payroll.pf_min_service_months',
+      'number',
+      'Months of service before provident-fund deduction starts',
+      12,
+    ],
+    ['payroll.tax_enabled', 'boolean', 'Deduct income tax at source', false],
+    [
+      'payroll.tax_slabs',
+      'json',
+      'BD income-tax slabs: [{ upTo: number|null, rate: percent }] on ANNUAL taxable income',
+      [
+        { upTo: 350000, rate: 0 },
+        { upTo: 450000, rate: 5 },
+        { upTo: 750000, rate: 10 },
+        { upTo: 1150000, rate: 15 },
+        { upTo: 1650000, rate: 20 },
+        { upTo: null, rate: 25 },
+      ],
+    ],
+    [
+      'payroll.tax_rebate_percent',
+      'number',
+      'Flat investment rebate applied to the computed annual tax (%)',
+      0,
+    ],
+    [
+      'payroll.rounding',
+      'string',
+      'Net pay rounding: NONE, NEAREST_1, NEAREST_5 or NEAREST_10',
+      'NEAREST_1',
+    ],
+    [
+      'payroll.default_payment_mode',
+      'string',
+      'Default disbursement mode for a new salary assignment',
+      'BANK',
+    ],
+    [
+      'payroll.festival_bonus_min_service_months',
+      'number',
+      'Default minimum service (months) for festival-bonus eligibility',
+      6,
+    ],
+    [
+      'payroll.festival_bonus_prorate',
+      'boolean',
+      'Prorate a festival bonus for employees short of the minimum service',
+      false,
+    ],
+    [
+      'payroll.payslip_sms',
+      'boolean',
+      'Send an SMS when a payroll run is disbursed',
+      true,
+    ],
+    [
+      'payroll.auto_post_accounting',
+      'boolean',
+      'Post the salary voucher to the ledger on disbursement',
+      true,
+    ],
+    [
+      'payroll.leave_year_carry_forward',
+      'boolean',
+      'Carry unused balance into the next session where the type allows it',
+      true,
+    ],
+    [
+      'payroll.leave_requires_balance',
+      'boolean',
+      'Refuse an approval that would take a balance negative',
+      true,
+    ],
+    [
+      'payroll.report_footer',
+      'string',
+      'Footer line printed on payslips and payroll reports',
       '',
     ],
   ]),

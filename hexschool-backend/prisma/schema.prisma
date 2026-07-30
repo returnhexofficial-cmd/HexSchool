@@ -96,6 +96,7 @@ enum SettingsGroup {
   communication
   website
   accounting
+  payroll
 
   @@map("settings_group_enum")
 }
@@ -172,21 +173,19 @@ enum TeacherDesignation {
   @@map("teacher_designation_enum")
 }
 
-/// Interim leave taxonomy (M08); migrates into the HR leave system (M21).
-enum LeaveType {
-  CASUAL
-  SICK
-  MATERNITY
-  UNPAID
-  OTHER
+// The M08 `leave_type_enum` (CASUAL/SICK/MATERNITY/UNPAID/OTHER) was
+// dropped in M21: a leave taxonomy carries a quota, a carry-forward rule
+// and a paid/unpaid flag, none of which an enum can hold. It is now the
+// `leave_types` TABLE, seeded with those five codes so nothing is lost.
 
-  @@map("leave_type_enum")
-}
-
+/// CANCELLED joined in M21: a person who withdraws an application they
+/// already filed is not the same as a school that refused it, and payroll
+/// has to tell the two apart when it counts unpaid days.
 enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  CANCELLED
 
   @@map("leave_status_enum")
 }
@@ -764,6 +763,94 @@ enum PostingMapKind {
   @@map("posting_map_kind_enum")
 }
 
+// ── Module 21: HR & Payroll ───────────────────────────────────────────
+
+/// Which half of the workforce a leave type is offered to. Maternity
+/// leave exists for both, but a school's "field duty" leave usually does
+/// not — so the type carries the audience rather than every allocation
+/// having to remember it.
+enum LeaveApplicableTo {
+  ALL
+  TEACHER
+  STAFF
+
+  @@map("leave_applicable_to_enum")
+}
+
+/// A salary line either adds to the gross or is withheld from it.
+enum SalaryComponentType {
+  ALLOWANCE
+  DEDUCTION
+
+  @@map("salary_component_type_enum")
+}
+
+/// How a component's `value` is read: taka, or a percentage of basic
+/// (BD house rent is 40–50 % of basic, medical is usually a flat figure).
+enum SalaryCalc {
+  FLAT
+  PERCENT_OF_BASIC
+
+  @@map("salary_calc_enum")
+}
+
+enum PaymentMode {
+  BANK
+  CASH
+  MOBILE_BANKING
+
+  @@map("payment_mode_enum")
+}
+
+/// The run's straight-line lifecycle. GENERATED holds draft payslips that
+/// may still be edited with a reason; APPROVED freezes them; DISBURSED is
+/// the point money left the school and the ledger was posted.
+enum PayrollRunStatus {
+  DRAFT
+  GENERATED
+  APPROVED
+  DISBURSED
+  CANCELLED
+
+  @@map("payroll_run_status_enum")
+}
+
+/// HELD is a disciplinary hold: the payslip stays in the run and out of
+/// both the disbursement and the voucher until somebody releases it
+/// (roadmap M21 §6).
+enum PayslipStatus {
+  PENDING
+  PAID
+  HELD
+
+  @@map("payslip_status_enum")
+}
+
+enum BonusType {
+  FESTIVAL
+  PERFORMANCE
+  OTHER
+
+  @@map("bonus_type_enum")
+}
+
+enum BonusBasis {
+  PERCENT_OF_BASIC
+  FLAT
+
+  @@map("bonus_basis_enum")
+}
+
+/// What moved a provident-fund balance. CONTRIBUTION rows are written by
+/// a payroll run; WITHDRAWAL and ADJUSTMENT are recorded by hand.
+enum PfEntryType {
+  CONTRIBUTION
+  WITHDRAWAL
+  ADJUSTMENT
+
+  @@map("pf_entry_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -891,7 +978,6 @@ model School {
   staffDocuments           StaffDocument[]
   teachers                 Teacher[]
   teacherSectionSubjects   TeacherSectionSubject[]
-  teacherLeaves            TeacherLeave[]
   teacherEvaluations       TeacherEvaluation[]
   teacherDocuments         TeacherDocument[]
   students                 Student[]
@@ -945,6 +1031,16 @@ model School {
   budgets                  Budget[]
   fiscalPeriods            FiscalPeriod[]
   postingMaps              PostingMap[]
+  leaveTypes               LeaveType[]
+  leaveBalances            LeaveBalance[]
+  leaveApplications        LeaveApplication[]
+  salaryStructures         SalaryStructure[]
+  salaryComponents         SalaryComponent[]
+  employeeSalaries         EmployeeSalary[]
+  payrollRuns              PayrollRun[]
+  payslips                 Payslip[]
+  bonusRuns                BonusRun[]
+  pfLedger                 PfLedgerEntry[]
 
   @@map("schools")
 }
@@ -1050,6 +1146,7 @@ model AcademicSession {
   feeStructures            FeeStructure[]
   invoices                 Invoice[]
   budgets                  Budget[]
+  leaveBalances            LeaveBalance[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -1346,6 +1443,10 @@ model StaffProfile {
   /// { present: string, permanent: string }
   address        Json             @default("{}")
   joiningDate    DateTime         @map("joining_date") @db.Date
+  /// Last working day, set by M21 when the status moves to
+  /// RESIGNED/TERMINATED/RETIRED and cleared on a return to ACTIVE.
+  /// Payroll prorates a leaver's final month against it.
+  exitDate       DateTime?        @map("exit_date") @db.Date
   employmentType EmploymentType   @default(PERMANENT) @map("employment_type")
   status         StaffStatus      @default(ACTIVE)
 
@@ -1418,6 +1519,8 @@ model Teacher {
   photoUrl       String?            @map("photo_url") @db.VarChar(500)
   address        Json               @default("{}")
   joiningDate    DateTime           @map("joining_date") @db.Date
+  /// Last working day — see the note on `staff_profiles.exit_date`.
+  exitDate       DateTime?          @map("exit_date") @db.Date
   salaryGrade    String?            @map("salary_grade") @db.VarChar(30)
   /// BD Monthly Pay Order index (government-subsidized schools).
   mpoIndexNo     String?            @map("mpo_index_no") @db.VarChar(30)
@@ -1433,7 +1536,6 @@ model Teacher {
   qualifications   TeacherQualification[]
   subjects         TeacherSubject[]
   assignments      TeacherSectionSubject[]
-  leaves           TeacherLeave[]
   evaluations      TeacherEvaluation[]
   documents        TeacherDocument[]
   classTeacherOf   Section[]
@@ -1509,31 +1611,10 @@ model TeacherSectionSubject {
   @@map("teacher_section_subjects")
 }
 
-/// Minimal leave records (roadmap M08 §3) — PENDING rows may be hard-
-/// deleted; APPROVED/REJECTED are kept. Designed to migrate into the HR
-/// leave system (M21). Overlap of APPROVED ranges is service-enforced.
-model TeacherLeave {
-  id         String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  schoolId   String      @map("school_id") @db.Uuid
-  school     School      @relation(fields: [schoolId], references: [id], map: "fk_teacher_leaves_school")
-  teacherId  String      @map("teacher_id") @db.Uuid
-  teacher    Teacher     @relation(fields: [teacherId], references: [id], onDelete: Cascade, map: "fk_teacher_leaves_teacher")
-  fromDate   DateTime    @map("from_date") @db.Date
-  toDate     DateTime    @map("to_date") @db.Date
-  type       LeaveType   @default(CASUAL)
-  status     LeaveStatus @default(PENDING)
-  reason     String?
-  approvedBy String?     @map("approved_by") @db.Uuid
-
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy String?  @map("created_by") @db.Uuid
-  updatedBy String?  @map("updated_by") @db.Uuid
-
-  @@index([teacherId, status], map: "idx_teacher_leaves_teacher_status")
-  @@index([schoolId, fromDate, toDate], map: "idx_teacher_leaves_range")
-  @@map("teacher_leaves")
-}
+// `teacher_leaves` (M08 §3, always labelled interim) was superseded in
+// M21 by `leave_applications`, which is polymorphic over teachers AND
+// staff, carries a leave TYPE row with a quota, and decrements a balance.
+// The M21 migration copies every row across before dropping the table.
 
 /// Periodic evaluation: per-criterion scores in `criteria` (criterion →
 /// 0–100), overall `score` 0–100. Criteria names come from the
@@ -3730,4 +3811,374 @@ model PostingMap {
   @@index([schoolId, kind], map: "idx_posting_maps_kind")
   @@index([accountId], map: "idx_posting_maps_account")
   @@map("posting_maps")
+}
+
+// ── Module 21: HR & Payroll ───────────────────────────────────────────
+
+/// A named leave entitlement (Casual, Sick, Maternity, Unpaid…). This
+/// TABLE replaces the M08 `leave_type_enum`: a taxonomy that carries an
+/// annual quota, a carry-forward rule and a paid/unpaid flag is data, not
+/// a type. `is_paid = false` is what makes payroll deduct the days.
+model LeaveType {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String            @map("school_id") @db.Uuid
+  school       School            @relation(fields: [schoolId], references: [id], map: "fk_leave_types_school")
+  name         String            @db.VarChar(80)
+  /// Stable short handle (CASUAL, SICK…) — the M08 migration keys on it.
+  code         String            @db.VarChar(30)
+  annualQuota  Decimal           @default(0) @map("annual_quota") @db.Decimal(5, 1)
+  carryForward Boolean           @default(false) @map("carry_forward")
+  maxCarry     Decimal           @default(0) @map("max_carry") @db.Decimal(5, 1)
+  isPaid       Boolean           @default(true) @map("is_paid")
+  applicableTo LeaveApplicableTo @default(ALL) @map("applicable_to")
+  isActive     Boolean           @default(true) @map("is_active")
+  displayOrder Int               @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  balances     LeaveBalance[]
+  applications LeaveApplication[]
+
+  // `uq_leave_types_code` is partial (live rows) and hand-written.
+  @@index([schoolId, isActive], map: "idx_leave_types_school_active")
+  @@map("leave_types")
+}
+
+/// One employee's entitlement of one leave type for one session.
+/// Polymorphic over `teachers` / `staff_profiles` (`person_type` +
+/// `person_id`, no FK — the M12 `staff_attendances` decision). `used` is
+/// maintained by the approval flow, never typed in; what an employee may
+/// still take is `allocated + carried - used`.
+model LeaveBalance {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String               @map("school_id") @db.Uuid
+  school      School               @relation(fields: [schoolId], references: [id], map: "fk_leave_balances_school")
+  personType  AttendancePersonType @map("person_type")
+  personId    String               @map("person_id") @db.Uuid
+  sessionId   String               @map("session_id") @db.Uuid
+  session     AcademicSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_leave_balances_session")
+  leaveTypeId String               @map("leave_type_id") @db.Uuid
+  leaveType   LeaveType            @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict, map: "fk_leave_balances_type")
+
+  allocated Decimal @default(0) @db.Decimal(5, 1)
+  used      Decimal @default(0) @db.Decimal(5, 1)
+  carried   Decimal @default(0) @db.Decimal(5, 1)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_leave_balances_identity` is partial (live rows) and hand-written.
+  @@index([schoolId, sessionId], map: "idx_leave_balances_scope")
+  @@index([personType, personId], map: "idx_leave_balances_person")
+  @@map("leave_balances")
+}
+
+/// The unified leave application — the M08 `teacher_leaves` successor,
+/// covering staff as well and hanging off a `leave_types` row. `days` is
+/// stored rather than derived, because the working-day calendar it was
+/// counted against can be edited afterwards and an approved leave must
+/// not silently start consuming a different amount of quota.
+///
+/// `approver_chain` records who acted, in order (roadmap §3). A school
+/// with a single approver keeps a one-element array; the column exists so
+/// a multi-step chain needs no migration.
+model LeaveApplication {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String               @map("school_id") @db.Uuid
+  school      School               @relation(fields: [schoolId], references: [id], map: "fk_leave_applications_school")
+  personType  AttendancePersonType @map("person_type")
+  personId    String               @map("person_id") @db.Uuid
+  leaveTypeId String               @map("leave_type_id") @db.Uuid
+  leaveType   LeaveType            @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict, map: "fk_leave_applications_type")
+  /// The session the days fall in — the balance they consume is per session.
+  sessionId   String?              @map("session_id") @db.Uuid
+
+  fromDate DateTime @map("from_date") @db.Date
+  toDate   DateTime @map("to_date") @db.Date
+  halfDay  Boolean  @default(false) @map("half_day")
+  days     Decimal  @db.Decimal(4, 1)
+  reason   String
+
+  status        LeaveStatus @default(PENDING)
+  approverChain Json        @default("[]") @map("approver_chain")
+  approvedBy    String?     @map("approved_by") @db.Uuid
+  approvedAt    DateTime?   @map("approved_at") @db.Timestamptz(6)
+  decisionNote  String?     @map("decision_note")
+  /// S3 object key (a medical certificate, a duty order).
+  attachmentUrl String?     @map("attachment_url") @db.VarChar(500)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, status], map: "idx_leave_applications_school_status")
+  @@index([personType, personId, fromDate], map: "idx_leave_applications_person")
+  @@index([schoolId, fromDate, toDate], map: "idx_leave_applications_range")
+  @@map("leave_applications")
+}
+
+/// A reusable pay scale: a basic figure plus the allowance/deduction
+/// lines computed from it. Assigning it to a person is a separate row
+/// (`employee_salaries`), so raising House Rent for everyone on the scale
+/// is one edit and every future payslip follows.
+model SalaryStructure {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId    String  @map("school_id") @db.Uuid
+  school      School  @relation(fields: [schoolId], references: [id], map: "fk_salary_structures_school")
+  name        String  @db.VarChar(120)
+  /// Optional government pay-scale grade this mirrors (BD national scale).
+  grade       String? @db.VarChar(30)
+  basic       Decimal @db.Decimal(12, 2)
+  description String? @db.VarChar(500)
+  isActive    Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  components SalaryComponent[]
+  salaries   EmployeeSalary[]
+
+  // `uq_salary_structures_name` is partial (live rows) and hand-written.
+  @@index([schoolId, isActive], map: "idx_salary_structures_school_active")
+  @@map("salary_structures")
+}
+
+/// One line of a structure. **Hard-deleted** and replaced as a set while
+/// editing (the M13 `timetable_entries` / M19 `gallery_items` / M20
+/// `voucher_entries` precedent) — a structure is authored as a whole, and
+/// a half-saved scale would compute a wrong payslip.
+///
+/// `is_taxable` and `is_pf_base` are what the tax and provident-fund
+/// engines read: a conveyance allowance is usually neither.
+model SalaryComponent {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String              @map("school_id") @db.Uuid
+  school       School              @relation(fields: [schoolId], references: [id], map: "fk_salary_components_school")
+  structureId  String              @map("structure_id") @db.Uuid
+  structure    SalaryStructure     @relation(fields: [structureId], references: [id], onDelete: Cascade, map: "fk_salary_components_structure")
+  name         String              @db.VarChar(80)
+  type         SalaryComponentType
+  calc         SalaryCalc          @default(FLAT)
+  value        Decimal             @db.Decimal(12, 2)
+  isTaxable    Boolean             @default(true) @map("is_taxable")
+  isPfBase     Boolean             @default(false) @map("is_pf_base")
+  displayOrder Int                 @default(0) @map("display_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([structureId, displayOrder], map: "idx_salary_components_structure")
+  @@map("salary_components")
+}
+
+/// Who is on which scale, from when. **History-preserving**: a change
+/// writes a NEW row rather than updating the old one (roadmap §3), so a
+/// payslip re-generated for March still reads March's salary. The row in
+/// force for a month is the latest `effective_from` on or before it.
+///
+/// `basic_override` also serves the MPO case the roadmap names in §8: a
+/// government-paid teacher sits on a structure with a zero basic and
+/// draws only the school's allowances.
+model EmployeeSalary {
+  id            String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId      String               @map("school_id") @db.Uuid
+  school        School               @relation(fields: [schoolId], references: [id], map: "fk_employee_salaries_school")
+  personType    AttendancePersonType @map("person_type")
+  personId      String               @map("person_id") @db.Uuid
+  structureId   String               @map("structure_id") @db.Uuid
+  structure     SalaryStructure      @relation(fields: [structureId], references: [id], onDelete: Restrict, map: "fk_employee_salaries_structure")
+  basicOverride Decimal?             @map("basic_override") @db.Decimal(12, 2)
+  effectiveFrom DateTime             @map("effective_from") @db.Date
+  /// { bankName, branchName, accountNo, accountName, routingNo } — the
+  /// bank-advice sheet reads it; required when paymentMode = BANK.
+  bankAccount   Json?                @map("bank_account")
+  paymentMode   PaymentMode          @default(BANK) @map("payment_mode")
+  note          String?              @db.VarChar(300)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_employee_salaries_identity` is partial (live rows) and hand-written:
+  // one assignment per person per effective date, so re-saving a correction
+  // for the same date replaces it instead of stacking a second history row.
+  @@index([schoolId, personType, personId], map: "idx_employee_salaries_person")
+  @@index([structureId], map: "idx_employee_salaries_structure")
+  @@map("employee_salaries")
+}
+
+/// One month's payroll. `month` is stored as the first day of the month
+/// (a DATE, like every other calendar value here). One live run per month
+/// — a hand-written partial unique excludes CANCELLED rows so a cancelled
+/// run frees the month (the M11 enrollment rule).
+model PayrollRun {
+  id       String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String           @map("school_id") @db.Uuid
+  school   School           @relation(fields: [schoolId], references: [id], map: "fk_payroll_runs_school")
+  month    DateTime         @db.Date
+  status   PayrollRunStatus @default(DRAFT)
+  note     String?          @db.VarChar(500)
+
+  /// Working days the month was computed against — frozen at generation,
+  /// because the holiday calendar may be edited afterwards and a payslip
+  /// must stay reproducible.
+  workingDays Int?    @map("working_days")
+  /// Cached totals so a run list does not aggregate every payslip.
+  grossTotal  Decimal @default(0) @map("gross_total") @db.Decimal(12, 2)
+  netTotal    Decimal @default(0) @map("net_total") @db.Decimal(12, 2)
+
+  generatedBy  String?   @map("generated_by") @db.Uuid
+  generatedAt  DateTime? @map("generated_at") @db.Timestamptz(6)
+  approvedBy   String?   @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(6)
+  disbursedBy  String?   @map("disbursed_by") @db.Uuid
+  disbursedAt  DateTime? @map("disbursed_at") @db.Timestamptz(6)
+  /// The M20 voucher this run posted, once disbursed.
+  voucherId    String?   @map("voucher_id") @db.Uuid
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason") @db.VarChar(500)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  payslips Payslip[]
+
+  @@index([schoolId, month], map: "idx_payroll_runs_school_month")
+  @@map("payroll_runs")
+}
+
+/// One employee's pay for one run. Every figure is stored rather than
+/// recomputed on read: the structure, the attendance and the tax slabs
+/// can all move afterwards, and a payslip already handed over is a
+/// document, not a query (the M14/M15 snapshot rule).
+///
+/// `breakdown` keeps the line-by-line detail the PDF prints — component
+/// names with their computed amounts, the bonus lines, and any ad-hoc
+/// line added with a reason (roadmap §8's exam-committee allowance).
+model Payslip {
+  id           String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String               @map("school_id") @db.Uuid
+  school       School               @relation(fields: [schoolId], references: [id], map: "fk_payslips_school")
+  payrollRunId String               @map("payroll_run_id") @db.Uuid
+  payrollRun   PayrollRun           @relation(fields: [payrollRunId], references: [id], onDelete: Cascade, map: "fk_payslips_run")
+  personType   AttendancePersonType @map("person_type")
+  personId     String               @map("person_id") @db.Uuid
+  /// Denormalised at generation — an employee may be renamed or deleted,
+  /// and last March's payslip still has to print the name it was issued to.
+  personName   String               @map("person_name") @db.VarChar(200)
+  employeeId   String               @map("employee_id") @db.VarChar(30)
+  designation  String?              @db.VarChar(80)
+
+  basic               Decimal @db.Decimal(12, 2)
+  totalAllowances     Decimal @default(0) @map("total_allowances") @db.Decimal(12, 2)
+  gross               Decimal @default(0) @db.Decimal(12, 2)
+  totalDeductions     Decimal @default(0) @map("total_deductions") @db.Decimal(12, 2)
+  attendanceDeduction Decimal @default(0) @map("attendance_deduction") @db.Decimal(12, 2)
+  tax                 Decimal @default(0) @db.Decimal(12, 2)
+  pfEmployee          Decimal @default(0) @map("pf_employee") @db.Decimal(12, 2)
+  pfEmployer          Decimal @default(0) @map("pf_employer") @db.Decimal(12, 2)
+  bonus               Decimal @default(0) @db.Decimal(12, 2)
+  netPayable          Decimal @default(0) @map("net_payable") @db.Decimal(12, 2)
+
+  daysPresent     Decimal @default(0) @map("days_present") @db.Decimal(4, 1)
+  daysLeavePaid   Decimal @default(0) @map("days_leave_paid") @db.Decimal(4, 1)
+  daysAbsent      Decimal @default(0) @map("days_absent") @db.Decimal(4, 1)
+  daysUnpaidLeave Decimal @default(0) @map("days_unpaid_leave") @db.Decimal(4, 1)
+  workingDays     Int     @default(0) @map("working_days")
+
+  breakdown   Json          @default("{}")
+  status      PayslipStatus @default(PENDING)
+  holdReason  String?       @map("hold_reason") @db.VarChar(300)
+  paymentMode PaymentMode   @default(BANK) @map("payment_mode")
+  paidAt      DateTime?     @map("paid_at") @db.Timestamptz(6)
+  /// Set when a figure was overridden by hand on the draft (roadmap §5).
+  editReason  String?       @map("edit_reason") @db.VarChar(300)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_payslips_person` is partial (live rows) and hand-written: one
+  // payslip per person per run, which is what makes regeneration an
+  // idempotent replace rather than a duplicate.
+  @@index([payrollRunId], map: "idx_payslips_run")
+  @@index([schoolId, personType, personId], map: "idx_payslips_person")
+  @@map("payslips")
+}
+
+/// A bonus round ("Eid-ul-Fitr Bonus 2027") attached to the month it is
+/// paid with. Eligibility is a minimum service length; `prorate` decides
+/// whether somebody four months short gets a fraction or nothing.
+model BonusRun {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId         String            @map("school_id") @db.Uuid
+  school           School            @relation(fields: [schoolId], references: [id], map: "fk_bonus_runs_school")
+  name             String            @db.VarChar(120)
+  type             BonusType         @default(FESTIVAL)
+  basis            BonusBasis        @default(PERCENT_OF_BASIC)
+  value            Decimal           @db.Decimal(12, 2)
+  /// The payroll month this bonus rides along with (first of the month).
+  monthPaidWith    DateTime?         @map("month_paid_with") @db.Date
+  minServiceMonths Int               @default(0) @map("min_service_months")
+  prorate          Boolean           @default(false)
+  applicableTo     LeaveApplicableTo @default(ALL) @map("applicable_to")
+  isActive         Boolean           @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, monthPaidWith], map: "idx_bonus_runs_month")
+  @@map("bonus_runs")
+}
+
+/// The provident-fund passbook: **append-only** (no soft delete — the M17
+/// `sms_credits` / M03 `audit_logs` rule), one row per movement, each
+/// carrying the running `balance_after` so a statement never has to
+/// re-add the whole history to answer "what is in the fund".
+model PfLedgerEntry {
+  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String               @map("school_id") @db.Uuid
+  school     School               @relation(fields: [schoolId], references: [id], map: "fk_pf_ledger_school")
+  personType AttendancePersonType @map("person_type")
+  personId   String               @map("person_id") @db.Uuid
+  /// First day of the month the movement belongs to.
+  month      DateTime             @db.Date
+  type       PfEntryType          @default(CONTRIBUTION)
+
+  employeeAmt  Decimal @default(0) @map("employee_amt") @db.Decimal(12, 2)
+  employerAmt  Decimal @default(0) @map("employer_amt") @db.Decimal(12, 2)
+  balanceAfter Decimal @map("balance_after") @db.Decimal(12, 2)
+  /// The payslip that produced a CONTRIBUTION row; NULL for hand entries.
+  payslipId    String? @map("payslip_id") @db.Uuid
+  note         String? @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // `uq_pf_ledger_payslip` is partial and hand-written — one contribution
+  // row per payslip, which is what makes a re-run idempotent.
+  @@index([schoolId, personType, personId, month], map: "idx_pf_ledger_person_month")
+  @@map("pf_ledger")
 }

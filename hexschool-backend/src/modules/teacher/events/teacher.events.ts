@@ -1,14 +1,18 @@
-import { LeaveType, StaffStatus } from '../../../common/constants';
+import { StaffStatus } from '../../../common/constants';
 
 /**
  * Teacher domain events (roadmap M08). CREATED/STATUS_CHANGED mirror the
- * staff module; LEAVE_APPROVED is the hook Attendance (M12) consumes to
- * mark Leave days.
+ * staff module.
+ *
+ * `teacher.leave.approved` was retired in M21 along with the interim
+ * `teacher_leaves` table: leave is no longer a teacher-only concern, and
+ * `hr.leave.approved` (`modules/hr/events/hr.events.ts`) carries a
+ * `personType` so an office assistant's approved leave marks their
+ * attendance the same way a teacher's always did.
  */
 export const TEACHER_EVENTS = {
   CREATED: 'teacher.created',
   STATUS_CHANGED: 'teacher.status_changed',
-  LEAVE_APPROVED: 'teacher.leave.approved',
 } as const;
 
 export interface TeacherCreatedEvent {
@@ -30,13 +34,4 @@ export interface TeacherStatusChangedEvent {
   from: StaffStatus;
   to: StaffStatus;
   reason: string;
-}
-
-export interface TeacherLeaveApprovedEvent {
-  leaveId: string;
-  teacherId: string;
-  schoolId: string;
-  fromDate: string;
-  toDate: string;
-  type: LeaveType;
 }

@@ -38,6 +38,7 @@ import {
   StaffWithRelations,
 } from '../repositories/staff-profiles.repository';
 import { defaultRoleSlugFor, generateTempPassword } from '../staff.utils';
+import { exitDateFor } from '../../../common/utils/employment.util';
 
 export const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 export const PHOTO_SIZE_PX = 512;
@@ -310,8 +311,14 @@ export class StaffService {
       throw new BadRequestException(`Staff member is already ${dto.status}`);
     }
 
+    // M21: record WHEN the change took effect, not just that it did —
+    // payroll prorates a leaver's final month against `exit_date`, and a
+    // return to ACTIVE clears it so a re-hire is not paid to nothing.
+    const exitDate = exitDateFor(dto.status, dto.effectiveDate);
+
     const updated = await this.staffProfiles.update(id, {
       status: dto.status,
+      exitDate,
       updatedBy: actor.sub,
     });
 

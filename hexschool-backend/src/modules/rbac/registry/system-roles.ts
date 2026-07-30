@@ -78,8 +78,6 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'teacher.subject.assign',
       'teacher.assign',
       'teacher.assign.override',
-      'teacher.leave.manage',
-      'teacher.leave.approve',
       'teacher.evaluation.manage',
       'student.view',
       'student.create',
@@ -203,6 +201,30 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'budget.manage',
       'accounting.period.manage',
       'accounting.period.reopen',
+      // M21 — the head runs HR: leave policy and approvals, the pay
+      // scales, and the two signatures on a payroll run. Generating the
+      // month's payslips is the accountant's mechanical step, and the
+      // Principal keeps the two that release money: approve and disburse.
+      'hr.view',
+      'leave.type.manage',
+      'leave.apply',
+      'leave.approve',
+      'leave.approve.override',
+      'leave.balance.manage',
+      'salary.view',
+      'salary.structure.manage',
+      'salary.assign',
+      'payroll.view',
+      'payroll.generate',
+      'payroll.generate.force',
+      'payroll.approve',
+      'payroll.disburse',
+      'payroll.payslip.edit',
+      'payroll.payslip.hold',
+      'bonus.manage',
+      'pf.manage',
+      'payroll.report',
+      'payroll.export',
     ],
   },
   {
@@ -224,7 +246,11 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'user.view',
       'teacher.view',
       'teacher.assign',
-      'teacher.leave.approve',
+      // M21 — the deputy still works the leave inbox, now over the
+      // unified HR table (teachers AND staff), but not the payroll.
+      'hr.view',
+      'leave.apply',
+      'leave.approve',
       'student.view',
       'student.status',
       'guardian.view',
@@ -341,6 +367,23 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // voucher is the head's call) and NOT `accounting.period.reopen`
       // — the person who closed the books must not be able to quietly
       // reopen them.
+      // M21 — the accountant computes the payroll and pays out against an
+      // approved run: they may generate it, correct a draft payslip and
+      // read every report, and they keep the provident-fund passbook.
+      'hr.view',
+      'salary.view',
+      'payroll.view',
+      'payroll.generate',
+      'payroll.payslip.edit',
+      'payroll.disburse',
+      'pf.manage',
+      'payroll.report',
+      'payroll.export',
+      // Deliberately NOT granted: `payroll.approve` — the person who
+      // computed a payroll must not be the one who signs it off, which is
+      // the same rule as `fee.override.approve` and `voucher.cancel`
+      // above. Nor `salary.structure.manage` / `salary.assign`: what a
+      // teacher is paid is set by the head, not by whoever pays it.
     ],
   },
   {
@@ -417,6 +460,11 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'website.faq.manage',
       'website.message.view',
       'website.message.manage',
+      // M21 — the office files leave applications on behalf of staff who
+      // hand in a paper form, and can see the HR workspace. Approving,
+      // and everything to do with pay, stays above them.
+      'hr.view',
+      'leave.apply',
     ],
   },
 ];

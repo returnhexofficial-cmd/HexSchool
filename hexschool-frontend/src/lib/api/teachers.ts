@@ -11,8 +11,6 @@ export type TeacherDesignation =
   | "SUBJECT_TEACHER"
   | "PART_TIME";
 
-export type LeaveType = "CASUAL" | "SICK" | "MATERNITY" | "UNPAID" | "OTHER";
-export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export const TEACHER_DESIGNATION_LABELS: Record<TeacherDesignation, string> = {
   HEAD_TEACHER: "Head Teacher",
@@ -136,22 +134,6 @@ export interface WorkloadRow {
   assignments: number;
 }
 
-export interface TeacherLeave {
-  id: string;
-  teacherId: string;
-  fromDate: string;
-  toDate: string;
-  type: LeaveType;
-  status: LeaveStatus;
-  reason: string | null;
-  createdAt: string;
-  teacher?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    employeeId: string;
-  };
-}
 
 export interface TeacherEvaluation {
   id: string;
@@ -419,50 +401,6 @@ export const teacherAssignmentsApi = {
   },
 };
 
-export const teacherLeavesApi = {
-  async list(query: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    teacherId?: string;
-    status?: LeaveStatus;
-    type?: LeaveType;
-  }): Promise<{ data: TeacherLeave[]; meta: PaginationMeta }> {
-    const res = await api.get<ApiEnvelope<TeacherLeave[]>>("/teacher-leaves", {
-      params: params(query),
-    });
-    return { data: res.data.data, meta: res.data.meta! };
-  },
-
-  async create(input: {
-    teacherId: string;
-    fromDate: string;
-    toDate: string;
-    type?: LeaveType;
-    reason?: string;
-  }): Promise<TeacherLeave> {
-    const res = await api.post<ApiEnvelope<TeacherLeave>>(
-      "/teacher-leaves",
-      input,
-    );
-    return res.data.data;
-  },
-
-  async remove(id: string): Promise<void> {
-    await api.delete(`/teacher-leaves/${id}`);
-  },
-
-  async approve(id: string): Promise<TeacherLeave> {
-    const res = await api.post<ApiEnvelope<TeacherLeave>>(
-      `/teacher-leaves/${id}/approve`,
-    );
-    return res.data.data;
-  },
-
-  async reject(id: string): Promise<TeacherLeave> {
-    const res = await api.post<ApiEnvelope<TeacherLeave>>(
-      `/teacher-leaves/${id}/reject`,
-    );
-    return res.data.data;
-  },
-};
+// `teacherLeavesApi` was retired in M21: leave moved to the unified HR
+// table and is served by `leaveApi` in `lib/api/hr.ts`, which covers
+// staff as well.

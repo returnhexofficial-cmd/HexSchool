@@ -257,6 +257,60 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [P.session, P.from, P.to],
     formats: ['xlsx'],
   },
+  // ── HR & Payroll (M21) ──────────────────────────────────────────────
+  {
+    code: 'payroll.register',
+    name: 'Monthly payroll register',
+    module: 'HR & Payroll',
+    description:
+      'Every employee’s pay for a month: basic, allowances, deductions and net.',
+    permission: 'payroll.report',
+    endpoint: '/payroll/reports/register',
+    params: [P.from, P.to],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'payroll.pf',
+    name: 'Provident fund',
+    module: 'HR & Payroll',
+    description:
+      'Contributions, withdrawals and the closing balance per employee.',
+    permission: 'payroll.report',
+    endpoint: '/payroll/reports/pf',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'payroll.tax',
+    name: 'Tax deduction summary',
+    module: 'HR & Payroll',
+    description: 'Income tax deducted at source per employee over a window.',
+    permission: 'payroll.report',
+    endpoint: '/payroll/reports/tax',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'payroll.grades',
+    name: 'Salary-grade distribution',
+    module: 'HR & Payroll',
+    description:
+      'Headcount and monthly cost per salary structure, from the live assignments.',
+    permission: 'payroll.report',
+    endpoint: '/payroll/reports/grades',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'payroll.ytd',
+    name: 'Year-to-date per employee',
+    module: 'HR & Payroll',
+    description: 'One employee’s month-by-month pay and deductions.',
+    permission: 'payroll.report',
+    endpoint: '/payroll/reports/ytd',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

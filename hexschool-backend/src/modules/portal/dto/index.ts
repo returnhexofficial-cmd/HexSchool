@@ -1,5 +1,5 @@
 import {
-  IsEnum,
+  IsBoolean,
   IsOptional,
   IsString,
   IsUUID,
@@ -7,7 +7,6 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { LeaveType } from '@prisma/client';
 import { DATE_PATTERN } from '../../staff/dto/staff.dto';
 
 /** Trigger the automatic withhold-on-dues for an exam. */
@@ -40,9 +39,9 @@ export class PortalContactDto {
 }
 
 /**
- * A teacher filing their own leave from the portal. Deliberately has no
- * `teacherId` — the M08 `CreateLeaveDto` does, and accepting it here would
- * let a teacher apply in a colleague's name.
+ * An employee filing their own leave from the portal. Deliberately has no
+ * `personType`/`personId` — the M21 `CreateLeaveDto` does, and accepting
+ * them here would let anyone apply in a colleague's name.
  */
 export class PortalLeaveDto {
   @Matches(DATE_PATTERN, { message: 'fromDate must be YYYY-MM-DD' })
@@ -51,12 +50,14 @@ export class PortalLeaveDto {
   @Matches(DATE_PATTERN, { message: 'toDate must be YYYY-MM-DD' })
   toDate!: string;
 
-  @IsOptional()
-  @IsEnum(LeaveType)
-  type?: LeaveType;
+  @IsUUID()
+  leaveTypeId!: string;
 
   @IsOptional()
+  @IsBoolean()
+  halfDay?: boolean;
+
   @IsString()
   @MaxLength(500)
-  reason?: string;
+  reason!: string;
 }

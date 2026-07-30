@@ -162,6 +162,28 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       'New career application: {{name}} ({{phone}}) applied for {{position}}.',
   },
+  // ── Module 21 — HR & payroll ─────────────────────────────────────────
+  {
+    code: 'PAYSLIP_READY',
+    module: 'HR & Payroll',
+    description: 'Salary disbursed for the month',
+    channels: [C.SMS],
+    // Deliberately NOT the full breakdown: an SMS is read on a shared
+    // handset and in front of colleagues, so it carries the net figure
+    // and points at the portal for the rest.
+    variables: ['name', 'month', 'net', 'school'],
+    defaultBody:
+      '{{school}}: salary for {{month}} has been disbursed. Net {{net}} BDT. Your payslip is available in the portal.',
+  },
+  {
+    code: 'LEAVE_DECISION',
+    module: 'HR & Payroll',
+    description: 'A leave application was approved or rejected',
+    channels: [C.SMS, C.IN_APP],
+    variables: ['name', 'leave_type', 'from', 'to', 'status', 'school'],
+    defaultBody:
+      '{{school}}: your {{leave_type}} from {{from}} to {{to}} is {{status}}.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

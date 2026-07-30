@@ -191,16 +191,46 @@ export interface MessageHistory {
   }>;
 }
 
-// ── teacher leaves ──────────────────────────────────────────────────────
+// ── employee leave & payslips (M21) ─────────────────────────────────────
 
-export interface TeacherLeave {
+export interface PortalLeave {
   id: string;
   fromDate: string;
   toDate: string;
-  type: string;
+  halfDay: boolean;
+  days: string;
   status: string;
-  reason: string | null;
-  createdAt: string;
+  reason: string;
+  decisionNote: string | null;
+  leaveType: { id: string; name: string; isPaid: boolean };
+}
+
+export interface PortalLeaveBalance {
+  leaveType: { id: string; name: string; isPaid: boolean };
+  allocated: number;
+  used: number;
+  carried: number;
+  available: number;
+}
+
+export interface PortalPayslip {
+  id: string;
+  month: string;
+  gross: number;
+  totalDeductions: number;
+  netPayable: number;
+  status: string;
+  paidAt: string | null;
+}
+
+export interface PortalEmployee {
+  personType: "TEACHER" | "STAFF";
+  personId: string;
+  employeeId: string;
+  name: string;
+  designation: string;
+  joiningDate: string;
+  status: string;
 }
 
 export interface TeacherRoster {
@@ -443,25 +473,57 @@ export const portalApi = {
     );
     return res.data.data;
   },
-  async teacherLeaves() {
-    // Paginated handler, but the envelope lifts `meta` to the top level and
-    // leaves the rows in `data` — so this is one unwrap, not two.
-    const res = await api.get<ApiEnvelope<TeacherLeave[]>>(
-      "/portal/teacher/leaves",
+  // ── employee self-service (M21) ───────────────────────────────────────
+  // These serve teachers AND non-teaching staff: the person is resolved
+  // from the logged-in account, never from a parameter.
+
+  async employeeMe() {
+    const res = await api.get<ApiEnvelope<PortalEmployee>>(
+      "/portal/employee/me",
+    );
+    return res.data.data;
+  },
+  async myLeaves() {
+    const res = await api.get<ApiEnvelope<PortalLeave[]>>(
+      "/portal/employee/leaves",
+    );
+    return res.data.data;
+  },
+  async myLeaveBalances() {
+    const res = await api.get<ApiEnvelope<PortalLeaveBalance[]>>(
+      "/portal/employee/leave-balances",
     );
     return res.data.data;
   },
   async applyForLeave(input: {
     fromDate: string;
     toDate: string;
-    type?: string;
-    reason?: string;
+    leaveTypeId: string;
+    halfDay?: boolean;
+    reason: string;
   }) {
-    const res = await api.post<ApiEnvelope<TeacherLeave>>(
-      "/portal/teacher/leaves",
+    const res = await api.post<ApiEnvelope<PortalLeave>>(
+      "/portal/employee/leaves",
       input,
     );
     return res.data.data;
+  },
+  async myPayslips() {
+    const res = await api.get<ApiEnvelope<PortalPayslip[]>>(
+      "/portal/employee/payslips",
+    );
+    return res.data.data;
+  },
+  async downloadPayslip(id: string) {
+    const res = await api.get<Blob>(`/portal/employee/payslips/${id}/pdf`, {
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(res.data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `payslip-${id}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
   },
 
   async adminDashboard() {

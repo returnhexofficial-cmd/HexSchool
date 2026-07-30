@@ -38,6 +38,7 @@ import { TimetableModule } from './modules/timetable/timetable.module';
 import { VersionModule } from './modules/version/version.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
+import { HrModule } from './modules/hr/hr.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -140,6 +141,7 @@ import { QueuesModule } from './queues/queues.module';
     // auto-posting needs, and listens for `payment.success` — the fee
     // module never learns the ledger exists. M21 payroll imports THIS one.
     AccountingModule,
+    HrModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

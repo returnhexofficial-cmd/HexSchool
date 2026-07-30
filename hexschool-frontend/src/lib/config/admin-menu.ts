@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   Globe,
   GraduationCap,
+  HandCoins,
   LayoutDashboard,
   Network,
   FileBarChart,
@@ -134,6 +135,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/fees",
     icon: Wallet,
     permission: "fee.view",
+  },
+  {
+    label: "HR & Payroll",
+    href: "/admin/hr",
+    icon: HandCoins,
+    permission: "hr.view",
   },
   {
     label: "Accounting",

@@ -16,14 +16,6 @@ export const TEACHER_DESIGNATIONS = [
   "PART_TIME",
 ] as const;
 
-export const LEAVE_TYPES = [
-  "CASUAL",
-  "SICK",
-  "MATERNITY",
-  "UNPAID",
-  "OTHER",
-] as const;
-
 export const teacherSchema = z
   .object({
     email: z
@@ -82,20 +74,9 @@ export const qualificationSchema = z.object({
 
 export type QualificationValues = z.infer<typeof qualificationSchema>;
 
-export const teacherLeaveSchema = z
-  .object({
-    teacherId: z.string().min(1, "Pick a teacher"),
-    fromDate: dateString,
-    toDate: dateString,
-    type: z.enum(LEAVE_TYPES),
-    reason: z.string().trim().max(500).optional().or(z.literal("")),
-  })
-  .refine((v) => v.fromDate <= v.toDate, {
-    message: "End must be on/after start",
-    path: ["toDate"],
-  });
-
-export type TeacherLeaveValues = z.infer<typeof teacherLeaveSchema>;
+// `teacherLeaveSchema` / `LEAVE_TYPES` were retired in M21: leave moved
+// to the unified HR table, and the type is now a row with a quota
+// (`leaveApplicationSchema` in `validations/hr.ts`).
 
 /** Criterion scores are kept as strings in the form (RHF convention). */
 export const evaluationSchema = z.object({

@@ -55,8 +55,8 @@ describe('Portals & Dashboards (e2e)', () => {
     await prisma.contactMessage.deleteMany({
       where: { schoolId: DEFAULT_SCHOOL_ID, name: { startsWith: NAME } },
     });
-    await prisma.teacherLeave.deleteMany({
-      where: { teacher: { firstName: NAME } },
+    await prisma.leaveApplication.deleteMany({
+      where: { schoolId: DEFAULT_SCHOOL_ID, reason: { contains: NAME } },
     });
     await prisma.enrollment.deleteMany({
       where: { schoolId: DEFAULT_SCHOOL_ID, student: { firstName: NAME } },
@@ -555,7 +555,7 @@ describe('Portals & Dashboards (e2e)', () => {
     // directly in `data` — one unwrap, not two.
     expect(Array.isArray(dataOf<unknown[]>(before))).toBe(true);
 
-    // The M08 rule is "inside the current session", so the dates come from
+    // Leave attaches to the session covering its dates (M21), so they come from
     // whichever session the school actually has current — this suite must
     // not flip `is_current`, which the academic suite asserts on.
     const current = await prisma.academicSession.findFirst({
@@ -568,28 +568,41 @@ describe('Portals & Dashboards (e2e)', () => {
       return d.toISOString().slice(0, 10);
     };
 
+    // M21: leave now hangs off a `leave_types` row, seeded per school.
+    const casual = await prisma.leaveType.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, code: 'CASUAL', deletedAt: null },
+      select: { id: true },
+    });
+
     await server()
       .post('/api/v1/portal/teacher/leaves')
       .set(auth(teacherToken))
-      .send({ fromDate: day(30), toDate: day(31), reason: 'E2EPORTAL leave' })
+      .send({
+        fromDate: day(30),
+        toDate: day(31),
+        leaveTypeId: casual!.id,
+        reason: 'E2EPORTAL leave',
+      })
       .expect(201);
 
-    const filed = await prisma.teacherLeave.findFirst({
-      where: { teacher: { firstName: NAME }, reason: 'E2EPORTAL leave' },
+    const filed = await prisma.leaveApplication.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, reason: 'E2EPORTAL leave' },
       select: { status: true },
     });
-    // Filed, not auto-approved — the M08 approval flow still owns that.
+    // Filed, not auto-approved — the M21 approval flow still owns that.
     expect(filed?.status).toBe('PENDING');
 
-    // The route has no teacherId to pass — supplying one is rejected by the
+    // The route has no personId to pass — supplying one is rejected by the
     // whitelist, so a teacher cannot apply in a colleague's name.
     await server()
       .post('/api/v1/portal/teacher/leaves')
       .set(auth(teacherToken))
       .send({
-        teacherId: randomUUID(),
+        personId: randomUUID(),
         fromDate: day(40),
         toDate: day(41),
+        leaveTypeId: casual!.id,
+        reason: 'E2EPORTAL leave 2',
       })
       .expect(400);
   });

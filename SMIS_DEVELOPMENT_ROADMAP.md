@@ -101,7 +101,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 |---|--------|--------|
 | 19 | Website CMS (Public Site) | ☑ |
 | 20 | Accounting & Finance | ☑ |
-| 21 | HR & Payroll | ☐ |
+| 21 | HR & Payroll | ☑ |
 | 22 | Assignments & Homework | ☐ |
 | 23 | Library Management | ☐ |
 | 24 | Inventory & Assets | ☐ |
@@ -1497,12 +1497,12 @@ Consolidated HR (unified employee view over teachers+staff, leave management pro
 - `pf_ledger`: `id, person_id, person_type, month, employee_amt, employer_amt, balance_after` (+ withdrawal records).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Leave: type CRUD, yearly balance allocation job, apply/approve flow (quota check, overlap check), calendar integration (approved leave → attendance LEAVE marks, paid/unpaid flag).
-- [ ] Salary structure & assignment CRUD (history-preserving).
-- [ ] Payroll generation engine: for month M — base from structure, prorate by joining/exit date, unpaid-leave & absent deductions (working-days aware via Module 05 holidays), bonuses attached to run, PF both sides, tax (simple slab config in settings — BD income tax slabs configurable), rounding rules → payslips DRAFT.
-- [ ] Approval → lock; disbursement marking (bulk + per person), bank advice sheet XLSX export, payslip PDFs + SMS/email dispatch.
-- [ ] Accounting hook: on DISBURSED → salary expense/PF payable/tax payable vouchers via posting map.
-- [ ] Reports: monthly payroll register, PF ledger, tax deduction summary, salary-grade distribution, YTD per employee.
+- [x] Leave: type CRUD, yearly balance allocation job, apply/approve flow (quota check, overlap check), calendar integration (approved leave → attendance LEAVE marks, paid/unpaid flag).
+- [x] Salary structure & assignment CRUD (history-preserving).
+- [x] Payroll generation engine: for month M — base from structure, prorate by joining/exit date, unpaid-leave & absent deductions (working-days aware via Module 05 holidays), bonuses attached to run, PF both sides, tax (simple slab config in settings — BD income tax slabs configurable), rounding rules → payslips DRAFT.
+- [x] Approval → lock; disbursement marking (bulk + per person), bank advice sheet XLSX export, payslip PDFs + SMS/email dispatch.
+- [x] Accounting hook: on DISBURSED → salary expense/PF payable/tax payable vouchers via posting map.
+- [x] Reports: monthly payroll register, PF ledger, tax deduction summary, salary-grade distribution, YTD per employee.
 ### APIs
 ```
 CRUD /api/v1/leave-types | leave-applications (+ approve/reject/cancel)  GET /api/v1/leave-balances/:person
@@ -1514,11 +1514,11 @@ GET  /api/v1/payroll/reports/register|pf|tax|ytd
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Leave: my-leave (portal) apply form with balance display, approval inbox, team calendar view.
-- [ ] Structure builder (component rows with live sample calculation preview).
-- [ ] Payroll run wizard: month → generate → review grid (per-person expandable breakdown, edit-with-reason on DRAFT) → approve → disburse (checklist + bank advice download).
-- [ ] Payslip viewer/PDF; employee self-service payslip history in portal.
-- [ ] Reports pages.
+- [x] Leave: my-leave (portal) apply form with balance display, approval inbox. *(Team calendar view deferred — see the completion doc.)*
+- [x] Structure builder (component rows with live sample calculation preview).
+- [x] Payroll run wizard: month → generate → review grid (per-person expandable breakdown, edit-with-reason on DRAFT) → approve → disburse (checklist + bank advice download).
+- [x] Payslip viewer/PDF; employee self-service payslip history in portal.
+- [x] Reports pages.
 
 ## 6. Business Rules
 - One payroll run per month; regeneration only while DRAFT (wipes DRAFT payslips).
@@ -1536,15 +1536,15 @@ GET  /api/v1/payroll/reports/register|pf|tax|ytd
 - Attendance not finalized when generating → warning listing unmarked days; generation allowed with `payroll.generate.force`.
 
 ## 9. Testing Checklist
-- [ ] Unit: engine golden fixtures (proration, unpaid leave, PF, tax slabs, rounding).
-- [ ] e2e: full run lifecycle; accounting vouchers created on disburse.
-- [ ] Frontend: run wizard states; payslip PDF sample verified.
+- [x] Unit: engine golden fixtures (proration, unpaid leave, PF, tax slabs, rounding).
+- [x] e2e: full run lifecycle; accounting vouchers created on disburse.
+- [x] Frontend: run wizard states; payslip PDF sample verified.
 
 ## 10. Completion Checklist
-- [ ] Leave system migrated & unified
-- [ ] Payroll engine + payslips + disbursement
-- [ ] Accounting integration
-- [ ] Docs: `docs/modules/21-hr-payroll.md`
+- [x] Leave system migrated & unified
+- [x] Payroll engine + payslips + disbursement
+- [x] Accounting integration
+- [x] Docs: `docs/modules/21-hr-payroll.md`
 
 ---
 

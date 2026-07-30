@@ -5,6 +5,7 @@ import { NoticesRepository } from '../communication/repositories/notices.reposit
 import { NotificationsRepository } from '../communication/repositories/notifications.repository';
 import { EnrollmentModule } from '../enrollment/enrollment.module';
 import { FeeModule } from '../fee/fee.module';
+import { HrModule } from '../hr/hr.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { ResultModule } from '../result/result.module';
 import { SchoolModule } from '../school/school.module';
@@ -23,6 +24,7 @@ import { PortalActionsService } from './services/portal-actions.service';
 import { PortalMessagesService } from './services/portal-messages.service';
 import { PortalResolverService } from './services/portal-resolver.service';
 import { ReportsService } from './services/reports.service';
+import { EmployeePortalService } from './services/employee-portal.service';
 import { StudentPortalService } from './services/student-portal.service';
 import { TeacherPortalService } from './services/teacher-portal.service';
 
@@ -41,7 +43,8 @@ import { TeacherPortalService } from './services/teacher-portal.service';
  * re-provisions, the established M07/M16 convention.
  *
  * `WebsiteModule` is imported for one thing: the portal "Contact School"
- * form files into the M19 office inbox rather than a second one.
+ * form files into the M19 office inbox rather than a second one, and
+ * `HrModule` (M21) for the employee self-service panels.
  */
 @Module({
   imports: [
@@ -56,12 +59,17 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     SchoolModule,
     TeacherModule,
     WebsiteModule,
+    // M21 — the employee self-service panels (my leave, my payslips) and
+    // the teacher portal's leave list, which now reads the unified HR
+    // table rather than M08's retired `teacher_leaves`.
+    HrModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [
     PortalResolverService,
     StudentPortalService,
     TeacherPortalService,
+    EmployeePortalService,
     PortalMessagesService,
     DashboardService,
     DashboardRepository,

@@ -41,6 +41,7 @@ import type {
 import { TeacherAssignmentsRepository } from '../repositories/teacher-assignments.repository';
 import { TeacherQualificationsRepository } from '../repositories/teacher-qualifications.repository';
 import { TeacherSubjectsRepository } from '../repositories/teacher-subjects.repository';
+import { exitDateFor } from '../../../common/utils/employment.util';
 import {
   TeachersRepository,
   TeacherWithRelations,
@@ -333,8 +334,12 @@ export class TeachersService {
       }
     }
 
+    // M21: record WHEN the change took effect — payroll prorates a
+    // leaver's final month against `exit_date`, and returning to ACTIVE
+    // clears it so a re-hire is not paid to nothing.
     const updated = await this.teachers.update(id, {
       status: dto.status,
+      exitDate: exitDateFor(dto.status, dto.effectiveDate),
       updatedBy: actor.sub,
     });
 

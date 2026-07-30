@@ -315,6 +315,7 @@ function TeacherView() {
 
       <MyStudentsPanel sections={d.sections} />
       <MyLeavesPanel />
+      <MyPayslipsPanel />
     </>
   );
 }
@@ -390,32 +391,40 @@ function MyStudentsPanel({ sections }: { sections: { id: string; label: string }
   );
 }
 
-const LEAVE_TYPES = ["CASUAL", "SICK", "EARNED", "MATERNITY", "UNPAID"] as const;
-
 /**
- * Own leave history + apply form (roadmap M18 §5). The M08 rules still
- * run server-side — inside the current session, no overlap with an already
- * approved leave — so a rejected application says why.
+ * Own leave history, the balance strip and the apply form (roadmap M18
+ * §5, rebuilt on the M21 leave system).
+ *
+ * Two things changed with M21 and both are visible here: the type is a
+ * row with a real quota (so the form can show what is left before an
+ * application is filed), and the panel serves **staff as well as
+ * teachers** — the person is resolved from the logged-in account.
  */
 function MyLeavesPanel() {
   const qc = useQueryClient();
   const q = useQuery({
-    queryKey: ["portal", "teacher", "leaves"],
-    queryFn: portalApi.teacherLeaves,
+    queryKey: ["portal", "employee", "leaves"],
+    queryFn: portalApi.myLeaves,
   });
+  const balances = useQuery({
+    queryKey: ["portal", "employee", "leave-balances"],
+    queryFn: portalApi.myLeaveBalances,
+  });
+
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
-  const [type, setType] = useState<string>(LEAVE_TYPES[0]);
+  const [leaveTypeId, setLeaveTypeId] = useState("");
   const [reason, setReason] = useState("");
 
   const apply = useMutation({
-    mutationFn: () => portalApi.applyForLeave({ fromDate, toDate, type, reason: reason || undefined }),
+    mutationFn: () =>
+      portalApi.applyForLeave({ fromDate, toDate, leaveTypeId, reason }),
     onSuccess: () => {
       toast.success("Leave application submitted");
       setFromDate("");
       setToDate("");
       setReason("");
-      void qc.invalidateQueries({ queryKey: ["portal", "teacher", "leaves"] });
+      void qc.invalidateQueries({ queryKey: ["portal", "employee"] });
     },
     onError: (err: unknown) => {
       const message =
@@ -425,9 +434,26 @@ function MyLeavesPanel() {
     },
   });
 
+  const selected = balances.data?.find((b) => b.leaveType.id === leaveTypeId);
+
   return (
     <div className="space-y-4 rounded-md border p-4">
       <h3 className="font-medium">My leaves</h3>
+
+      {balances.data && balances.data.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {balances.data.map((b) => (
+            <div key={b.leaveType.id} className="rounded-md border px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                {b.leaveType.name}
+              </p>
+              <p className="text-sm font-medium tabular-nums">
+                {b.available} left
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1">
@@ -450,18 +476,24 @@ function MyLeavesPanel() {
         </div>
         <div className="space-y-1">
           <Label htmlFor="leave-type">Type</Label>
-          <Select value={type} onValueChange={setType}>
+          <Select value={leaveTypeId} onValueChange={setLeaveTypeId}>
             <SelectTrigger id="leave-type">
-              <SelectValue />
+              <SelectValue placeholder="Pick a type" />
             </SelectTrigger>
             <SelectContent>
-              {LEAVE_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {t}
+              {(balances.data ?? []).map((b) => (
+                <SelectItem key={b.leaveType.id} value={b.leaveType.id}>
+                  {b.leaveType.name}
+                  {b.leaveType.isPaid ? "" : " (unpaid)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {selected ? (
+            <p className="text-xs text-muted-foreground">
+              {selected.available} day(s) available
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1">
           <Label htmlFor="leave-reason">Reason</Label>
@@ -475,7 +507,10 @@ function MyLeavesPanel() {
       </div>
       <Button
         size="sm"
-        disabled={!fromDate || !toDate || apply.isPending}
+        disabled={
+          !fromDate || !toDate || !leaveTypeId || reason.trim().length < 3 ||
+          apply.isPending
+        }
         onClick={() => apply.mutate()}
       >
         {apply.isPending ? "Submitting…" : "Apply for leave"}
@@ -494,7 +529,10 @@ function MyLeavesPanel() {
               <span className="tabular-nums">
                 {String(l.fromDate).slice(0, 10)} → {String(l.toDate).slice(0, 10)}
               </span>
-              <Badge variant="outline">{l.type}</Badge>
+              <Badge variant="outline">{l.leaveType.name}</Badge>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {Number(l.days)} day(s)
+              </span>
               <Badge
                 variant={
                   l.status === "APPROVED"
@@ -509,6 +547,57 @@ function MyLeavesPanel() {
               {l.reason && (
                 <span className="text-muted-foreground">{l.reason}</span>
               )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Payslip history (roadmap M21 §5). **Disbursed months only** — a draft
+ * or merely approved payslip is a proposal the office is still working
+ * on, and showing it would have people querying figures that are about
+ * to change.
+ */
+function MyPayslipsPanel() {
+  const q = useQuery({
+    queryKey: ["portal", "employee", "payslips"],
+    queryFn: portalApi.myPayslips,
+  });
+
+  return (
+    <div className="space-y-3 rounded-md border p-4">
+      <h3 className="font-medium">My payslips</h3>
+      {q.isLoading ? (
+        <LoadingBlock />
+      ) : q.isError ? (
+        <ErrorState onRetry={() => void q.refetch()} />
+      ) : (q.data?.length ?? 0) === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No payslip has been disbursed yet.
+        </p>
+      ) : (
+        <ul className="divide-y text-sm">
+          {q.data!.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center gap-3 py-2">
+              <span className="font-medium tabular-nums">{p.month}</span>
+              <span className="text-muted-foreground tabular-nums">
+                gross {p.gross.toFixed(2)} · deductions{" "}
+                {p.totalDeductions.toFixed(2)}
+              </span>
+              <span className="font-medium tabular-nums">
+                net {p.netPayable.toFixed(2)}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto"
+                onClick={() => void portalApi.downloadPayslip(p.id)}
+              >
+                PDF
+              </Button>
             </li>
           ))}
         </ul>

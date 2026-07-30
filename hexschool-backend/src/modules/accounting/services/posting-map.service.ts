@@ -27,6 +27,14 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   [SYSTEM_SLOTS.CASH_DEFAULT]: '1110',
   [SYSTEM_SLOTS.GATEWAY_CHARGES]: '5600',
   [SYSTEM_SLOTS.OPENING_EQUITY]: '3100',
+  // M21 — already present in the seeded 61-account BD chart, which is why
+  // payroll posts correctly on a fresh school with nothing configured.
+  [SYSTEM_SLOTS.SALARY_EXPENSE]: '5100',
+  [SYSTEM_SLOTS.BONUS_EXPENSE]: '5110',
+  [SYSTEM_SLOTS.PF_EXPENSE]: '5120',
+  [SYSTEM_SLOTS.PF_PAYABLE]: '2120',
+  [SYSTEM_SLOTS.TAX_PAYABLE]: '2130',
+  [SYSTEM_SLOTS.SALARY_PAYABLE]: '2110',
 };
 
 export interface ResolvedPostingMap {

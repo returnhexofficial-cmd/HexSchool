@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   qualificationSchema,
-  teacherLeaveSchema,
   teacherSchema,
   type TeacherFormValues,
 } from "./teacher";
@@ -71,38 +70,3 @@ describe("qualificationSchema", () => {
   });
 });
 
-describe("teacherLeaveSchema", () => {
-  const base = {
-    teacherId: "t-1",
-    type: "CASUAL" as const,
-    reason: "",
-  };
-
-  it("end must be on/after start", () => {
-    expect(
-      teacherLeaveSchema.safeParse({
-        ...base,
-        fromDate: "2026-03-01",
-        toDate: "2026-03-05",
-      }).success,
-    ).toBe(true);
-    expect(
-      teacherLeaveSchema.safeParse({
-        ...base,
-        fromDate: "2026-03-06",
-        toDate: "2026-03-05",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("requires a teacher", () => {
-    expect(
-      teacherLeaveSchema.safeParse({
-        ...base,
-        teacherId: "",
-        fromDate: "2026-03-01",
-        toDate: "2026-03-05",
-      }).success,
-    ).toBe(false);
-  });
-});

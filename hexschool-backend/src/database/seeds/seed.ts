@@ -12,6 +12,7 @@ import { seedNctbGradingSystem } from '../../modules/school/seed/school.seeder';
 import { seedStandardGroups } from '../../modules/academic/seed/structure.seeder';
 import { seedNotificationTemplates } from '../../modules/communication/seed/communication.seeder';
 import { seedChartOfAccounts } from '../../modules/accounting/seed/accounting.seeder';
+import { seedLeaveTypes } from '../../modules/hr/seed/hr.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -121,6 +122,18 @@ const seeders: Seeder[] = [
       const created = await seedChartOfAccounts(prisma, DEFAULT_SCHOOL_ID);
       process.stdout.write(
         created > 0 ? `${created} accounts created; ` : 'already present; ',
+      );
+    },
+  },
+  {
+    // Module 21: the default leave taxonomy. Inserts only the codes a
+    // school is missing, so a renamed or re-quota'd type is never
+    // overwritten.
+    name: 'leave-types (M21)',
+    run: async (prisma) => {
+      const created = await seedLeaveTypes(prisma, DEFAULT_SCHOOL_ID);
+      process.stdout.write(
+        created > 0 ? `${created} created; ` : 'already present; ',
       );
     },
   },

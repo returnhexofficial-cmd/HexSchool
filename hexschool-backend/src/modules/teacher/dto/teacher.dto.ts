@@ -108,6 +108,14 @@ export class UpdateTeacherStatusDto {
   @IsString()
   @Length(3, 500)
   reason!: string;
+
+  /** Last working day for an exit status (M21) — see the staff DTO. */
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'effectiveDate must be YYYY-MM-DD',
+  })
+  effectiveDate?: string;
 }
 
 export class TeacherQueryDto extends PaginationQueryDto {

@@ -175,11 +175,8 @@ export default function TeachersListPage() {
             Assignment matrix
           </Button>
         </Can>
-        <Can permission="teacher.view">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/admin/teachers/leaves")}
-          >
+        <Can permission="hr.view">
+          <Button variant="outline" onClick={() => router.push("/admin/hr")}>
             Leaves
           </Button>
         </Can>

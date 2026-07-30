@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AcademicModule } from '../academic/academic.module';
+import { AssignmentModule } from '../assignment/assignment.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { NoticesRepository } from '../communication/repositories/notices.repository';
 import { NotificationsRepository } from '../communication/repositories/notifications.repository';
@@ -63,6 +64,11 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // the teacher portal's leave list, which now reads the unified HR
     // table rather than M08's retired `teacher_leaves`.
     HrModule,
+    // M22 — the student/parent assignment panels. The composition split
+    // is the usual one: AssignmentModule decides what a candidate may see
+    // and whether they may still submit; PortalModule answers only "which
+    // student is this account?" through `PortalResolverService`.
+    AssignmentModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

@@ -852,6 +852,92 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       '',
     ],
   ]),
+  // ── Module 22: Assignments & Homework ───────────────────────────────
+  ...g(SettingsGroup.assignment, [
+    ['assignment.enabled', 'boolean', 'Assignments & homework enabled', true],
+    [
+      'assignment.max_attachments',
+      'number',
+      'Maximum files on one assignment or submission',
+      3,
+    ],
+    [
+      'assignment.max_attachment_mb',
+      'number',
+      'Maximum size of a single attachment (MB)',
+      10,
+    ],
+    [
+      'assignment.allowed_file_types',
+      'json',
+      'Attachment extensions students and teachers may upload',
+      ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+    ],
+    [
+      'assignment.allow_resubmission',
+      'boolean',
+      'Let a student replace a submission they already made',
+      true,
+    ],
+    [
+      'assignment.resubmission_until_due',
+      'boolean',
+      'Only allow resubmission before the deadline has passed',
+      true,
+    ],
+    [
+      'assignment.allow_late_default',
+      'boolean',
+      'New assignments accept late submissions by default',
+      false,
+    ],
+    [
+      'assignment.default_due_days',
+      'number',
+      'Days ahead the due date is pre-filled to on a new assignment',
+      7,
+    ],
+    [
+      'assignment.publish_notification',
+      'boolean',
+      'Notify the section when an assignment is published',
+      true,
+    ],
+    // SMS costs real money per part (M17), and a school setting five
+    // assignments a day across twelve sections would spend a term's
+    // credit in a week. The in-app bell is free and is where a portal
+    // user already looks, so it is the default and SMS is opt-in.
+    [
+      'assignment.notification_channel',
+      'string',
+      'Channel for assignment alerts: IN_APP or SMS',
+      'IN_APP',
+    ],
+    [
+      'assignment.due_reminder_enabled',
+      'boolean',
+      'Send a reminder before an assignment falls due',
+      true,
+    ],
+    [
+      'assignment.due_reminder_hours',
+      'number',
+      'Hours before the deadline the reminder is sent',
+      24,
+    ],
+    [
+      'assignment.no_submission_alert_days',
+      'number',
+      'Days after the due date a teacher is nudged about zero submissions',
+      3,
+    ],
+    [
+      'assignment.material_link_hosts',
+      'json',
+      'Hosts a VIDEO_URL/LINK material may point at (empty = any https host)',
+      ['youtube.com', 'youtu.be', 'drive.google.com', 'docs.google.com'],
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

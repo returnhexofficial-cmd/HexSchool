@@ -102,7 +102,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 19 | Website CMS (Public Site) | ☑ |
 | 20 | Accounting & Finance | ☑ |
 | 21 | HR & Payroll | ☑ |
-| 22 | Assignments & Homework | ☐ |
+| 22 | Assignments & Homework | ☑ |
 | 23 | Library Management | ☐ |
 | 24 | Inventory & Assets | ☐ |
 | 25 | Transport Management | ☐ |
@@ -1562,12 +1562,12 @@ Teachers publish assignments/homework and learning materials (class notes) to se
 - `learning_materials`: `id, school_id, session_id, section_id NULL (null=class-wide), class_id, subject_id, teacher_id, title, description, file_urls JSONB, type ENUM('NOTE','SLIDE','VIDEO_URL','LINK','OTHER')`, audit/soft-delete.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Teacher-scoped CRUD (only own sections/subjects — policy check against teacher_section_subjects).
-- [ ] Publish → notification to section students/parents (template `ASSIGNMENT_NEW`), due-soon reminder job (24 h before).
-- [ ] Submission endpoints (student-owned), late detection, resubmission per setting.
-- [ ] Evaluation bulk grid endpoint; return-for-revision flow.
-- [ ] Files: student uploads ≤ 10 MB × 3, pdf/doc/img; virus-scan hook placeholder (ClamAV container optional).
-- [ ] Stats: per-assignment submission %, per-student pending list (feeds portals).
+- [x] Teacher-scoped CRUD (only own sections/subjects — policy check against teacher_section_subjects). **Checked against the LIVE roster, not `assignments.teacher_id`, which is what makes §8's reassignment case work with no migration.**
+- [x] Publish → notification to section students/parents (template `ASSIGNMENT_NEW`), due-soon reminder job (24 h before). **Default channel is IN_APP, not SMS — see the completion doc.**
+- [x] Submission endpoints (student-owned), late detection, resubmission per setting. **A parent may read but never submit.**
+- [x] Evaluation bulk grid endpoint; return-for-revision flow.
+- [x] Files: student uploads ≤ 10 MB × 3, pdf/doc/img; virus-scan hook placeholder (ClamAV container optional). **`ATTACHMENT_SCANNER` is a DI token bound to a pass-through — the M08/M14 hook convention.**
+- [x] Stats: per-assignment submission %, per-student pending list (feeds portals).
 ### APIs
 ```
 CRUD /api/v1/assignments (+ /:id/publish /:id/close)
@@ -1577,9 +1577,9 @@ CRUD /api/v1/learning-materials
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Teacher portal: assignment list per section, create form (rich text + attachments + due picker), submissions review table (status chips, inline mark+feedback, download-all zip).
-- [ ] Student portal: assignments list (due badges, pending/submitted/evaluated tabs), detail + submit form, materials library (filter by subject).
-- [ ] Parent portal: child's pending/late overview.
+- [x] Teacher portal: assignment list per section, create form (rich text + attachments + due picker), submissions review table (status chips, inline mark+feedback, download-all zip). **Built as the `/admin/assignments` area — teachers already hold the permissions and operate from admin pages (the M18 decision).**
+- [x] Student portal: assignments list (due badges, pending/submitted/evaluated tabs), detail + submit form, materials library (filter by subject).
+- [x] Parent portal: child's pending/late overview. **The same component, one prop apart — a parent's fetchers carry no `submit`.**
 
 ## 6. Business Rules
 - Students submit only for own enrollment & only PUBLISHED, non-CLOSED assignments; late only if `allow_late`.
@@ -1595,14 +1595,14 @@ CRUD /api/v1/learning-materials
 - Zero-submission auto-close reminder to teacher after due+3d.
 
 ## 9. Testing Checklist
-- [ ] Unit: ownership policies, late flag.
-- [ ] e2e: publish→notify→submit→evaluate cycle; IDOR attempts on submissions.
-- [ ] Frontend: upload constraints, tabs/status filters.
+- [x] Unit: ownership policies, late flag. **139 backend tests — 103 engine, 36 service.**
+- [x] e2e: publish→notify→submit→evaluate cycle; IDOR attempts on submissions. **61 cases in `test/assignment.e2e-spec.ts`, including the six CHECK constraints and the parent-cannot-submit case.**
+- [x] Frontend: upload constraints, tabs/status filters. **47 Vitest cases over the validations and the API helpers.**
 
 ## 10. Completion Checklist
-- [ ] Full cycle live in portals
-- [ ] Notifications wired
-- [ ] Docs: `docs/modules/22-assignments.md`
+- [x] Full cycle live in portals
+- [x] Notifications wired
+- [x] Docs: `docs/modules/22-assignments.md`
 
 ---
 

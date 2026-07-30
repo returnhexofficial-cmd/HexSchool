@@ -23,6 +23,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { portalApi } from "@/lib/api/portal";
+import { portalAssignmentApi } from "@/lib/api/assignment";
+import { AssignmentPanels } from "./assignment-panels";
 import { StudentPanels } from "./student-panels";
 
 export default function PortalHomePage() {
@@ -82,6 +84,16 @@ function StudentView() {
           pay: (invoiceIds, gateway) => portalApi.studentPay(invoiceIds, gateway),
         }}
       />
+      <AssignmentPanels
+        canSubmit
+        fetchers={{
+          key: "self",
+          list: (tab) => portalAssignmentApi.list({ tab }),
+          materials: () => portalAssignmentApi.materials(),
+          submit: (id, input) => portalAssignmentApi.submit(id, input),
+          upload: (file) => portalAssignmentApi.uploadAttachment(file),
+        }}
+      />
       <MessagesPanel />
       <ContactSchoolCard />
     </>
@@ -138,6 +150,20 @@ function ParentView({
             reportCard: (examId) => portalApi.childReportCard(selected, examId),
             pay: (invoiceIds, gateway) =>
               portalApi.childPay(selected, invoiceIds, gateway),
+          }}
+        />
+      )}
+      {selected && (
+        /* Read-only on purpose: a parent may see what is outstanding but
+           never hand the work in — the record of who did it has to mean
+           what it says, and the API refuses it regardless. */
+        <AssignmentPanels
+          key={`asg-${selected}`}
+          canSubmit={false}
+          fetchers={{
+            key: `child-${selected}`,
+            list: (tab) => portalAssignmentApi.childList(selected, { tab }),
+            materials: () => portalAssignmentApi.childMaterials(selected),
           }}
         />
       )}

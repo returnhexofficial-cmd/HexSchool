@@ -456,6 +456,36 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'Download payslips, the bank advice and payroll reports',
     ],
   ]),
+
+  // ── Module 22: Assignments & Homework ───────────────────────────────
+  // The first module whose primary author is the **Teacher** role rather
+  // than the office. `assignment.manage` is therefore scoped to a
+  // teacher's own section-subjects by the service; `assignment.all` is
+  // the separate code that widens it to the whole school, which is what
+  // roadmap §6's "teacher sees only own; head/admin see all" means in
+  // permission terms.
+  ...define('assignments', [
+    ['assignment.view', 'Open the assignments workspace and read submissions'],
+    [
+      'assignment.manage',
+      'Create, edit and delete assignments for your own section-subjects',
+    ],
+    [
+      'assignment.all',
+      'See and act on every teacher’s assignments, not only your own',
+    ],
+    ['assignment.publish', 'Publish, close and reopen an assignment'],
+    ['assignment.evaluate', 'Mark submissions, give feedback and return work'],
+    [
+      'assignment.evaluate.override',
+      'Change an evaluation after the assignment has been closed',
+    ],
+    ['assignment.export', 'Download submissions as a zip and the marks sheet'],
+  ]),
+  ...define('learning-materials', [
+    ['material.view', 'Browse the learning-material library'],
+    ['material.manage', 'Upload, edit and delete learning materials'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

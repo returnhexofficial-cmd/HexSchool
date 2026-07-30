@@ -97,6 +97,7 @@ enum SettingsGroup {
   website
   accounting
   payroll
+  assignment
 
   @@map("settings_group_enum")
 }
@@ -851,6 +852,55 @@ enum PfEntryType {
   @@map("pf_entry_type_enum")
 }
 
+// ── Module 22: Assignments & Homework ─────────────────────────────────
+
+/// Homework is the short nightly task; an assignment is the larger piece
+/// with marks against it. Same table because everything else about them
+/// — ownership, publication, submission, evaluation — is identical.
+enum AssignmentType {
+  ASSIGNMENT
+  HOMEWORK
+
+  @@map("assignment_type_enum")
+}
+
+/// DRAFT is invisible to students (the M19 "only PUBLISHED is public"
+/// rule applied to a section instead of the internet); CLOSED freezes
+/// evaluation the way an APPROVED payroll run freezes a payslip.
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+
+  @@map("assignment_status_enum")
+}
+
+/// The submission's own state. RESUBMITTED is a distinct value rather
+/// than a counter, because a teacher scanning the grid needs to see that
+/// the work in front of them replaced something they may already have
+/// read; RETURNED is the teacher handing it back for revision.
+enum SubmissionStatus {
+  SUBMITTED
+  RESUBMITTED
+  EVALUATED
+  RETURNED
+
+  @@map("submission_status_enum")
+}
+
+/// What a learning material actually is. NOTE/SLIDE/OTHER carry uploaded
+/// files; VIDEO_URL/LINK carry an external https URL checked against the
+/// `assignment.material_link_hosts` allow-list.
+enum LearningMaterialType {
+  NOTE
+  SLIDE
+  VIDEO_URL
+  LINK
+  OTHER
+
+  @@map("learning_material_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1041,6 +1091,9 @@ model School {
   payslips                 Payslip[]
   bonusRuns                BonusRun[]
   pfLedger                 PfLedgerEntry[]
+  assignments              Assignment[]
+  assignmentSubmissions    AssignmentSubmission[]
+  learningMaterials        LearningMaterial[]
 
   @@map("schools")
 }
@@ -1147,6 +1200,8 @@ model AcademicSession {
   invoices                 Invoice[]
   budgets                  Budget[]
   leaveBalances            LeaveBalance[]
+  assignments              Assignment[]
+  learningMaterials        LearningMaterial[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -1283,6 +1338,7 @@ model SchoolClass {
   examClasses           ExamClass[]
   examSubjects          ExamSubject[]
   feeStructures         FeeStructure[]
+  learningMaterials     LearningMaterial[]
 
   @@index([schoolId], map: "idx_classes_school")
   @@map("classes")
@@ -1348,6 +1404,8 @@ model Section {
   studentAttendances     StudentAttendance[]
   timetables             Timetable[]
   combinedTimetableEntry TimetableEntry[]        @relation("TimetableEntryCombinedWith")
+  assignments            Assignment[]
+  learningMaterials      LearningMaterial[]
 
   @@index([schoolId, sessionId], map: "idx_sections_school_session")
   @@index([classId], map: "idx_sections_class")
@@ -1379,6 +1437,8 @@ model Subject {
   optionalEnrollments    Enrollment[]            @relation("EnrollmentOptionalSubject")
   timetableEntries       TimetableEntry[]
   examSubjects           ExamSubject[]
+  assignments            Assignment[]
+  learningMaterials      LearningMaterial[]
 
   @@index([schoolId], map: "idx_subjects_school")
   @@map("subjects")
@@ -1533,13 +1593,17 @@ model Teacher {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  qualifications   TeacherQualification[]
-  subjects         TeacherSubject[]
-  assignments      TeacherSectionSubject[]
-  evaluations      TeacherEvaluation[]
-  documents        TeacherDocument[]
-  classTeacherOf   Section[]
-  timetableEntries TimetableEntry[]
+  qualifications      TeacherQualification[]
+  subjects            TeacherSubject[]
+  assignments         TeacherSectionSubject[]
+  evaluations         TeacherEvaluation[]
+  documents           TeacherDocument[]
+  classTeacherOf      Section[]
+  timetableEntries    TimetableEntry[]
+  /// M22 — the homework this teacher set. `assignments` above is M08's
+  /// section-subject duty roster, a different thing entirely.
+  authoredAssignments Assignment[]
+  learningMaterials   LearningMaterial[]
 
   // Same rule as staff: NOT deleted_at-scoped — teacher IDs never reused.
   @@unique([schoolId, employeeId], map: "uq_teachers_employee_id")
@@ -2046,15 +2110,16 @@ model Enrollment {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  transfers       EnrollmentTransfer[]
-  promotionItems  PromotionItem[]
-  attendances     StudentAttendance[]
-  seatPlanEntries SeatPlanEntry[]
-  marks           Mark[]
-  results         Result[]
-  combinedResults CombinedResult[]
-  feeOverrides    StudentFeeOverride[]
-  invoices        Invoice[]
+  transfers             EnrollmentTransfer[]
+  promotionItems        PromotionItem[]
+  attendances           StudentAttendance[]
+  seatPlanEntries       SeatPlanEntry[]
+  marks                 Mark[]
+  results               Result[]
+  combinedResults       CombinedResult[]
+  feeOverrides          StudentFeeOverride[]
+  invoices              Invoice[]
+  assignmentSubmissions AssignmentSubmission[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -4181,4 +4246,156 @@ model PfLedgerEntry {
   // row per payslip, which is what makes a re-run idempotent.
   @@index([schoolId, personType, personId, month], map: "idx_pf_ledger_person_month")
   @@map("pf_ledger")
+}
+
+// ── Module 22: Assignments & Homework ─────────────────────────────────
+
+/// A piece of work a teacher sets one section in one subject. The
+/// section+subject pair is what the ownership policy is checked against
+/// — deliberately re-read from `teacher_section_subjects` at every write
+/// rather than trusted from `teacher_id`, so a reassigned teacher
+/// inherits evaluation rights without a data migration (roadmap §8).
+///
+/// `assigned_at` is when the work is set and `due_at` when it is due;
+/// both are wall-clock instants rather than dates, because "due Thursday"
+/// at a BD school means a time of day, and a submission arriving at
+/// 23:59 rather than 00:01 is exactly the case `is_late` has to decide.
+model Assignment {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String          @map("school_id") @db.Uuid
+  school    School          @relation(fields: [schoolId], references: [id], map: "fk_assignments_school")
+  sessionId String          @map("session_id") @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_assignments_session")
+  sectionId String          @map("section_id") @db.Uuid
+  section   Section         @relation(fields: [sectionId], references: [id], map: "fk_assignments_section")
+  subjectId String          @map("subject_id") @db.Uuid
+  subject   Subject         @relation(fields: [subjectId], references: [id], map: "fk_assignments_subject")
+  /// Who set it. Kept for attribution and the "my assignments" filter; it
+  /// is deliberately NOT the authorization — see the model doc.
+  teacherId String          @map("teacher_id") @db.Uuid
+  teacher   Teacher         @relation(fields: [teacherId], references: [id], map: "fk_assignments_teacher")
+
+  type           AssignmentType @default(ASSIGNMENT)
+  title          String         @db.VarChar(200)
+  /// Author HTML, sanitized on WRITE through the M19 allow-list sanitizer
+  /// — a student portal renders this, so the stored row is the guarantee
+  /// rather than every future reader's memory.
+  instructions   String?
+  /// `[{ key, name, size, contentType }]` — S3 object keys, signed on read.
+  attachmentUrls Json           @default("[]") @map("attachment_urls")
+
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  dueAt      DateTime @map("due_at") @db.Timestamptz(6)
+  /// NULL means the work is not graded — feedback only.
+  fullMarks  Decimal? @map("full_marks") @db.Decimal(6, 2)
+  allowLate  Boolean  @default(false) @map("allow_late")
+
+  status      AssignmentStatus @default(DRAFT)
+  publishedAt DateTime?        @map("published_at") @db.Timestamptz(6)
+  closedAt    DateTime?        @map("closed_at") @db.Timestamptz(6)
+
+  /// Job idempotency, the M12 `absent_notified_at` pattern: a column on
+  /// the row the job acts on beats a second table nobody reads.
+  dueReminderSentAt   DateTime? @map("due_reminder_sent_at") @db.Timestamptz(6)
+  noSubmissionAlertAt DateTime? @map("no_submission_alert_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  submissions AssignmentSubmission[]
+
+  @@index([schoolId, sessionId, sectionId], map: "idx_assignments_scope")
+  @@index([schoolId, teacherId, status], map: "idx_assignments_teacher")
+  @@index([schoolId, status, dueAt], map: "idx_assignments_due")
+  @@map("assignments")
+}
+
+/// One candidate's answer to one assignment, keyed on **`enrollment_id`**
+/// like every other academic record (attendance, marks, fees). No soft
+/// delete: a resubmission replaces the row in place so its id stays
+/// stable for the evaluation hanging off it — the same reasoning `marks`
+/// uses, and what lets `uq_assignment_submissions_identity` be a plain
+/// unique rather than a partial one.
+///
+/// `is_late` is **stored, not derived**. Extending a deadline afterwards
+/// must not silently rewrite what last week's submission report said;
+/// forgiving a late submission is the teacher's call at evaluation, not a
+/// side effect of moving a date (the M21 stored-`days` reasoning).
+model AssignmentSubmission {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_assignment_submissions_school")
+  assignmentId String     @map("assignment_id") @db.Uuid
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade, map: "fk_assignment_submissions_assignment")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade, map: "fk_assignment_submissions_enrollment")
+
+  textAnswer     String? @map("text_answer")
+  attachmentUrls Json    @default("[]") @map("attachment_urls")
+
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  isLate      Boolean  @default(false) @map("is_late")
+  /// How many times this candidate has submitted; 1 on the first save.
+  attempt     Int      @default(1)
+
+  marks       Decimal?         @db.Decimal(6, 2)
+  feedback    String?
+  evaluatedBy String?          @map("evaluated_by") @db.Uuid
+  evaluatedAt DateTime?        @map("evaluated_at") @db.Timestamptz(6)
+  status      SubmissionStatus @default(SUBMITTED)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@unique([assignmentId, enrollmentId], map: "uq_assignment_submissions_identity")
+  @@index([schoolId, enrollmentId], map: "idx_assignment_submissions_enrollment")
+  @@index([assignmentId, status], map: "idx_assignment_submissions_status")
+  @@map("assignment_submissions")
+}
+
+/// Class notes, slides, a video link — the library beside the homework.
+/// `section_id` NULL means class-wide, which is why `class_id` is stored
+/// alongside it rather than read through the section: a class-wide note
+/// has no section to read a class from.
+model LearningMaterial {
+  id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String          @map("school_id") @db.Uuid
+  school    School          @relation(fields: [schoolId], references: [id], map: "fk_learning_materials_school")
+  sessionId String          @map("session_id") @db.Uuid
+  session   AcademicSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "fk_learning_materials_session")
+  classId   String          @map("class_id") @db.Uuid
+  class     SchoolClass     @relation(fields: [classId], references: [id], map: "fk_learning_materials_class")
+  /// NULL = every section of the class.
+  /// RESTRICT, not Prisma's default SET NULL for an optional relation:
+  /// NULL means "class-wide" here, so a deleted section would silently
+  /// promote its private material to the whole class.
+  sectionId String?         @map("section_id") @db.Uuid
+  section   Section?        @relation(fields: [sectionId], references: [id], onDelete: Restrict, map: "fk_learning_materials_section")
+  subjectId String          @map("subject_id") @db.Uuid
+  subject   Subject         @relation(fields: [subjectId], references: [id], map: "fk_learning_materials_subject")
+  teacherId String          @map("teacher_id") @db.Uuid
+  teacher   Teacher         @relation(fields: [teacherId], references: [id], map: "fk_learning_materials_teacher")
+
+  type        LearningMaterialType @default(NOTE)
+  title       String               @db.VarChar(200)
+  description String?
+  fileUrls    Json                 @default("[]") @map("file_urls")
+  /// The external https URL a VIDEO_URL/LINK material points at.
+  linkUrl     String?              @map("link_url") @db.VarChar(500)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, sessionId, classId], map: "idx_learning_materials_scope")
+  @@index([schoolId, subjectId], map: "idx_learning_materials_subject")
+  @@index([schoolId, teacherId], map: "idx_learning_materials_teacher")
+  @@map("learning_materials")
 }

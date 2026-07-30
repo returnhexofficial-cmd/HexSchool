@@ -184,6 +184,39 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '{{school}}: your {{leave_type}} from {{from}} to {{to}} is {{status}}.',
   },
+  // ── Module 22 — assignments & homework ───────────────────────────────
+  {
+    code: 'ASSIGNMENT_NEW',
+    module: 'Assignments',
+    description: 'An assignment or homework was published to a section',
+    // IN_APP first: this is the highest-frequency event in the system (a
+    // school sets homework daily, per section, per subject), and putting
+    // it on SMS by default would burn a term's credit in a fortnight.
+    // `assignment.notification_channel` is how a school opts into SMS.
+    channels: [C.IN_APP, C.SMS],
+    variables: ['student_name', 'title', 'subject', 'type', 'due', 'school'],
+    defaultBody:
+      '{{school}}: new {{type}} in {{subject}} — "{{title}}", due {{due}}.',
+  },
+  {
+    code: 'ASSIGNMENT_DUE_SOON',
+    module: 'Assignments',
+    description: 'Reminder that an assignment falls due shortly',
+    channels: [C.IN_APP, C.SMS],
+    variables: ['student_name', 'title', 'subject', 'due', 'school'],
+    defaultBody:
+      '{{school}}: reminder — "{{title}}" ({{subject}}) is due {{due}}. It has not been submitted yet.',
+  },
+  {
+    code: 'ASSIGNMENT_NO_SUBMISSIONS',
+    module: 'Assignments',
+    description:
+      'Nudge to the teacher that an assignment is past due with nothing handed in',
+    channels: [C.IN_APP],
+    variables: ['title', 'subject', 'section', 'due', 'school'],
+    defaultBody:
+      '"{{title}}" ({{subject}}, {{section}}) fell due {{due}} and has no submissions. Close it or chase the class.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

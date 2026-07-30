@@ -39,6 +39,7 @@ import { VersionModule } from './modules/version/version.module';
 import { WebsiteModule } from './modules/website/website.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { HrModule } from './modules/hr/hr.module';
+import { AssignmentModule } from './modules/assignment/assignment.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -142,6 +143,10 @@ import { QueuesModule } from './queues/queues.module';
     // module never learns the ledger exists. M21 payroll imports THIS one.
     AccountingModule,
     HrModule,
+    // AssignmentModule (M22) reads the M11 roster and sends through M17;
+    // nothing imports it back except PortalModule, which composes its
+    // student-facing service into /portal/assignments.
+    AssignmentModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

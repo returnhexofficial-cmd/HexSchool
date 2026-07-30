@@ -80,4 +80,8 @@ export {
   BonusType,
   BonusBasis,
   PfEntryType,
+  AssignmentType,
+  AssignmentStatus,
+  SubmissionStatus,
+  LearningMaterialType,
 } from '@prisma/client';

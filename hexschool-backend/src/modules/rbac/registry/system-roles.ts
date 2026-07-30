@@ -225,6 +225,17 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'pf.manage',
       'payroll.report',
       'payroll.export',
+      // M22 — the head sees every teacher's homework (`assignment.all`)
+      // and can unlock a closed one to correct a mark.
+      'assignment.view',
+      'assignment.manage',
+      'assignment.all',
+      'assignment.publish',
+      'assignment.evaluate',
+      'assignment.evaluate.override',
+      'assignment.export',
+      'material.view',
+      'material.manage',
     ],
   },
   {
@@ -291,6 +302,15 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'result.view',
       'result.process',
       'result.export',
+      // M22 — academic oversight: the deputy reads every section's
+      // homework and can pull the marks sheet, but does not author or
+      // evaluate. Deliberately NOT `assignment.evaluate` — marking a
+      // teacher's homework for them is the same category error as the
+      // four-eyes mark flow guards against.
+      'assignment.view',
+      'assignment.all',
+      'assignment.export',
+      'material.view',
     ],
   },
   {
@@ -324,6 +344,20 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'mark.entry',
       'mark.submit',
       'result.view',
+      // M22 — the one module where the teacher is the AUTHOR rather than
+      // a reader with a narrow write. They set the work, publish it,
+      // mark it and keep the class-notes library; what they deliberately
+      // do NOT get is `assignment.all` (another teacher's section is not
+      // theirs) or `assignment.evaluate.override` (reopening a closed
+      // assignment is a decision above the person who closed it — the
+      // M16/M20/M21 separation-of-duties encoding).
+      'assignment.view',
+      'assignment.manage',
+      'assignment.publish',
+      'assignment.evaluate',
+      'assignment.export',
+      'material.view',
+      'material.manage',
     ],
   },
   {

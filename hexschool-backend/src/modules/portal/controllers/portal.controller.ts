@@ -10,13 +10,28 @@ import {
   Req,
   Res,
   StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
+import { UserType } from '../../../common/constants';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { SkipEnvelope } from '../../../common/decorators/skip-envelope.decorator';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
+import {
+  PortalAssignmentQueryDto,
+  SubmitAssignmentDto,
+} from '../../assignment/dto';
+import { AssignmentUploadsService } from '../../assignment/services/assignment-uploads.service';
+import { StudentAssignmentsService } from '../../assignment/services/student-assignments.service';
 import { InitOnlinePaymentDto } from '../../fee/dto';
 import type { ExportFile } from '../../result/services/result-export.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
@@ -48,6 +63,8 @@ export class PortalController {
     private readonly actions: PortalActionsService,
     private readonly messages: PortalMessagesService,
     private readonly employeePortal: EmployeePortalService,
+    private readonly assignments: StudentAssignmentsService,
+    private readonly uploads: AssignmentUploadsService,
   ) {}
 
   @Get('me')
@@ -124,6 +141,90 @@ export class PortalController {
   ) {
     const id = await this.selfStudentId(user);
     return this.actions.payDues(id, dto, user, this.baseUrl(req));
+  }
+
+  // ── assignments & homework (M22) ────────────────────────────────────
+  //
+  // The roadmap's own paths. Ownership is resolved here and the
+  // assignment rules live in AssignmentModule — this controller never
+  // decides what a student may see, only which student is asking.
+
+  @Get('assignments')
+  @ApiOperation({ summary: 'My assignments — pending, submitted, evaluated' })
+  async studentAssignments(
+    @Query() query: PortalAssignmentQueryDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    const id = await this.selfStudentId(user);
+    return this.assignments.list(id, user.schoolId, query);
+  }
+
+  @Get('assignments/:id')
+  @ApiOperation({ summary: 'One assignment, with my submission on it' })
+  async studentAssignment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    const studentId = await this.selfStudentId(user);
+    return this.assignments.detail(studentId, user.schoolId, id);
+  }
+
+  @Post('assignments/:id/submit')
+  @ApiOperation({ summary: 'Hand work in (students only — never a parent)' })
+  async submitAssignment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SubmitAssignmentDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    const studentId = await this.selfStudentId(user);
+    return this.assignments.submit(studentId, id, dto, user, {
+      isStudentSelf: user.userType === UserType.STUDENT,
+    });
+  }
+
+  @Post('assignments/attachments')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload a file to attach to a submission' })
+  async uploadSubmissionFile(
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    // Resolving the student first is what stops a parent (or any other
+    // account) using the portal as an open upload endpoint.
+    await this.selfStudentId(user);
+    return this.uploads.upload(file, 'submission', user.schoolId);
+  }
+
+  @Get('materials')
+  @ApiOperation({ summary: 'My class notes and slides, filterable by subject' })
+  async studentMaterials(
+    @Query('subjectId') subjectId: string | undefined,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    const id = await this.selfStudentId(user);
+    return this.assignments.materialsFor(id, user.schoolId, { subjectId });
+  }
+
+  @Get('parent/child/:childId/assignments')
+  @OwnsStudent('childId')
+  @ApiOperation({ summary: "A child's pending / late assignment overview" })
+  childAssignments(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @Query() query: PortalAssignmentQueryDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.assignments.list(childId, user.schoolId, query);
+  }
+
+  @Get('parent/child/:childId/materials')
+  @OwnsStudent('childId')
+  childMaterials(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @Query('subjectId') subjectId: string | undefined,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.assignments.materialsFor(childId, user.schoolId, { subjectId });
   }
 
   // ── parent (per child) ──────────────────────────────────────────────

@@ -938,6 +938,150 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       ['youtube.com', 'youtu.be', 'drive.google.com', 'docs.google.com'],
     ],
   ]),
+  // ── Module 23: Library Management ───────────────────────────────────
+  ...g(SettingsGroup.library, [
+    ['library.enabled', 'boolean', 'Library management enabled', true],
+    [
+      'library.accession_pattern',
+      'string',
+      'Accession-number pattern for new copies',
+      'ACC-{YY}-{SEQ5}',
+    ],
+    [
+      'library.card_no_pattern',
+      'string',
+      'Library card-number pattern for new members',
+      'LIB-{YY}-{SEQ5}',
+    ],
+    // Roadmap §3's "student 7 / teacher 14". Staff sit with the
+    // teachers: an office assistant borrowing a reference book is doing
+    // the same thing a teacher is, and a shorter loan for them would be
+    // a distinction the school never asked for.
+    ['library.loan_days_student', 'number', 'Loan period for a student (days)', 7],
+    ['library.loan_days_teacher', 'number', 'Loan period for a teacher (days)', 14],
+    ['library.loan_days_staff', 'number', 'Loan period for staff (days)', 14],
+    ['library.max_books_student', 'number', 'Books a student may hold at once', 2],
+    ['library.max_books_teacher', 'number', 'Books a teacher may hold at once', 5],
+    ['library.max_books_staff', 'number', 'Books a staff member may hold at once', 3],
+    ['library.max_renews', 'number', 'Times one loan may be renewed', 2],
+    ['library.fine_per_day', 'number', 'Overdue fine per day (BDT)', 2],
+    [
+      'library.fine_grace_days',
+      'number',
+      'Days after the due date before a fine starts',
+      0,
+    ],
+    [
+      'library.max_fine_per_book',
+      'number',
+      'Ceiling on the overdue fine for one loan (0 = uncapped)',
+      500,
+    ],
+    // Roadmap §4 calls holiday-awareness an "option" and it is one: a
+    // school whose library opens on Fridays wants every day counted, and
+    // one that closes would otherwise fine a member for a day on which
+    // they could not physically have returned the book.
+    [
+      'library.fine_holiday_aware',
+      'boolean',
+      'Skip school holidays when counting overdue days',
+      true,
+    ],
+    [
+      'library.fine_block_threshold',
+      'number',
+      'Unpaid fine at or above which borrowing is blocked (0 = never)',
+      100,
+    ],
+    [
+      'library.block_when_overdue',
+      'boolean',
+      'Refuse a new loan while the member is holding an overdue book',
+      true,
+    ],
+    [
+      'library.block_duplicate_title',
+      'boolean',
+      'Refuse a second copy of a title the member already has out',
+      true,
+    ],
+    [
+      'library.lost_price_multiplier',
+      'number',
+      'Charge for a lost book, as a multiple of its price',
+      1.5,
+    ],
+    [
+      'library.damaged_price_multiplier',
+      'number',
+      'Charge for a damaged book, as a multiple of its price',
+      0.5,
+    ],
+    [
+      'library.default_book_price',
+      'number',
+      'Replacement value used when a title carries no price (BDT)',
+      300,
+    ],
+    [
+      'library.reservation_days',
+      'number',
+      'Days a returned copy is held for the member who reserved it',
+      3,
+    ],
+    [
+      'library.auto_provision_members',
+      'boolean',
+      'Enrol a student/teacher/staff member automatically on their first issue',
+      true,
+    ],
+    [
+      'library.overdue_notice_enabled',
+      'boolean',
+      'Send the weekly overdue chase',
+      true,
+    ],
+    [
+      'library.overdue_notice_channel',
+      'string',
+      'Channel for library alerts: IN_APP or SMS',
+      'IN_APP',
+    ],
+    [
+      'library.overdue_notice_weekday',
+      'number',
+      'Day of week the overdue chase runs (0 = Sunday)',
+      6,
+    ],
+    [
+      'library.overdue_repeat_days',
+      'number',
+      'Days before the same overdue loan is chased again',
+      7,
+    ],
+    ['library.opac_enabled', 'boolean', 'Show the catalogue in the portal', true],
+    [
+      'library.opac_allow_reservation',
+      'boolean',
+      'Let portal users place their own holds',
+      true,
+    ],
+    [
+      'library.auto_post_accounting',
+      'boolean',
+      'Post collected fines to the ledger (Module 20)',
+      true,
+    ],
+    // Deliberately OFF by default, mirroring `fees.dues_block_exit_status`
+    // (M16): a school transferring a student mid-dispute still has to be
+    // able to record it, so the default is a warning the office reads.
+    [
+      'library.clearance_block_exit',
+      'boolean',
+      'Block a student exit status while books are out or fines unpaid',
+      false,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

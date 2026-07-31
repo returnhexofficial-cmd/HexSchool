@@ -486,6 +486,38 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['material.view', 'Browse the learning-material library'],
     ['material.manage', 'Upload, edit and delete learning materials'],
   ]),
+
+  // ── Module 23: Library Management ───────────────────────────────────
+  // The separation of duties this module encodes is the one every
+  // library actually has: the person who **takes** the money at the desk
+  // is not the person who may decide it is not owed. `library.issue`
+  // covers the whole circulation desk, `library.fine.collect` receipts a
+  // payment, and `library.fine.waive` writes one off — the M16
+  // `fee.override.approve` / M20 `voucher.cancel` / M21 `payroll.approve`
+  // rule, continued into the reading room.
+  ...define('library', [
+    ['library.view', 'Open the library workspace, catalogue and reports'],
+    [
+      'library.catalog.manage',
+      'Create/edit/delete categories, authors, publishers and books',
+    ],
+    [
+      'library.copy.manage',
+      'Add copies, print barcode labels and write a copy off as lost, damaged or withdrawn',
+    ],
+    ['library.member.manage', 'Enrol, suspend and close library members'],
+    ['library.issue', 'Issue, return and renew books at the circulation desk'],
+    [
+      'library.issue.override',
+      'Issue past a borrowing limit, an unpaid fine, a suspended card or another member’s hold',
+    ],
+    ['library.fine.collect', 'Take payment for a library fine'],
+    ['library.fine.waive', 'Write off a library fine (with a reason)'],
+    ['library.reservation.manage', 'Place and cancel holds on behalf of a member'],
+    ['library.stock.verify', 'Run a physical stock verification'],
+    ['library.report', 'Run the overdue, popular-title, stock and member reports'],
+    ['library.export', 'Download library reports and barcode label sheets'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

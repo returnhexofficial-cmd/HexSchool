@@ -217,6 +217,28 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '"{{title}}" ({{subject}}, {{section}}) fell due {{due}} and has no submissions. Close it or chase the class.',
   },
+  // ── Module 23 — library ──────────────────────────────────────────────
+  {
+    code: 'LIBRARY_OVERDUE',
+    module: 'Library',
+    description: 'Weekly chase for a book that is past its due date',
+    // IN_APP first for the M22 reason — a library chases the same
+    // members week after week, and an SMS default would spend real
+    // credit on a message the portal bell carries for free.
+    channels: [C.IN_APP, C.SMS],
+    variables: ['name', 'title', 'due', 'days', 'fine', 'school'],
+    defaultBody:
+      '{{school}} library: "{{title}}" was due {{due}} and is {{days}} day(s) overdue. Fine so far {{fine}} BDT.',
+  },
+  {
+    code: 'LIBRARY_RESERVATION_READY',
+    module: 'Library',
+    description: 'A reserved title is being held at the desk',
+    channels: [C.IN_APP, C.SMS],
+    variables: ['name', 'title', 'until', 'school'],
+    defaultBody:
+      '{{school}} library: "{{title}}" is ready for you. It will be held until {{until}}.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

@@ -20,6 +20,7 @@ import {
   Network,
   FileBarChart,
   MessageSquare,
+  Library,
   NotebookPen,
   ScrollText,
   Settings,
@@ -136,6 +137,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/assignments",
     icon: NotebookPen,
     anyOf: ["assignment.view", "material.view"],
+  },
+  {
+    label: "Library",
+    href: "/admin/library",
+    icon: Library,
+    permission: "library.view",
   },
   {
     label: "Fees & Payments",

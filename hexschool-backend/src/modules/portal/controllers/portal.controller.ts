@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   NotFoundException,
   Param,
@@ -33,6 +34,8 @@ import {
 import { AssignmentUploadsService } from '../../assignment/services/assignment-uploads.service';
 import { StudentAssignmentsService } from '../../assignment/services/student-assignments.service';
 import { InitOnlinePaymentDto } from '../../fee/dto';
+import { CreateReservationDto, OpacQueryDto } from '../../library/dto';
+import { OpacService } from '../../library/services/opac.service';
 import type { ExportFile } from '../../result/services/result-export.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
 import { PortalContactDto, PortalLeaveDto } from '../dto';
@@ -65,6 +68,7 @@ export class PortalController {
     private readonly employeePortal: EmployeePortalService,
     private readonly assignments: StudentAssignmentsService,
     private readonly uploads: AssignmentUploadsService,
+    private readonly opac: OpacService,
   ) {}
 
   @Get('me')
@@ -225,6 +229,64 @@ export class PortalController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.assignments.materialsFor(childId, user.schoolId, { subjectId });
+  }
+
+  // ── library / OPAC (M23) ────────────────────────────────────────────
+  //
+  // Same split as the assignments block above: LibraryModule decides
+  // what a member may see and whether they may still reserve, this
+  // controller answers only "whose card is this?".
+  //
+  // Note what these routes do NOT resolve through `selfStudentId`: a
+  // library card belongs to a *person*, and a teacher or an office
+  // assistant borrows books too. The card is resolved from the logged-in
+  // user id, so the same three routes serve every kind of reader.
+
+  @Get('library/catalogue')
+  @ApiOperation({ summary: 'Search the catalogue, with an availability badge' })
+  opacSearch(
+    @Query() query: OpacQueryDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.opac.search(query, user.schoolId);
+  }
+
+  @Get('library/me')
+  @ApiOperation({
+    summary: 'My loans, holds and fines — empty rather than 404 with no card',
+  })
+  myLibrary(@CurrentUser() user: AccessTokenPayload) {
+    return this.opac.myLibrary(user.schoolId, user.sub);
+  }
+
+  @Post('library/reservations')
+  @ApiOperation({ summary: 'Place a hold on a title I cannot borrow today' })
+  reserve(
+    @Body() dto: CreateReservationDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.opac.reserve(dto, user);
+  }
+
+  @Delete('library/reservations/:id')
+  @ApiOperation({ summary: 'Cancel my own hold — anybody else’s 404s' })
+  cancelReservation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.opac.cancelReservation(id, user);
+  }
+
+  @Get('parent/child/:childId/library')
+  @OwnsStudent('childId')
+  @ApiOperation({
+    summary: "A child's library loans — read-only, the card is theirs",
+  })
+  childLibrary(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.opac.childLibrary(user.schoolId, childId);
   }
 
   // ── parent (per child) ──────────────────────────────────────────────

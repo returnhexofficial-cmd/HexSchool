@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Inject } from '@nestjs/common';
 import { Prisma, Student, StudentMedicalInfo } from '@prisma/client';
 import { InvoicesRepository } from '../../fee/repositories/invoices.repository';
 import { ResultsRepository } from '../../result/repositories/results.repository';
@@ -32,6 +33,10 @@ import { SchoolsRepository } from '../../school/repositories/schools.repository'
 import { SettingsService } from '../../school/services/settings.service';
 import { SequenceService } from '../../sequence/sequence.service';
 import { StorageService } from '../../storage/storage.service';
+import {
+  LIBRARY_CLEARANCE,
+  type LibraryClearanceChecker,
+} from '../../library/library.constants';
 import {
   CheckDuplicatesDto,
   CreateStudentDto,
@@ -121,6 +126,14 @@ export class StudentsService {
     private readonly storage: StorageService,
     private readonly auditContext: AuditContextService,
     private readonly events: EventEmitter2,
+    /**
+     * M23's library clearance. Injected by TOKEN rather than by class,
+     * over an implementation re-provisioned inside this module — the M13
+     * `TIMETABLE_CONFLICT_CHECKER` pattern. Importing LibraryModule here
+     * would close a cycle (Library → Accounting → Fee → Student).
+     */
+    @Inject(LIBRARY_CLEARANCE)
+    private readonly libraryClearance: LibraryClearanceChecker,
   ) {}
 
   async list(
@@ -377,6 +390,41 @@ export class StudentsService {
           );
         }
         warnings.push(`${message}. Verify before completing the exit.`);
+      }
+
+      // Library clearance (roadmap M23 §6). Same shape as the dues check
+      // above and for the same reason: a warning by default, a hard
+      // block only when the school turns `library.clearance_block_exit`
+      // on — a student transferring mid-dispute still has to be
+      // recordable. A student who never borrowed anything is cleared
+      // without a query reaching the loans table.
+      const library = await this.libraryClearance.clearanceForPerson(
+        actor.schoolId,
+        'STUDENT',
+        id,
+      );
+      if (!library.cleared) {
+        const blockLibrary = await this.settings.getValue<boolean>(
+          actor.schoolId,
+          'library.clearance_block_exit',
+        );
+        const summary = [
+          library.booksOut > 0 ? `${library.booksOut} library book(s) still out` : null,
+          library.outstandingFine > 0
+            ? `${library.outstandingFine.toFixed(2)} BDT of library fines unpaid`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(', ');
+        if (blockLibrary === true) {
+          throw new ConflictException(
+            `${existing.firstName} ${existing.lastName} has ${summary} — settle the library first, or turn off library.clearance_block_exit`,
+          );
+        }
+        warnings.push(
+          `${existing.firstName} ${existing.lastName} has ${summary}.`,
+          ...library.details,
+        );
       }
     }
 

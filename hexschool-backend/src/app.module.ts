@@ -40,6 +40,7 @@ import { WebsiteModule } from './modules/website/website.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { HrModule } from './modules/hr/hr.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
+import { LibraryModule } from './modules/library/library.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -147,6 +148,13 @@ import { QueuesModule } from './queues/queues.module';
     // nothing imports it back except PortalModule, which composes its
     // student-facing service into /portal/assignments.
     AssignmentModule,
+    // LibraryModule (M23) imports Academic (the holiday-aware fine),
+    // Communication (the overdue chase) and Accounting (the fine
+    // voucher). It reads students/teachers/staff over a narrow
+    // directory repository rather than importing those three modules,
+    // which is also what lets StudentModule bind its clearance checker
+    // without closing a cycle.
+    LibraryModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

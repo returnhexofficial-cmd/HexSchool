@@ -103,7 +103,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 20 | Accounting & Finance | ☑ |
 | 21 | HR & Payroll | ☑ |
 | 22 | Assignments & Homework | ☑ |
-| 23 | Library Management | ☐ |
+| 23 | Library Management | ☑ |
 | 24 | Inventory & Assets | ☐ |
 | 25 | Transport Management | ☐ |
 | 26 | Hostel Management | ☐ |
@@ -1623,11 +1623,11 @@ Book catalog (categories, authors, publishers), copies with barcode/QR, member m
 - Policy settings: loan days (student 7 / teacher 14), max renews, fine/day, max books.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Masters + book CRUD; bulk copy generation (N copies → sequential accession numbers); barcode label PDF sheets (Code128).
-- [ ] Member auto-provision on first issue (or explicit enroll); card printing.
-- [ ] Circulation desk endpoints: issue (scan accession + member card/UID), return (auto fine calc: overdue days × rate, holiday-aware option), renew (limit + no-reservation check), mark lost/damaged (fine = book price × multiplier setting).
-- [ ] Fine handling: collect at desk (creates library income record; optional voucher via posting map) or waive (permission).
-- [ ] Reports: issued/overdue lists (+ overdue SMS job weekly), popular titles, category stock, member history, stock-check (physical verification mode: scan-all, diff report).
+- [x] Masters + book CRUD; bulk copy generation (N copies → sequential accession numbers); barcode label PDF sheets (Code128).
+- [x] Member auto-provision on first issue (or explicit enroll); card printing. *(One card number per member from `SequenceService`; the physical card layout reuses no dedicated template — the number is printed on the label sheet alongside the accession barcodes.)*
+- [x] Circulation desk endpoints: issue (scan accession + member card/UID), return (auto fine calc: overdue days × rate, holiday-aware option), renew (limit + no-reservation check), mark lost/damaged (fine = book price × multiplier setting).
+- [x] Fine handling: collect at desk (creates library income record; optional voucher via posting map) or waive (permission). *(The voucher is real, through M20's `postAuto`; `library.fine.collect` and `library.fine.waive` are deliberately different codes.)*
+- [x] Reports: issued/overdue lists (+ overdue SMS job weekly), popular titles, category stock, member history, stock-check (physical verification mode: scan-all, diff report). *(The weekly chase runs daily and reads a per-school weekday setting — one cron expression cannot be per-school.)*
 ### APIs
 ```
 CRUD /api/v1/library/categories|authors|publishers|books
@@ -1639,10 +1639,10 @@ GET  /api/v1/library/reports/overdue|popular|stock|member/:id
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Catalog manager (book form with author multi-select, cover upload; copies tab with status chips, label print).
-- [ ] Circulation desk screen: keyboard/scanner-first (accession input autofocus → book card; member input → member card with current issues & fines), big Issue/Return buttons, fine prompt on overdue return.
-- [ ] OPAC (search) page in student/teacher portal: availability badge, my-issues list with due dates.
-- [ ] Reports + overdue dashboard.
+- [x] Catalog manager (book form with author multi-select, cover upload; copies tab with status chips, label print). *(Cover is a pasted URL — the media-library gap M19/M20/M21 all carry.)*
+- [x] Circulation desk screen: keyboard/scanner-first (accession input autofocus → book card; member input → member card with current issues & fines), big Issue/Return buttons, fine prompt on overdue return.
+- [x] OPAC (search) page in student/teacher portal: availability badge, my-issues list with due dates. *(And the parent's read-only view of a child's loans.)*
+- [x] Reports + overdue dashboard.
 
 ## 6. Business Rules
 - Member over max_books or with unpaid fine > threshold → issue blocked (override permission).
@@ -1658,14 +1658,14 @@ GET  /api/v1/library/reports/overdue|popular|stock|member/:id
 - Barcode scanner sends Enter suffix → desk inputs handle it.
 
 ## 9. Testing Checklist
-- [ ] Unit: fine calculator (holiday-aware), issue guards.
-- [ ] e2e: issue→renew→overdue return→fine collect; clearance block.
-- [ ] Manual: real barcode scanner desk test.
+- [x] Unit: fine calculator (holiday-aware), issue guards. *(105 golden engine tests + 47 service tests.)*
+- [x] e2e: issue→renew→overdue return→fine collect; clearance block. *(57-case `library.e2e-spec.ts`.)*
+- [ ] Manual: real barcode scanner desk test. *(Outstanding — needs physical hardware.)*
 
 ## 10. Completion Checklist
-- [ ] Catalog + circulation + fines + reports
-- [ ] Portal OPAC
-- [ ] Docs: `docs/modules/23-library.md`
+- [x] Catalog + circulation + fines + reports
+- [x] Portal OPAC
+- [x] Docs: `docs/modules/23-library.md`
 
 ---
 

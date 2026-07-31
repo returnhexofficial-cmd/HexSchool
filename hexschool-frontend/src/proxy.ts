@@ -38,7 +38,15 @@ export function proxy(request: NextRequest) {
   // routine) — the admin sidebar's <Can> gating and the API guards handle
   // authorization; this only lets the shell render for them (M18 §5
   // "Take Attendance / Mark Entry shortcuts").
-  const TEACHER_ADMIN_PATHS = ["/admin/attendance", "/admin/exams", "/admin/timetables"];
+  const TEACHER_ADMIN_PATHS = [
+    "/admin/attendance",
+    "/admin/exams",
+    "/admin/timetables",
+    // M23 — a teacher who also runs the library desk (common in a small
+    // BD school) needs the shell to render; `library.*` on their roles is
+    // what actually decides, here and at the API.
+    "/admin/library",
+  ];
   const teacherAllowed =
     userType === UserType.TEACHER &&
     TEACHER_ADMIN_PATHS.some((p) => pathname.startsWith(p));

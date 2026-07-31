@@ -98,6 +98,7 @@ enum SettingsGroup {
   accounting
   payroll
   assignment
+  library
 
   @@map("settings_group_enum")
 }
@@ -727,6 +728,10 @@ enum VoucherSource {
   PAYROLL
   INVENTORY
   ADMISSION
+  /// M23 — library fine and lost-book recoveries, posted through the
+  /// same `postAuto` door M21 uses. Appended rather than reused so the
+  /// income & expenditure statement can say where the money came from.
+  LIBRARY
 
   @@map("voucher_source_enum")
 }
@@ -899,6 +904,96 @@ enum LearningMaterialType {
   OTHER
 
   @@map("learning_material_type_enum")
+}
+
+// ── Module 23: Library Management ─────────────────────────────────────
+
+/// The physical life of one copy. AVAILABLE/ISSUED/RESERVED are the
+/// circulating states; LOST/DAMAGED/WITHDRAWN are terminal and drop the
+/// copy out of stock counts (roadmap §6) without deleting the row —
+/// "we used to own this" is a fact a stock report has to be able to say.
+enum BookCopyStatus {
+  AVAILABLE
+  ISSUED
+  RESERVED
+  LOST
+  DAMAGED
+  WITHDRAWN
+
+  @@map("book_copy_status_enum")
+}
+
+/// A copy's physical condition, recorded when it is added and again on
+/// every return. An enum rather than free text because roadmap §8's
+/// damaged-on-return dispute needs the *change* between the two to be
+/// comparable — a note beside it carries the argument.
+enum BookCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+
+  @@map("book_condition_enum")
+}
+
+/// Who holds the card. Polymorphic over `students`, `teachers` and
+/// `staff_profiles` with no FK — the M12 `staff_attendances` / M21
+/// `leave_applications` precedent, because the three tables share no
+/// supertype and a library card is issued to a *person*, not to a role.
+enum LibraryMemberType {
+  STUDENT
+  TEACHER
+  STAFF
+
+  @@map("library_member_type_enum")
+}
+
+/// ACTIVE borrows; SUSPENDED keeps the history and the outstanding
+/// loans while refusing new ones (what a school does about repeated
+/// damage); CLOSED is the card handed back on the way out.
+enum LibraryMemberStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+
+  @@map("library_member_status_enum")
+}
+
+/// Why money is owed on a loan. Stored rather than inferred from the
+/// dates, because a lost book charged at replacement price and an
+/// overdue book charged per day are different lines in the income
+/// report, and a copy marked lost after being returned late is both.
+enum LibraryFineReason {
+  NONE
+  OVERDUE
+  LOST
+  DAMAGED
+
+  @@map("library_fine_reason_enum")
+}
+
+/// A hold on a *title*, not on a copy — a member wants the book, any
+/// copy of it. Roadmap §3 put `RESERVED` in the copy-status enum and §4
+/// asks renew to make a "no-reservation check", which is only decidable
+/// against a queue; this is that queue.
+enum BookReservationStatus {
+  ACTIVE
+  READY
+  FULFILLED
+  CANCELLED
+  EXPIRED
+
+  @@map("book_reservation_status_enum")
+}
+
+/// The physical stock-take (roadmap §4 "scan-all, diff report").
+enum StockVerificationStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("stock_verification_status_enum")
 }
 
 // ── Module 02: Authentication ─────────────────────────────────────────
@@ -1094,6 +1189,15 @@ model School {
   assignments              Assignment[]
   assignmentSubmissions    AssignmentSubmission[]
   learningMaterials        LearningMaterial[]
+  bookCategories           BookCategory[]
+  authors                  Author[]
+  publishers               Publisher[]
+  books                    Book[]
+  bookCopies               BookCopy[]
+  libraryMembers           LibraryMember[]
+  bookIssues               BookIssue[]
+  bookReservations         BookReservation[]
+  stockVerifications       StockVerification[]
 
   @@map("schools")
 }
@@ -4398,4 +4502,385 @@ model LearningMaterial {
   @@index([schoolId, subjectId], map: "idx_learning_materials_subject")
   @@index([schoolId, teacherId], map: "idx_learning_materials_teacher")
   @@map("learning_materials")
+}
+
+// â”€â”€ Module 23: Library Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+/// Shelf classification (Fiction, Science, Referenceâ€¦). A master in the
+/// M06 sense: session-independent, soft-deleted, unique per school among
+/// live rows.
+model BookCategory {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_book_categories_school")
+
+  name        String  @db.VarChar(120)
+  nameBn      String? @map("name_bn") @db.VarChar(120)
+  description String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  books Book[]
+
+  @@index([schoolId], map: "idx_book_categories_school")
+  @@map("book_categories")
+}
+
+model Author {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_authors_school")
+
+  name   String  @db.VarChar(160)
+  nameBn String? @map("name_bn") @db.VarChar(160)
+  /// Free text â€” "Bangladeshi novelist, 1948-2012". Not a biography.
+  note   String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  books BookAuthor[]
+
+  @@index([schoolId], map: "idx_authors_school")
+  @@map("authors")
+}
+
+model Publisher {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_publishers_school")
+
+  name    String  @db.VarChar(160)
+  nameBn  String? @map("name_bn") @db.VarChar(160)
+  phone   String? @db.VarChar(20)
+  email   String? @db.VarChar(160)
+  address String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  books Book[]
+
+  @@index([schoolId], map: "idx_publishers_school")
+  @@map("publishers")
+}
+
+/// The **title** â€” the bibliographic record. What a school owns is a
+/// `BookCopy`; what a reader searches for is this. Roadmap Â§8's "same
+/// title, different edition => separate books" falls out of that: the
+/// edition is a column here, so two editions are two rows and their
+/// copies never mix on the shelf list.
+///
+/// `isbn` is nullable and deliberately NOT unique. A BD school's shelves
+/// carry locally-printed guides with no ISBN at all, donated copies of
+/// the same ISBN catalogued twice by two librarians, and textbooks whose
+/// ISBN is reprinted unchanged across editions. A checksum is validated
+/// on write (`isbn.util.ts`); uniqueness would refuse real books.
+model Book {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_books_school")
+
+  title   String  @db.VarChar(250)
+  titleBn String? @map("title_bn") @db.VarChar(250)
+  /// Digits only, hyphens stripped, checksum-validated on write.
+  isbn    String? @db.VarChar(17)
+
+  categoryId  String       @map("category_id") @db.Uuid
+  category    BookCategory @relation(fields: [categoryId], references: [id], map: "fk_books_category")
+  publisherId String?      @map("publisher_id") @db.Uuid
+  publisher   Publisher?   @relation(fields: [publisherId], references: [id], onDelete: Restrict, map: "fk_books_publisher")
+
+  edition     String?  @db.VarChar(60)
+  language    String   @default("English") @db.VarChar(40)
+  /// Replacement value. Drives the lost/damaged charge; a book with no
+  /// price falls back to `library.default_book_price` rather than
+  /// charging nothing, because a lost book that costs a school nothing
+  /// is a lost book nobody bothers to return.
+  price       Decimal? @db.Decimal(12, 2)
+  coverUrl    String?  @map("cover_url") @db.VarChar(500)
+  /// Where it physically lives â€” the one field a stock-take reads most.
+  rackNo      String?  @map("rack_no") @db.VarChar(40)
+  description String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  authors      BookAuthor[]
+  copies       BookCopy[]
+  reservations BookReservation[]
+
+  @@index([schoolId, categoryId], map: "idx_books_category")
+  @@index([schoolId, title], map: "idx_books_title")
+  @@index([schoolId, isbn], map: "idx_books_isbn")
+  @@map("books")
+}
+
+/// Title <-> author, ordered. **Hard-deleted and replaced as a set** when
+/// a book's author list is edited â€” the M13 `timetable_entries` / M19
+/// `gallery_items` / M20 `voucher_entries` precedent.
+model BookAuthor {
+  bookId   String @map("book_id") @db.Uuid
+  book     Book   @relation(fields: [bookId], references: [id], onDelete: Cascade, map: "fk_book_authors_book")
+  authorId String @map("author_id") @db.Uuid
+  author   Author @relation(fields: [authorId], references: [id], onDelete: Cascade, map: "fk_book_authors_author")
+  /// 0 = first-named author, which is how a spine label is written.
+  position Int    @default(0)
+
+  @@id([bookId, authorId])
+  @@index([authorId], map: "idx_book_authors_author")
+  @@map("book_authors")
+}
+
+/// One physical volume on one shelf. `accession_no` is the barcode value
+/// written inside the cover, and its unique index deliberately **ignores
+/// `deleted_at`** â€” the M07 employee-ID / M09 student-UID rule. An
+/// accession number is a label stuck in a book; re-issuing one to a
+/// different volume would make a twenty-year-old stock register lie.
+model BookCopy {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_book_copies_school")
+  bookId   String @map("book_id") @db.Uuid
+  book     Book   @relation(fields: [bookId], references: [id], onDelete: Restrict, map: "fk_book_copies_book")
+
+  accessionNo   String         @map("accession_no") @db.VarChar(40)
+  status        BookCopyStatus @default(AVAILABLE)
+  condition     BookCondition  @default(NEW)
+  /// Free text beside the condition â€” roadmap Â§8's damaged-on-return
+  /// dispute is settled by what the librarian wrote, not by the enum.
+  conditionNote String?        @map("condition_note")
+  /// What the school paid for this volume, when it differs from the
+  /// title's list price (a donated copy is 0, a reprint may be cheaper).
+  purchasePrice Decimal?       @map("purchase_price") @db.Decimal(12, 2)
+  addedAt       DateTime       @default(now()) @map("added_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  issues BookIssue[]
+  scans  StockVerificationScan[]
+
+  /// The one unique in this module that deliberately IGNORES
+  /// `deleted_at` — see the model doc.
+  @@unique([schoolId, accessionNo], map: "uq_book_copies_accession")
+  @@index([schoolId, bookId, status], map: "idx_book_copies_book")
+  @@index([schoolId, status], map: "idx_book_copies_status")
+  @@map("book_copies")
+}
+
+/// The card. Polymorphic over students/teachers/staff with no FK (the
+/// M12/M21 precedent), because the three tables share no supertype and a
+/// card belongs to a person rather than to a role.
+///
+/// `max_books` is **stored on the member**, not read from settings at
+/// issue time. The settings value seeds it; a librarian raising one
+/// student's limit for a project must not have to raise everybody's, and
+/// a school editing `library.max_books_student` must not silently
+/// re-limit the members it already granted an exception to.
+model LibraryMember {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String            @map("school_id") @db.Uuid
+  school     School            @relation(fields: [schoolId], references: [id], map: "fk_library_members_school")
+  personType LibraryMemberType @map("person_type")
+  /// students.id | teachers.id | staff_profiles.id â€” no FK by design.
+  personId   String            @map("person_id") @db.Uuid
+
+  cardNo       String              @map("card_no") @db.VarChar(40)
+  maxBooks     Int                 @default(2) @map("max_books")
+  status       LibraryMemberStatus @default(ACTIVE)
+  joinedAt     DateTime            @default(now()) @map("joined_at") @db.Timestamptz(6)
+  /// Why the card was suspended or closed â€” the M07 status-reason rule.
+  statusReason String?             @map("status_reason")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  issues       BookIssue[]
+  reservations BookReservation[]
+
+  /// Printed on a physical card, so never reused — the same reasoning
+  /// `uq_book_copies_accession` carries. The *person* identity unique is
+  /// partial (live cards only) and lives in the migration.
+  @@unique([schoolId, cardNo], map: "uq_library_members_card")
+  @@index([schoolId, status], map: "idx_library_members_status")
+  @@index([schoolId, personType, personId], map: "idx_library_members_person")
+  @@map("library_members")
+}
+
+/// One loan. **Not soft-deletable** â€” a loan is history, and the M20
+/// "corrections are reversals" rule applies: a wrongly-issued copy is
+/// returned, not erased. Which is also what lets the one-open-loan-per-
+/// copy rule be a partial unique over `returned_at IS NULL` rather than
+/// something a service has to remember.
+///
+/// The fine columns are the module's money. `fine_amount` is what was
+/// assessed, `fine_collected` and `fine_waived` are the two ways it goes
+/// away, and `fine_paid` is **derived by CHECK** rather than assigned â€”
+/// the M16 `deriveStatus` rule pinned at the database, so no write path
+/// can leave the flag disagreeing with the arithmetic beside it.
+model BookIssue {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], map: "fk_book_issues_school")
+  copyId   String        @map("copy_id") @db.Uuid
+  copy     BookCopy      @relation(fields: [copyId], references: [id], onDelete: Restrict, map: "fk_book_issues_copy")
+  memberId String        @map("member_id") @db.Uuid
+  member   LibraryMember @relation(fields: [memberId], references: [id], onDelete: Restrict, map: "fk_book_issues_member")
+
+  issuedAt   DateTime  @default(now()) @map("issued_at") @db.Timestamptz(6)
+  /// End of the loan, stored as an instant like M22's `due_at`: the desk
+  /// hands a book over at a time of day and the fine engine counts whole
+  /// days from it.
+  dueAt      DateTime  @map("due_at") @db.Timestamptz(6)
+  returnedAt DateTime? @map("returned_at") @db.Timestamptz(6)
+  renewCount Int       @default(0) @map("renew_count")
+
+  fineAmount      Decimal           @default(0) @map("fine_amount") @db.Decimal(12, 2)
+  fineCollected   Decimal           @default(0) @map("fine_collected") @db.Decimal(12, 2)
+  fineWaived      Decimal           @default(0) @map("fine_waived") @db.Decimal(12, 2)
+  fineReason      LibraryFineReason @default(NONE) @map("fine_reason")
+  /// Derived â€” see `chk_book_issues_fine_paid`.
+  finePaid        Boolean           @default(true) @map("fine_paid")
+  fineWaivedBy    String?           @map("fine_waived_by") @db.Uuid
+  fineWaiveReason String?           @map("fine_waive_reason")
+  fineCollectedAt DateTime?         @map("fine_collected_at") @db.Timestamptz(6)
+  /// The M20 voucher this fine receipt posted to, when accounting is on.
+  fineVoucherId   String?           @map("fine_voucher_id") @db.Uuid
+
+  /// How many days of the overdue period were charged, and how many were
+  /// forgiven as holidays â€” **stored, not recomputed**, for the M21
+  /// reason: the calendar they were counted against can be edited
+  /// afterwards, and a settled fine must not start disagreeing with the
+  /// receipt the member was handed.
+  overdueDays Int @default(0) @map("overdue_days")
+  holidayDays Int @default(0) @map("holiday_days")
+
+  returnCondition   BookCondition? @map("return_condition")
+  issuedBy          String?        @map("issued_by") @db.Uuid
+  returnedTo        String?        @map("returned_to") @db.Uuid
+  remarks           String?
+  /// Idempotency for the weekly overdue chase â€” the M12
+  /// `absent_notified_at` column-as-dedupe pattern.
+  overdueNotifiedAt DateTime?      @map("overdue_notified_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([schoolId, memberId], map: "idx_book_issues_member")
+  @@index([schoolId, dueAt], map: "idx_book_issues_due")
+  @@index([copyId], map: "idx_book_issues_copy")
+  @@map("book_issues")
+}
+
+/// A hold on a title. Queue position is `reserved_at` order, which is why
+/// there is no explicit rank column: a rank would have to be rewritten
+/// every time somebody cancelled, and a timestamp never lies about who
+/// asked first.
+model BookReservation {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], map: "fk_book_reservations_school")
+  bookId   String        @map("book_id") @db.Uuid
+  book     Book          @relation(fields: [bookId], references: [id], onDelete: Cascade, map: "fk_book_reservations_book")
+  memberId String        @map("member_id") @db.Uuid
+  member   LibraryMember @relation(fields: [memberId], references: [id], onDelete: Cascade, map: "fk_book_reservations_member")
+
+  status     BookReservationStatus @default(ACTIVE)
+  reservedAt DateTime              @default(now()) @map("reserved_at") @db.Timestamptz(6)
+  /// Set when a returned copy is held for this member; the copy goes
+  /// RESERVED and waits until here.
+  readyAt    DateTime?             @map("ready_at") @db.Timestamptz(6)
+  expiresAt  DateTime?             @map("expires_at") @db.Timestamptz(6)
+  /// Which copy is being held. Cleared when the hold lapses.
+  heldCopyId String?               @map("held_copy_id") @db.Uuid
+  closedAt   DateTime?             @map("closed_at") @db.Timestamptz(6)
+  notifiedAt DateTime?             @map("notified_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@index([schoolId, bookId, status], map: "idx_book_reservations_book")
+  @@index([schoolId, memberId, status], map: "idx_book_reservations_member")
+  @@map("book_reservations")
+}
+
+/// A physical stock-take: open one, scan every accession number on the
+/// shelves, close it, read the diff (roadmap Â§4). The **expected set is
+/// resolved at close, not at open** â€” a book issued during the count is
+/// legitimately not on the shelf, and freezing the expectation at open
+/// would report it missing.
+model StockVerification {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_stock_verifications_school")
+
+  name        String                  @db.VarChar(160)
+  status      StockVerificationStatus @default(IN_PROGRESS)
+  /// Optional narrowing â€” one rack at a time is how a stock-take is
+  /// actually done. NULL means the whole library.
+  rackNo      String?                 @map("rack_no") @db.VarChar(40)
+  startedAt   DateTime                @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt DateTime?               @map("completed_at") @db.Timestamptz(6)
+
+  /// The diff, frozen at close. Recomputing it later would compare
+  /// today's shelves against last year's scan (the M14/M15 snapshot rule).
+  expectedCount   Int     @default(0) @map("expected_count")
+  scannedCount    Int     @default(0) @map("scanned_count")
+  missingCount    Int     @default(0) @map("missing_count")
+  unexpectedCount Int     @default(0) @map("unexpected_count")
+  notes           String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  scans StockVerificationScan[]
+
+  @@index([schoolId, status], map: "idx_stock_verifications_status")
+  @@map("stock_verifications")
+}
+
+/// One scan. **Hard-deleted** with its parent and replaced as a set â€” a
+/// scan log outside its stock-take means nothing.
+model StockVerificationScan {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  verificationId String            @map("verification_id") @db.Uuid
+  verification   StockVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade, map: "fk_stock_verification_scans_verification")
+  /// NULL when the scanned accession number matched no copy at all â€”
+  /// which is exactly the row a diff report exists to show, so the raw
+  /// string is kept beside it rather than the scan being dropped.
+  copyId         String?           @map("copy_id") @db.Uuid
+  copy           BookCopy?         @relation(fields: [copyId], references: [id], onDelete: Cascade, map: "fk_stock_verification_scans_copy")
+  accessionNo    String            @map("accession_no") @db.VarChar(40)
+  scannedAt      DateTime          @default(now()) @map("scanned_at") @db.Timestamptz(6)
+
+  @@index([verificationId], map: "idx_stock_verification_scans_verification")
+  @@index([copyId], map: "idx_stock_verification_scans_copy")
+  @@map("stock_verification_scans")
 }

@@ -42,6 +42,7 @@ describe('StudentsService', () => {
   let classes: Record<string, jest.Mock>;
   let users: Record<string, jest.Mock>;
   let invoices: Record<string, jest.Mock>;
+  let libraryClearance: Record<string, jest.Mock>;
   let settings: Record<string, jest.Mock>;
   let refreshTokens: Record<string, jest.Mock>;
   let sequences: Record<string, jest.Mock>;
@@ -120,6 +121,16 @@ describe('StudentsService', () => {
       getValue: jest.fn().mockResolvedValue('{SCHOOL_CODE}-{YYYY}{SEQ5}'),
     };
 
+    // M23: nothing on loan and nothing owed by default.
+    libraryClearance = {
+      clearanceForPerson: jest.fn().mockResolvedValue({
+        cleared: true,
+        booksOut: 0,
+        outstandingFine: 0,
+        details: [],
+      }),
+    };
+
     service = new StudentsService(
       students as never,
       guardians as never,
@@ -147,6 +158,9 @@ describe('StudentsService', () => {
       } as never, // storage
       { set: jest.fn() } as never, // audit context
       events as never,
+      // M23 library clearance — cleared by default; the exit-status
+      // cases override it.
+      libraryClearance as never,
     );
   });
 

@@ -236,6 +236,14 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'assignment.export',
       'material.view',
       'material.manage',
+      // M23 — the head is the counterweight to the library desk: they
+      // hold the two codes the Librarian deliberately does not, and can
+      // read the reports without working the circulation loop.
+      'library.view',
+      'library.issue.override',
+      'library.fine.waive',
+      'library.report',
+      'library.export',
     ],
   },
   {
@@ -452,8 +460,34 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
   {
     name: 'Librarian',
     slug: 'librarian',
-    description: 'Library desk. Permissions arrive with Module 23.',
-    corePermissions: [],
+    description:
+      'Library desk — the catalogue, the copies, the members and the whole circulation loop (Module 23).',
+    corePermissions: [
+      // The desk needs to see who it is lending to, and to which class.
+      'student.view',
+      'teacher.view',
+      'staff.view',
+      'structure.view',
+      'session.view',
+      // The library itself.
+      'library.view',
+      'library.catalog.manage',
+      'library.copy.manage',
+      'library.member.manage',
+      'library.issue',
+      'library.fine.collect',
+      'library.reservation.manage',
+      'library.stock.verify',
+      'library.report',
+      'library.export',
+      // Deliberately NOT granted, and each for its own reason:
+      //   `library.fine.waive` — the person who takes the money must not
+      //     also be the one who decides it is not owed (the M16/M20/M21
+      //     separation-of-duties rule; the head or an admin waives).
+      //   `library.issue.override` — the limits, the fine block and
+      //     another member's hold are the school's policy, not the
+      //     desk's; overriding them is a decision with a name on it.
+    ],
   },
   {
     name: 'Student',

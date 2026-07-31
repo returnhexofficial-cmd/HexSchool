@@ -35,6 +35,12 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   [SYSTEM_SLOTS.PF_PAYABLE]: '2120',
   [SYSTEM_SLOTS.TAX_PAYABLE]: '2130',
   [SYSTEM_SLOTS.SALARY_PAYABLE]: '2110',
+  // M23 — `4150 Library Fee Income` is already in the seeded 61-account
+  // BD chart, so a fresh school posts library fines correctly with
+  // nothing configured (the property this whole fallback table exists
+  // for). A school that wants fines separated from the library fee
+  // itself maps the slot to its own account.
+  [SYSTEM_SLOTS.LIBRARY_FINE_INCOME]: '4150',
 };
 
 export interface ResolvedPostingMap {

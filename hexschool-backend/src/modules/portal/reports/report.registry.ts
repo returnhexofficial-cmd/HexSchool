@@ -311,6 +311,49 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [P.from, P.to],
     formats: ['xlsx'],
   },
+  // ── Library (M23) ───────────────────────────────────────────────────
+  {
+    code: 'library.overdue',
+    name: 'Overdue books',
+    module: 'Library',
+    description:
+      'Every loan past its due date, with the borrower, the days late and the fine so far.',
+    permission: 'library.report',
+    endpoint: '/library/reports/overdue',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'library.issued',
+    name: 'Books on loan',
+    module: 'Library',
+    description: 'Everything currently out, due soonest first.',
+    permission: 'library.report',
+    endpoint: '/library/reports/issued',
+    params: [],
+    formats: [],
+  },
+  {
+    code: 'library.popular',
+    name: 'Popular titles',
+    module: 'Library',
+    description: 'Most-borrowed titles over a window.',
+    permission: 'library.report',
+    endpoint: '/library/reports/popular',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'library.stock',
+    name: 'Category stock',
+    module: 'Library',
+    description:
+      'Titles and copies per category, split by available / on loan / written off.',
+    permission: 'library.report',
+    endpoint: '/library/reports/stock',
+    params: [],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { portalApi } from "@/lib/api/portal";
 import { portalAssignmentApi } from "@/lib/api/assignment";
 import { AssignmentPanels } from "./assignment-panels";
+import { LibraryPanels } from "./library-panels";
+import { opacApi } from "@/lib/api/library";
 import { StudentPanels } from "./student-panels";
 
 export default function PortalHomePage() {
@@ -94,6 +96,7 @@ function StudentView() {
           upload: (file) => portalAssignmentApi.uploadAttachment(file),
         }}
       />
+      <LibraryPanels fetchers={{ key: "self", me: opacApi.me }} />
       <MessagesPanel />
       <ContactSchoolCard />
     </>
@@ -164,6 +167,18 @@ function ParentView({
             key: `child-${selected}`,
             list: (tab) => portalAssignmentApi.childList(selected, { tab }),
             materials: () => portalAssignmentApi.childMaterials(selected),
+          }}
+        />
+      )}
+      {selected && (
+        /* Read-only for the same reason the assignments panel is: the
+           library card belongs to the reader. */
+        <LibraryPanels
+          key={`lib-${selected}`}
+          fetchers={{
+            key: `child-${selected}`,
+            me: () => opacApi.childLibrary(selected),
+            canAct: false,
           }}
         />
       )}
@@ -340,6 +355,9 @@ function TeacherView() {
       </div>
 
       <MyStudentsPanel sections={d.sections} />
+      {/* A teacher borrows books too — the library card belongs to a
+          person, not to a student, so the same panel serves them. */}
+      <LibraryPanels fetchers={{ key: "self", me: opacApi.me }} />
       <MyLeavesPanel />
       <MyPayslipsPanel />
     </>

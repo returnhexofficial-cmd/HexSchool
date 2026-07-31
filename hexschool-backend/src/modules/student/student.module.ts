@@ -4,6 +4,8 @@ import { AcademicModule } from '../academic/academic.module';
 import { ClassesRepository } from '../academic/repositories/classes.repository';
 import { StudentAttendancesRepository } from '../attendance/repositories/student-attendances.repository';
 import { InvoicesRepository } from '../fee/repositories/invoices.repository';
+import { LIBRARY_CLEARANCE } from '../library/library.constants';
+import { LibraryClearanceService } from '../library/services/library-clearance.service';
 import { ResultsRepository } from '../result/repositories/results.repository';
 import { AuthModule } from '../auth/auth.module';
 import { EnrollmentsRepository } from '../enrollment/repositories/enrollments.repository';
@@ -80,6 +82,13 @@ import { StudentsService } from './services/students.service';
     ResultsRepository,
     // M16: the exit-status dues check.
     InvoicesRepository,
+    // M23: the library half of the same exit check. The CLASS lives in
+    // the library module but is instantiated HERE, over PrismaService
+    // alone — the M13 `TIMETABLE_CONFLICT_CHECKER` pattern. Importing
+    // LibraryModule would close a cycle (Library → Accounting → Fee →
+    // Student), and the token is always bound so the call site can never
+    // be conditional (the M08/M14 hook convention).
+    { provide: LIBRARY_CLEARANCE, useClass: LibraryClearanceService },
   ],
   // StudentsService exported since M10 — admission conversion reuses the
   // registration path (gap-free UID + guardian dedup), per roadmap M10 §4.

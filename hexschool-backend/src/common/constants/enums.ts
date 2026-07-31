@@ -84,4 +84,11 @@ export {
   AssignmentStatus,
   SubmissionStatus,
   LearningMaterialType,
+  BookCopyStatus,
+  BookCondition,
+  LibraryMemberType,
+  LibraryMemberStatus,
+  LibraryFineReason,
+  BookReservationStatus,
+  StockVerificationStatus,
 } from '@prisma/client';

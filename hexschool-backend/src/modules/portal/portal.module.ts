@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AcademicModule } from '../academic/academic.module';
 import { AssignmentModule } from '../assignment/assignment.module';
+import { LibraryModule } from '../library/library.module';
 import { CommunicationModule } from '../communication/communication.module';
 import { NoticesRepository } from '../communication/repositories/notices.repository';
 import { NotificationsRepository } from '../communication/repositories/notifications.repository';
@@ -69,6 +70,12 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // and whether they may still submit; PortalModule answers only "which
     // student is this account?" through `PortalResolverService`.
     AssignmentModule,
+    // M23 — the OPAC and "my loans" panels. Same shape as the M22 edge:
+    // LibraryModule decides what a member may see and do, PortalModule
+    // resolves whose card is asking. A library card belongs to a person
+    // rather than to a student, so these routes serve teachers and staff
+    // through the same service.
+    LibraryModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

@@ -51,6 +51,12 @@ export const SYSTEM_SLOTS = {
   /** Unpaid salary — where a HELD payslip's money waits, if a school
    *  chooses to accrue it rather than simply not post it. */
   SALARY_PAYABLE: 'SALARY_PAYABLE',
+  // ── M23 library ─────────────────────────────────────────────────────
+  /** Overdue fines and lost/damaged recoveries. Kept off
+   *  `LATE_FINE_INCOME` (which is the *fee* late fine) so a school can
+   *  see what its library earns without it being buried in tuition
+   *  arrears — two different stories about two different problems. */
+  LIBRARY_FINE_INCOME: 'LIBRARY_FINE_INCOME',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

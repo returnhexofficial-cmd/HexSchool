@@ -91,4 +91,10 @@ export {
   LibraryFineReason,
   BookReservationStatus,
   StockVerificationStatus,
+  VehicleType,
+  VehicleStatus,
+  DriverStatus,
+  RouteStatus,
+  TransportAssignmentStatus,
+  VehicleExpenseType,
 } from '@prisma/client';

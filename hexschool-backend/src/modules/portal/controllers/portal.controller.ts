@@ -37,6 +37,7 @@ import { InitOnlinePaymentDto } from '../../fee/dto';
 import { CreateReservationDto, OpacQueryDto } from '../../library/dto';
 import { OpacService } from '../../library/services/opac.service';
 import type { ExportFile } from '../../result/services/result-export.service';
+import { TransportPortalService } from '../../transport/services/transport-portal.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
 import { PortalContactDto, PortalLeaveDto } from '../dto';
 import { OwnershipGuard } from '../guards/ownership.guard';
@@ -69,6 +70,7 @@ export class PortalController {
     private readonly assignments: StudentAssignmentsService,
     private readonly uploads: AssignmentUploadsService,
     private readonly opac: OpacService,
+    private readonly transport: TransportPortalService,
   ) {}
 
   @Get('me')
@@ -287,6 +289,31 @@ export class PortalController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.opac.childLibrary(user.schoolId, childId);
+  }
+
+  // ── transport (M25) ─────────────────────────────────────────────────
+  //
+  // Roadmap M25 §5's "parent portal shows child's route/stop/times". The
+  // projection is deliberately thin — the stop, the two times and a
+  // number to ring — and a student who does not ride gets a
+  // self-describing `{ assigned: false, reason }` rather than an empty
+  // card (the M09/M19 stub shape).
+
+  @Get('transport')
+  @ApiOperation({ summary: 'My bus route, stop and times' })
+  async myTransport(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.selfStudentId(user);
+    return this.transport.forStudent(user.schoolId, id);
+  }
+
+  @Get('parent/child/:childId/transport')
+  @OwnsStudent('childId')
+  @ApiOperation({ summary: "A child's bus route, stop and times" })
+  childTransport(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.transport.forStudent(user.schoolId, childId);
   }
 
   // ── parent (per child) ──────────────────────────────────────────────

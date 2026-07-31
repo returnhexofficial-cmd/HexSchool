@@ -518,6 +518,35 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['library.report', 'Run the overdue, popular-title, stock and member reports'],
     ['library.export', 'Download library reports and barcode label sheets'],
   ]),
+
+  // ── Module 25: Transport Management ─────────────────────────────────
+  // The fleet, the routes and the riders are three different desks: the
+  // office puts children on buses, the transport clerk keeps the papers
+  // and the receipts, and only a senior may overfill a bus. That last
+  // one is the separation this module encodes — `transport.assign`
+  // covers the everyday work and `transport.assign.override` is what it
+  // takes to seat a 41st child on a 40-seat bus, which is a decision
+  // with a name on it (the M16/M20/M21/M23 rule).
+  ...define('transport', [
+    ['transport.view', 'Open the transport workspace, routes and reports'],
+    [
+      'transport.vehicle.manage',
+      'Add and edit vehicles and their fitness, tax and insurance dates',
+    ],
+    ['transport.driver.manage', 'Add and edit drivers and their licences'],
+    [
+      'transport.route.manage',
+      'Create routes, order their stops and set stop fares',
+    ],
+    ['transport.assign', 'Put students on a route, move, suspend or end them'],
+    [
+      'transport.assign.override',
+      'Assign past a full bus when the capacity block is on',
+    ],
+    ['transport.expense.manage', 'Record fuel, maintenance and repair spending'],
+    ['transport.report', 'Run the roster, expense, utilization and fee reports'],
+    ['transport.export', 'Download transport reports and the driver’s sheet'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

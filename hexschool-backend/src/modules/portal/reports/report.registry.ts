@@ -354,6 +354,50 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [],
     formats: ['xlsx'],
   },
+  // ── Transport (M25) ─────────────────────────────────────────────────
+  {
+    code: 'transport.roster',
+    name: 'Route roster (driver’s sheet)',
+    module: 'Transport',
+    description:
+      'Riders per stop with guardian phone numbers, in the order the bus drives.',
+    permission: 'transport.report',
+    endpoint: '/transport/reports/roster/:routeId',
+    params: [],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'transport.expenses',
+    name: 'Vehicle expenses',
+    module: 'Transport',
+    description:
+      'Fuel, maintenance and repairs by vehicle and month, with cost per kilometre.',
+    permission: 'transport.report',
+    endpoint: '/transport/reports/expenses',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'transport.utilization',
+    name: 'Capacity utilization',
+    module: 'Transport',
+    description: 'Seats against riders, per route and across the fleet.',
+    permission: 'transport.report',
+    endpoint: '/transport/reports/utilization',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'transport.collection',
+    name: 'Transport fee collection',
+    module: 'Transport',
+    description:
+      'Expected, invoiced and collected transport fees per route for a month.',
+    permission: 'transport.report',
+    endpoint: '/transport/reports/collection',
+    params: [],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

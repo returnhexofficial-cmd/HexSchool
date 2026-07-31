@@ -5,6 +5,7 @@ import {
   BookOpenCheck,
   BookUser,
   BriefcaseBusiness,
+  Bus,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
@@ -143,6 +144,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/library",
     icon: Library,
     permission: "library.view",
+  },
+  {
+    label: "Transport",
+    href: "/admin/transport",
+    icon: Bus,
+    permission: "transport.view",
   },
   {
     label: "Fees & Payments",

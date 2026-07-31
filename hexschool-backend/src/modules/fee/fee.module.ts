@@ -8,6 +8,8 @@ import { SchoolModule } from '../school/school.module';
 import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { SequenceModule } from '../sequence/sequence.module';
 import { StudentGuardiansRepository } from '../student/repositories/student-guardians.repository';
+import { TransportFeeService } from '../transport/services/transport-fee.service';
+import { TRANSPORT_FEE_SOURCE } from '../transport/transport.constants';
 import { FeeHeadsController } from './controllers/fee-setup.controller';
 import {
   FeeOverridesController,
@@ -96,6 +98,15 @@ import { PaymentGatewayService } from './services/payment-gateway.service';
     ClassesRepository,
     SchoolsRepository,
     StudentGuardiansRepository,
+    // M25 — the transport line on a monthly bill. `TransportFeeService`
+    // depends on PrismaService + SettingsService alone, so it is bound
+    // HERE rather than imported: FeeModule importing TransportModule
+    // would close a cycle (Transport → Accounting → Fee). The M13
+    // `RoutineConflictChecker` / M23 `LIBRARY_CLEARANCE` pattern, and the
+    // token is ALWAYS bound — a school with no routes simply gets an
+    // empty map (the M08/M14 "the call site is what gets forgotten"
+    // rule).
+    { provide: TRANSPORT_FEE_SOURCE, useClass: TransportFeeService },
   ],
   // M09 exit-status clearance, M14 admit cards and M27 certificates all
   // read the ledger; M18 portals render dues and invoices.

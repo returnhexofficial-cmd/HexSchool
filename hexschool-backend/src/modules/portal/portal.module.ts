@@ -15,6 +15,7 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StudentModule } from '../student/student.module';
 import { TeacherModule } from '../teacher/teacher.module';
 import { TimetableModule } from '../timetable/timetable.module';
+import { TransportModule } from '../transport/transport.module';
 import { WebsiteModule } from '../website/website.module';
 import { DashboardController } from './controllers/dashboard.controller';
 import { PortalController } from './controllers/portal.controller';
@@ -76,6 +77,11 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // rather than to a student, so these routes serve teachers and staff
     // through the same service.
     LibraryModule,
+    // M25 — the child's route, stop and pickup/drop times. The narrowest
+    // edge of the three: TransportModule returns a deliberately thin
+    // projection (no other rider, no capacity, no licence dates) and
+    // PortalModule only says which student is asking.
+    TransportModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

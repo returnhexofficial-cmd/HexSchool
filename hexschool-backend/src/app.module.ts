@@ -41,6 +41,7 @@ import { AccountingModule } from './modules/accounting/accounting.module';
 import { HrModule } from './modules/hr/hr.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
+import { TransportModule } from './modules/transport/transport.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -155,6 +156,13 @@ import { QueuesModule } from './queues/queues.module';
     // which is also what lets StudentModule bind its clearance checker
     // without closing a cycle.
     LibraryModule,
+    // TransportModule (M25) imports Enrollment (a rider is an
+    // enrollment), Communication (the document-expiry alert) and
+    // Accounting (the fuel voucher). It does NOT import FeeModule: the
+    // transport fee line reaches M16 through the `TRANSPORT_FEE_SOURCE`
+    // token, bound inside FeeModule, because the reverse import would
+    // close a cycle through Accounting.
+    TransportModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

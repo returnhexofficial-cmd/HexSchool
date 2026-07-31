@@ -57,6 +57,12 @@ export const SYSTEM_SLOTS = {
    *  see what its library earns without it being buried in tuition
    *  arrears — two different stories about two different problems. */
   LIBRARY_FINE_INCOME: 'LIBRARY_FINE_INCOME',
+  // ── M25 transport ───────────────────────────────────────────────────
+  /** Fuel, maintenance, repairs, tolls — what running the fleet costs.
+   *  The first slot that is spent rather than received, which is why its
+   *  voucher is a DEBIT one. Transport fee INCOME needs no slot: it is a
+   *  fee head like any other and posts through the head → account map. */
+  TRANSPORT_EXPENSE: 'TRANSPORT_EXPENSE',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

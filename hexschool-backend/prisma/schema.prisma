@@ -99,6 +99,7 @@ enum SettingsGroup {
   payroll
   assignment
   library
+  transport
 
   @@map("settings_group_enum")
 }
@@ -732,6 +733,10 @@ enum VoucherSource {
   /// same `postAuto` door M21 uses. Appended rather than reused so the
   /// income & expenditure statement can say where the money came from.
   LIBRARY
+  /// M25 — fuel, maintenance and the rest of what a fleet costs. The
+  /// first auto-posted voucher in the system that spends money rather
+  /// than receiving it, which is why it posts as a DEBIT voucher.
+  TRANSPORT
 
   @@map("voucher_source_enum")
 }
@@ -996,6 +1001,78 @@ enum StockVerificationStatus {
   @@map("stock_verification_status_enum")
 }
 
+// ── Module 25: Transport Management ───────────────────────────────────
+
+/// What the school runs. `OTHER` covers the rented pickup a village
+/// school hires for one route — the fleet table has to be able to hold
+/// the vehicle that actually carries the children.
+enum VehicleType {
+  BUS
+  MICROBUS
+  VAN
+  OTHER
+
+  @@map("vehicle_type_enum")
+}
+
+/// MAINTENANCE is deliberately not INACTIVE: roadmap §6 says a vehicle
+/// in the workshop **keeps its route visible but flagged**, because the
+/// route still runs tomorrow and somebody has to notice that it has no
+/// bus today.
+enum VehicleStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+
+  @@map("vehicle_status_enum")
+}
+
+/// ON_LEAVE is the state roadmap §8's "driver replaced temporarily"
+/// produces: the driver is still the route's driver, and the substitute
+/// field on the route says who is driving while they are away.
+enum DriverStatus {
+  ACTIVE
+  ON_LEAVE
+  INACTIVE
+
+  @@map("driver_status_enum")
+}
+
+/// A route with no vehicle or no driver is not INACTIVE — it is an
+/// ACTIVE route the office has not finished setting up, and refusing
+/// assignments against it is `RoutesService`'s job, not a status.
+enum RouteStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("route_status_enum")
+}
+
+/// SUSPENDED is a rider who is not travelling this month (illness, a
+/// long absence) and will be back; ENDED is a rider who has stopped.
+/// The distinction is what stops the fee: both truncate the billing
+/// window, and only one of them can be reversed.
+enum TransportAssignmentStatus {
+  ACTIVE
+  SUSPENDED
+  ENDED
+
+  @@map("transport_assignment_status_enum")
+}
+
+/// What the money was spent on. FUEL is separated from MAINTENANCE and
+/// REPAIR because the per-kilometre figure roadmap §4 asks for is only
+/// meaningful over fuel — a gearbox rebuild is not a running cost.
+enum VehicleExpenseType {
+  FUEL
+  MAINTENANCE
+  REPAIR
+  TOLL
+  OTHER
+
+  @@map("vehicle_expense_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1198,6 +1275,12 @@ model School {
   bookIssues               BookIssue[]
   bookReservations         BookReservation[]
   stockVerifications       StockVerification[]
+  vehicles                 Vehicle[]
+  drivers                  Driver[]
+  routes                   Route[]
+  routeStops               RouteStop[]
+  transportAssignments     TransportAssignment[]
+  vehicleExpenses          VehicleExpense[]
 
   @@map("schools")
 }
@@ -1620,7 +1703,9 @@ model StaffProfile {
   updatedBy String?   @map("updated_by") @db.Uuid
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
 
-  documents StaffDocument[]
+  documents     StaffDocument[]
+  /// M25 — set when the school employs its own bus driver.
+  driverRecords Driver[]
 
   // Deliberately NOT deleted_at-scoped: employee IDs are never reused
   // (hand-written in the M07 migration; declared here so drift detection
@@ -2224,6 +2309,7 @@ model Enrollment {
   feeOverrides          StudentFeeOverride[]
   invoices              Invoice[]
   assignmentSubmissions AssignmentSubmission[]
+  transportAssignments  TransportAssignment[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -4883,4 +4969,265 @@ model StockVerificationScan {
   @@index([verificationId], map: "idx_stock_verification_scans_verification")
   @@index([copyId], map: "idx_stock_verification_scans_copy")
   @@map("stock_verification_scans")
+}
+
+// ── Module 25: Transport Management ───────────────────────────────────
+
+/// One vehicle in the fleet.
+///
+/// `reg_no` is unique per school among **live** rows, which is the
+/// opposite of the M07 employee-ID / M09 student-UID / M23 accession
+/// rule and deliberately so: a registration plate is issued by the BRTA
+/// and belongs to the *vehicle*, not to the school's numbering. A school
+/// that deletes a mis-typed row must be able to enter the same plate
+/// again, and a school that sells a bus and buys it back gets the same
+/// number from the authority either way.
+///
+/// The three expiry dates are the module's most load-bearing columns:
+/// driving an unfit or uninsured bus full of children is the one thing
+/// this module exists to stop happening quietly, so they drive a daily
+/// alert job rather than living as a note somebody re-reads once a year.
+model Vehicle {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_vehicles_school")
+
+  regNo     String        @map("reg_no") @db.VarChar(40)
+  type      VehicleType   @default(BUS)
+  /// Seats. The capacity engine compares it against live assignments.
+  capacity  Int
+  makeModel String?       @map("make_model") @db.VarChar(120)
+  /// Year of manufacture — printed on the fleet list, not used in any rule.
+  modelYear Int?          @map("model_year")
+  status    VehicleStatus @default(ACTIVE)
+
+  fitnessExpiry    DateTime? @map("fitness_expiry") @db.Date
+  taxTokenExpiry   DateTime? @map("tax_token_expiry") @db.Date
+  insuranceExpiry  DateTime? @map("insurance_expiry") @db.Date
+  /// Idempotency for the expiry chase — the M12 `absent_notified_at` /
+  /// M23 `overdue_notified_at` column-as-dedupe pattern, read as a
+  /// window so a bus whose fitness lapsed a month ago is re-flagged.
+  expiryNotifiedAt DateTime? @map("expiry_notified_at") @db.Timestamptz(6)
+
+  notes String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  routes   Route[]
+  expenses VehicleExpense[]
+
+  @@index([schoolId, status], map: "idx_vehicles_status")
+  @@map("vehicles")
+}
+
+/// The person behind the wheel. `staff_id` is **optional** because a BD
+/// school's driver is as often on a contract with the transport
+/// contractor as on the school's payroll — linking to `staff_profiles`
+/// when the link exists keeps one record of the person, and not
+/// requiring it keeps the module usable for the schools that do not
+/// employ their drivers.
+model Driver {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], map: "fk_drivers_school")
+  /// M07 staff record, when the driver IS on the payroll.
+  staffId  String?       @map("staff_id") @db.Uuid
+  staff    StaffProfile? @relation(fields: [staffId], references: [id], onDelete: Restrict, map: "fk_drivers_staff")
+
+  name          String       @db.VarChar(120)
+  phone         String       @db.VarChar(20)
+  licenseNo     String       @map("license_no") @db.VarChar(60)
+  licenseExpiry DateTime?    @map("license_expiry") @db.Date
+  address       String?
+  status        DriverStatus @default(ACTIVE)
+
+  expiryNotifiedAt DateTime? @map("expiry_notified_at") @db.Timestamptz(6)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  routes           Route[] @relation("RouteDriver")
+  substituteRoutes Route[] @relation("RouteSubstituteDriver")
+
+  @@index([schoolId, status], map: "idx_drivers_status")
+  @@map("drivers")
+}
+
+/// A named run — "Mirpur–School morning". The vehicle and the driver are
+/// nullable so a route can be drawn before the bus is bought; roadmap §6
+/// makes an ACTIVE route WITH a vehicle the precondition for assigning a
+/// rider, and that check lives in the service where it can explain
+/// itself.
+///
+/// `substitute_driver_id` is roadmap §8's "driver replaced temporarily",
+/// deliberately a field rather than a schedule: a school that needs to
+/// know who drove on the 14th reads the audit log, and a substitution
+/// engine would be a rota system nobody asked for.
+model Route {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_routes_school")
+
+  name        String  @db.VarChar(160)
+  nameBn      String? @map("name_bn") @db.VarChar(160)
+  description String?
+
+  vehicleId          String?  @map("vehicle_id") @db.Uuid
+  vehicle            Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Restrict, map: "fk_routes_vehicle")
+  driverId           String?  @map("driver_id") @db.Uuid
+  driver             Driver?  @relation("RouteDriver", fields: [driverId], references: [id], onDelete: Restrict, map: "fk_routes_driver")
+  /// Who is driving while the driver is away (§8).
+  substituteDriverId String?  @map("substitute_driver_id") @db.Uuid
+  substituteDriver   Driver?  @relation("RouteSubstituteDriver", fields: [substituteDriverId], references: [id], onDelete: Restrict, map: "fk_routes_substitute_driver")
+
+  helperName  String?     @map("helper_name") @db.VarChar(120)
+  helperPhone String?     @map("helper_phone") @db.VarChar(20)
+  status      RouteStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  stops       RouteStop[]
+  assignments TransportAssignment[]
+
+  @@index([schoolId, status], map: "idx_routes_status")
+  @@index([schoolId, vehicleId], map: "idx_routes_vehicle")
+  @@map("routes")
+}
+
+/// A pickup point on a route, and **the price of travelling from it** —
+/// which is why a stop is soft-deleted rather than hard-deleted like an
+/// M13 timetable cell: an assignment points at it, and a deleted stop
+/// still has to be able to say what a rider was paying.
+///
+/// `display_order` carries a live-rows unique per route, so the drag-to-
+/// reorder endpoint has to do the M11 two-phase negative update rather
+/// than assign 0…N straight over the top of itself.
+model RouteStop {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_route_stops_school")
+  routeId  String @map("route_id") @db.Uuid
+  route    Route  @relation(fields: [routeId], references: [id], onDelete: Restrict, map: "fk_route_stops_route")
+
+  name         String    @db.VarChar(160)
+  landmark     String?   @db.VarChar(200)
+  /// Wall-clock times, `TIME(0)` like M13's bell schedule and M14's exam
+  /// sittings — a pickup is "07:10", not an instant.
+  pickupTime   DateTime? @map("pickup_time") @db.Time(0)
+  dropTime     DateTime? @map("drop_time") @db.Time(0)
+  /// What a rider boarding here pays per month. The fee lives on the
+  /// STOP, not on the route: distance is what a BD school charges for.
+  monthlyFee   Decimal   @default(0) @map("monthly_fee") @db.Decimal(12, 2)
+  displayOrder Int       @default(0) @map("display_order")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  assignments TransportAssignment[]
+
+  /// Not an identity rule — the target of the COMPOSITE foreign key on
+  /// `transport_assignments`, which is what makes "this stop is on this
+  /// route" a database fact rather than a service's memory. `id` is
+  /// already unique, so this index costs correctness nothing and buys
+  /// the FK its required unique target.
+  @@unique([routeId, id], map: "uq_route_stops_route_stop")
+  @@index([routeId], map: "idx_route_stops_route")
+  @@map("route_stops")
+}
+
+/// A rider. Keyed on **`enrollment_id`**, never `student_id` — the
+/// global rule since M11, and it is what makes a promotion or a section
+/// transfer leave last year's transport billing alone.
+///
+/// The billing window is `[effectiveFrom, effectiveTo)` where
+/// `effectiveFrom = resumed_at ?? start_date` and
+/// `effectiveTo = end_date ?? suspended_at ?? open`. That is the whole
+/// contract with M16: `TransportFeeService` intersects it with the month
+/// being billed and prorates. Storing the two suspension dates rather
+/// than a status alone is the M21 `exit_date` reasoning — a status
+/// change with no date cannot answer "how much of March does this rider
+/// owe".
+model TransportAssignment {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_transport_assignments_school")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, map: "fk_transport_assignments_enrollment")
+  routeId      String     @map("route_id") @db.Uuid
+  route        Route      @relation(fields: [routeId], references: [id], onDelete: Restrict, map: "fk_transport_assignments_route")
+  /// The stop is pinned to the route by a **composite** foreign key
+  /// over `(route_id, stop_id)`, so "that stop is not on that route" is
+  /// refused by the database rather than remembered by a service. That
+  /// is why `routeId` appears in two relations: one says which route,
+  /// the other says the pair must exist together.
+  stopId       String     @map("stop_id") @db.Uuid
+  stop         RouteStop  @relation(fields: [routeId, stopId], references: [routeId, id], onDelete: Restrict, map: "fk_transport_assignments_route_stop")
+
+  startDate DateTime                  @map("start_date") @db.Date
+  endDate   DateTime?                 @map("end_date") @db.Date
+  status    TransportAssignmentStatus @default(ACTIVE)
+
+  /// Billing stops here while SUSPENDED; billing resumes from here.
+  suspendedAt  DateTime? @map("suspended_at") @db.Date
+  resumedAt    DateTime? @map("resumed_at") @db.Date
+  /// Why the rider stopped or was suspended — the M07 status-reason rule.
+  statusReason String?   @map("status_reason")
+  /// Free text the driver's sheet prints ("gets off at the mosque").
+  remarks      String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, routeId, status], map: "idx_transport_assignments_route")
+  @@index([schoolId, stopId], map: "idx_transport_assignments_stop")
+  @@index([enrollmentId], map: "idx_transport_assignments_enrollment")
+  @@map("transport_assignments")
+}
+
+/// What the fleet costs. `odometer` is nullable because a toll receipt
+/// has no reading, and the per-kilometre figure is computed only over
+/// the rows that carry one (see `expense.engine.ts`).
+model VehicleExpense {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId  String  @map("school_id") @db.Uuid
+  school    School  @relation(fields: [schoolId], references: [id], map: "fk_vehicle_expenses_school")
+  vehicleId String  @map("vehicle_id") @db.Uuid
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict, map: "fk_vehicle_expenses_vehicle")
+
+  type        VehicleExpenseType
+  /// A calendar date: fuel is bought on a day, not at an instant.
+  date        DateTime           @db.Date
+  amount      Decimal            @db.Decimal(12, 2)
+  odometer    Int?
+  description String?
+  receiptUrl  String?            @map("receipt_url") @db.VarChar(500)
+  /// The M20 voucher this expense posted to, when accounting is on.
+  voucherId   String?            @map("voucher_id") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, vehicleId, date], map: "idx_vehicle_expenses_vehicle")
+  @@index([schoolId, date], map: "idx_vehicle_expenses_date")
+  @@map("vehicle_expenses")
 }

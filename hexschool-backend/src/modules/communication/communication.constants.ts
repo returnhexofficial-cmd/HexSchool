@@ -239,6 +239,45 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '{{school}} library: "{{title}}" is ready for you. It will be held until {{until}}.',
   },
+  // ── Module 25 — transport ────────────────────────────────────────────
+  {
+    code: 'TRANSPORT_DOCUMENT_EXPIRY',
+    module: 'Transport',
+    description:
+      'A vehicle or driver document has lapsed, is about to, or was never recorded',
+    // IN_APP only by default: this is an OFFICE problem — a parent
+    // cannot renew a tax token — and the people who can act on it are
+    // already looking at the bell.
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'subject',
+      'kind',
+      'document',
+      'expiry',
+      'days',
+      'detail',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: {{detail}} Renew it before the vehicle runs again.',
+  },
+  {
+    code: 'TRANSPORT_ASSIGNED',
+    module: 'Transport',
+    description: 'A student was put on a bus route — the stop and the times',
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'student_name',
+      'route',
+      'stop',
+      'pickup',
+      'drop',
+      'fee',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: {{student_name}} is on route {{route}}, boarding at {{stop}} — pickup {{pickup}}, drop {{drop}}. Monthly fare {{fee}} BDT.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

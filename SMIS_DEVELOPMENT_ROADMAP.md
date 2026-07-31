@@ -105,7 +105,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 22 | Assignments & Homework | ☑ |
 | 23 | Library Management | ☑ |
 | 24 | Inventory & Assets | ☐ |
-| 25 | Transport Management | ☐ |
+| 25 | Transport Management | ☑ |
 | 26 | Hostel Management | ☐ |
 | 27 | Document Management & Certificates | ☐ |
 | 28 | Complaint, Visitor & Alumni Management | ☐ |
@@ -1748,11 +1748,11 @@ Vehicles, routes & stops, drivers/helpers, student transport assignment with sto
 - `vehicle_expenses`: `id, vehicle_id, type ENUM('FUEL','MAINTENANCE','REPAIR','TOLL','OTHER'), date, amount, odometer NULL, description, receipt_url NULL`, audit.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] CRUD everything; route-stop ordering; capacity tracking (assigned vs vehicle capacity).
-- [ ] Assignment service → registers monthly Transport fee override/line for invoicing (integration contract with Module 16: fee head "Transport", amount from stop; proration on mid-month start/end).
-- [ ] Expiry alert job (fitness/tax/insurance/license within 30 days → admin notification).
-- [ ] Expense entry + optional voucher posting.
-- [ ] Reports: route roster (per route/stop student list + guardian phones — for driver sheet PDF), vehicle expense summary (per km if odometer), fee collection vs assigned, capacity utilization.
+- [x] CRUD everything; route-stop ordering; capacity tracking (assigned vs vehicle capacity). *(Reordering is a two-pass update around the live-rows unique on `(route_id, display_order)` — the M11 renumber problem; capacity comes from one `capacityStatus` verdict the bar, the refusal and the report all read.)*
+- [x] Assignment service → registers monthly Transport fee override/line for invoicing (integration contract with Module 16: fee head "Transport", amount from stop; proration on mid-month start/end). *(Implemented as a line rather than an override — an override is a *discount* in M16's model. `TRANSPORT_FEE_SOURCE` is bound inside FeeModule (the reverse import would cycle through Accounting), the head resolves by id then by name, and the amount arrives **already prorated** against the rider's service window, so the invoice engine adds it with `prorated: false`.)*
+- [x] Expiry alert job (fitness/tax/insurance/license within 30 days → admin notification). *(Daily, windowed by `transport.expiry_alert_days`, deduped on `expiry_notified_at`; a **missing** date is alerted too, because the vehicle with no fitness date recorded is the likeliest to be unfit.)*
+- [x] Expense entry + optional voucher posting. *(A real posting through M20's `postAuto` — the system's first auto-posted **DEBIT** voucher, Dr `5800 Transport Expense` / Cr cash, idempotent on `transport-expense:<id>`.)*
+- [x] Reports: route roster (per route/stop student list + guardian phones — for driver sheet PDF), vehicle expense summary (per km if odometer), fee collection vs assigned, capacity utilization. *(All four, XLSX for each and PDF for the roster; cost-per-km is computed from the **gaps** between odometer readings, and a backwards reading breaks the chain rather than going negative. Collection is attributed pro rata — money is paid against an invoice, not a line.)*
 ### APIs
 ```
 CRUD /api/v1/transport/vehicles|drivers|routes (+ stops nested)
@@ -1762,10 +1762,10 @@ GET  /api/v1/transport/reports/roster/:routeId|expenses|utilization
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Vehicle/driver/route managers; route detail with draggable stops + fee editing; capacity bar.
-- [ ] Assignment flow from student profile (route→stop picker showing fee) + bulk assign by section.
-- [ ] Expense log with monthly chart; expiry alerts widget.
-- [ ] Roster print view; parent portal shows child's route/stop/times.
+- [x] Vehicle/driver/route managers; route detail with draggable stops + fee editing; capacity bar. *(Reordering is ↑/↓ buttons rather than HTML5 drag — the same server call, and it works on the phone an office clerk actually has.)*
+- [x] Assignment flow from student profile (route→stop picker showing fee) + bulk assign by section. *(A Transport tab on the student profile with the fare-showing picker, plus the same picker and a section-wide assign in the Riders tab.)*
+- [x] Expense log with monthly chart; expiry alerts widget. *(The alert count sits in the page header rather than inside a tab — an expired fitness certificate must not wait to be clicked on.)*
+- [x] Roster print view; parent portal shows child's route/stop/times. *(The portal panel is identical for the student and the parent — there is nothing here a rider can do.)*
 
 ## 6. Business Rules
 - Assignment requires ACTIVE route with vehicle; over-capacity warns (hard block setting).
@@ -1781,14 +1781,14 @@ GET  /api/v1/transport/reports/roster/:routeId|expenses|utilization
 - Driver replaced temporarily → route-level substitute field (no schedule engine — keep simple).
 
 ## 9. Testing Checklist
-- [ ] Unit: fee proration handoff contract, capacity math.
-- [ ] e2e: assign→invoice generated next cycle→end assignment→invoice stops.
-- [ ] Frontend: stop reorder, roster PDF.
+- [x] Unit: fee proration handoff contract, capacity math. *(111 golden engine tests written before any service existed, plus 34 service tests.)*
+- [x] e2e: assign→invoice generated next cycle→end assignment→invoice stops. *(55-case `transport.e2e-spec.ts`, including the mid-month proration and every database invariant probed.)*
+- [x] Frontend: stop reorder, roster PDF. *(Reorder is covered by `reorderPlan`'s golden tests and the endpoint's e2e case; the roster PDF is asserted end to end. The in-browser click-through is listed in the completion doc's Remaining TODOs.)*
 
 ## 10. Completion Checklist
-- [ ] Fleet + routes + assignments + fees integration
-- [ ] Expenses + alerts + reports
-- [ ] Docs: `docs/modules/25-transport.md`
+- [x] Fleet + routes + assignments + fees integration
+- [x] Expenses + alerts + reports
+- [x] Docs: `docs/modules/25-transport.md`
 
 ---
 

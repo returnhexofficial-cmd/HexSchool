@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
@@ -21,6 +22,11 @@ import {
 } from '../../enrollment/repositories/enrollments.repository';
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
 import { SequenceService } from '../../sequence/sequence.service';
+import {
+  TRANSPORT_FEE_SOURCE,
+  type TransportCharge,
+  type TransportFeeSource,
+} from '../../transport/transport.constants';
 import {
   BillableHead,
   buildInvoice,
@@ -99,6 +105,13 @@ export class InvoiceService {
     private readonly schools: SchoolsRepository,
     private readonly config: FeeSettingsService,
     private readonly auditContext: AuditContextService,
+    /**
+     * M25. Always bound (to `TransportFeeService`, over PrismaService and
+     * SettingsService only) — see `fee.module.ts` for why the binding
+     * lives there rather than an import.
+     */
+    @Inject(TRANSPORT_FEE_SOURCE)
+    private readonly transportFees: TransportFeeSource,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
@@ -190,6 +203,22 @@ export class InvoiceService {
       throw new BadRequestException('Due date must be on or after the issue date');
     }
 
+    // M25: the transport line, one query for the whole batch. It arrives
+    // ALREADY PRORATED against the rider's service window, so it is
+    // added with `prorated: false` — proration by enrollment date and
+    // proration by service window answer different questions, and
+    // multiplying them would bill a mid-month joiner (21/31)² of the
+    // fare.
+    const transport = billingMonth
+      ? await this.transportFees.monthlyCharges(
+          schoolId,
+          candidates.map((c) => c.id),
+          `${billingMonth.getUTCFullYear()}-${String(
+            billingMonth.getUTCMonth() + 1,
+          ).padStart(2, '0')}`,
+        )
+      : new Map<string, TransportCharge>();
+
     const rows: GenerationPreviewRow[] = [];
     const writes: Array<{
       enrollment: EnrollmentWithRelations;
@@ -234,6 +263,19 @@ export class InvoiceService {
         sessionId,
         schoolId,
       );
+
+      // Only the monthly batch carries transport: an ad-hoc exam-fee
+      // invoice must not quietly pick up a bus fare.
+      const rider = billingMonth ? transport.get(enrollment.id) : undefined;
+      if (rider) {
+        heads.push({
+          feeHeadId: rider.feeHeadId,
+          feeHeadName: rider.description,
+          amount: rider.amount,
+          prorated: false,
+        });
+      }
+
       if (heads.length === 0) {
         rows.push({
           ...base,

@@ -27,6 +27,8 @@ import { portalAssignmentApi } from "@/lib/api/assignment";
 import { AssignmentPanels } from "./assignment-panels";
 import { LibraryPanels } from "./library-panels";
 import { opacApi } from "@/lib/api/library";
+import { TransportPanels } from "./transport-panels";
+import { portalTransportApi } from "@/lib/api/transport";
 import { StudentPanels } from "./student-panels";
 
 export default function PortalHomePage() {
@@ -97,6 +99,7 @@ function StudentView() {
         }}
       />
       <LibraryPanels fetchers={{ key: "self", me: opacApi.me }} />
+      <TransportPanels fetchers={{ key: "self", get: portalTransportApi.me }} />
       <MessagesPanel />
       <ContactSchoolCard />
     </>
@@ -179,6 +182,17 @@ function ParentView({
             key: `child-${selected}`,
             me: () => opacApi.childLibrary(selected),
             canAct: false,
+          }}
+        />
+      )}
+      {selected && (
+        /* Identical to the student's own view: there is nothing a rider
+           can DO here, so parent and child see the same panel. */
+        <TransportPanels
+          key={`transport-${selected}`}
+          fetchers={{
+            key: `child-${selected}`,
+            get: () => portalTransportApi.child(selected),
           }}
         />
       )}

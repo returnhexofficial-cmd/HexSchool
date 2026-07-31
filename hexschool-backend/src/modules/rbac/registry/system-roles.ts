@@ -244,6 +244,14 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'library.fine.waive',
       'library.report',
       'library.export',
+      // M25 — the head is the one who may seat a 41st child on a 40-seat
+      // bus, and reads the fleet reports. The day-to-day fleet paperwork
+      // belongs to the office.
+      'transport.view',
+      'transport.assign',
+      'transport.assign.override',
+      'transport.report',
+      'transport.export',
     ],
   },
   {
@@ -402,6 +410,13 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'accounting.export',
       'budget.manage',
       'accounting.period.manage',
+      // M25 — fuel, maintenance and repair receipts are spending, so the
+      // person who keeps the books records them. Putting children on
+      // buses is the office's job and is deliberately not here.
+      'transport.view',
+      'transport.expense.manage',
+      'transport.report',
+      'transport.export',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.
@@ -533,6 +548,19 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // and everything to do with pay, stays above them.
       'hr.view',
       'leave.apply',
+      // M25 — the office runs the buses: the fleet list, the drivers, the
+      // routes and who rides them. Deliberately NOT granted:
+      // `transport.assign.override` — putting more children on a full bus
+      // is the head's decision, not the desk's (the M16/M20/M21/M23
+      // separation-of-duties rule) — and `transport.expense.manage`,
+      // because the fuel money is the accountant's ledger.
+      'transport.view',
+      'transport.vehicle.manage',
+      'transport.driver.manage',
+      'transport.route.manage',
+      'transport.assign',
+      'transport.report',
+      'transport.export',
     ],
   },
 ];

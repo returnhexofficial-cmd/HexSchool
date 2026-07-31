@@ -41,6 +41,10 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   // for). A school that wants fines separated from the library fee
   // itself maps the slot to its own account.
   [SYSTEM_SLOTS.LIBRARY_FINE_INCOME]: '4150',
+  // M25 — `5800 Transport Expense` is already in the seeded 61-account BD
+  // chart (as is `4130 Transport Fee Income`, which the fee head maps to),
+  // so a fresh school posts a fuel bill correctly with nothing configured.
+  [SYSTEM_SLOTS.TRANSPORT_EXPENSE]: '5800',
 };
 
 export interface ResolvedPostingMap {

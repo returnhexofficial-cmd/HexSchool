@@ -1082,6 +1082,90 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       false,
     ],
   ]),
+
+  // ── Module 25: Transport Management ─────────────────────────────────
+  ...g(SettingsGroup.transport, [
+    ['transport.enabled', 'boolean', 'School transport is in use', true],
+    // The M16 link. An id wins; the NAME is the fallback, so a school
+    // that simply created a fee head called "Transport" bills correctly
+    // with nothing configured — the M20 posting-map shape.
+    [
+      'transport.fee_head_id',
+      'string',
+      'Fee head the monthly transport charge is billed under',
+      '',
+    ],
+    [
+      'transport.fee_head_name',
+      'string',
+      'Fee head name to fall back on when no id is set',
+      'Transport',
+    ],
+    [
+      'transport.auto_invoice',
+      'boolean',
+      'Add a transport line to the monthly fee batch',
+      true,
+    ],
+    // Roadmap §6: "ending an assignment stops future transport invoicing
+    // (current month per proration rule)". Off means a whole month is
+    // charged for any service in it, which is what "per month started"
+    // schools mean.
+    [
+      'transport.prorate_enabled',
+      'boolean',
+      'Charge part of a month when a rider starts or stops mid-month',
+      true,
+    ],
+    // Roadmap §6 makes over-capacity a WARNING. A school that means it
+    // turns this on deliberately, and `transport.assign.override` is
+    // then what gets past it.
+    [
+      'transport.capacity_hard_block',
+      'boolean',
+      'Refuse an assignment that would exceed the vehicle’s seats',
+      false,
+    ],
+    [
+      'transport.expiry_alert_enabled',
+      'boolean',
+      'Send the daily fitness / tax / insurance / licence alert',
+      true,
+    ],
+    [
+      'transport.expiry_alert_days',
+      'number',
+      'Days before a document expires that the alert starts',
+      30,
+    ],
+    [
+      'transport.expiry_alert_channel',
+      'string',
+      'Channel for transport alerts: IN_APP or SMS',
+      'IN_APP',
+    ],
+    [
+      'transport.expiry_repeat_days',
+      'number',
+      'Days before the same lapsed document is flagged again',
+      7,
+    ],
+    // Off by default: a route assignment is not news a family needs an
+    // SMS about every time the office edits a stop (the M22 channel
+    // reasoning — the cheapest message is the one not sent).
+    [
+      'transport.notify_guardian_on_assign',
+      'boolean',
+      'Tell the guardian the route, stop and times when a rider is assigned',
+      false,
+    ],
+    [
+      'transport.auto_post_accounting',
+      'boolean',
+      'Post vehicle expenses to the ledger (Module 20)',
+      true,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

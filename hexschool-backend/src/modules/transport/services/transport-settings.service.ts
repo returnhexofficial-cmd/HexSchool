@@ -26,6 +26,13 @@ function clamp(
   max: number,
   fallback: number,
 ): number {
+  // `null`, `undefined` and `''` all mean "no value", and `Number()` maps
+  // the first and third to **0** rather than to NaN — so the finiteness
+  // check below never sees them and they clamp to `min` instead of
+  // falling back. For `transport.expiry_alert_days` that turns a missing
+  // row into a ONE-DAY warning window on a bus's fitness certificate.
+  // Found by M24's settings spec, which carries the same helper.
+  if (value === null || value === undefined || value === '') return fallback;
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(max, Math.max(min, Math.round(n)));

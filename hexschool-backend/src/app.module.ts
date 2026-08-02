@@ -42,6 +42,7 @@ import { HrModule } from './modules/hr/hr.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TransportModule } from './modules/transport/transport.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -163,6 +164,13 @@ import { QueuesModule } from './queues/queues.module';
     // token, bound inside FeeModule, because the reverse import would
     // close a cycle through Accounting.
     TransportModule,
+    // InventoryModule (M24) imports School, Sequence, Communication (the
+    // low-stock sweep) and Accounting (the purchase voucher). It imports
+    // no feature module for the people and departments a gate pass goes
+    // to — `InventoryDirectoryRepository` reads those narrowly over
+    // PrismaService, the M12/M17/M18/M19/M22/M23/M25 precedent — and
+    // nothing imports it back.
+    InventoryModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -100,6 +100,7 @@ enum SettingsGroup {
   assignment
   library
   transport
+  inventory
 
   @@map("settings_group_enum")
 }
@@ -770,6 +771,12 @@ enum PostingMapKind {
   FEE_HEAD
   PAYMENT_METHOD
   SYSTEM
+  /// M24 — an item category → the account a RECEIVED purchase of it
+  /// posts to. Furniture capitalizes to `1520`, computers to `1540`,
+  /// library books to `1530` and stationery expenses straight to `5500`,
+  /// and which is which is a school's accounting policy rather than
+  /// something the inventory module can infer from a category name.
+  INVENTORY_CATEGORY
 
   @@map("posting_map_kind_enum")
 }
@@ -1073,6 +1080,149 @@ enum VehicleExpenseType {
   @@map("vehicle_expense_type_enum")
 }
 
+// ── Module 24: Inventory & Assets ─────────────────────────────────────
+
+/// The one distinction the whole module turns on. A CONSUMABLE is
+/// counted — the ledger's balance is the truth and nothing tracks an
+/// individual biro. An ASSET is *identified*: every unit gets a tag, a
+/// location and a custodian, and "how many do we have" is answered by
+/// counting rows rather than by reading a balance.
+///
+/// Which means a purchase of ten chairs and a purchase of ten reams of
+/// paper are two different events, and roadmap §4's "asset_units
+/// generation on RECEIVE" is what makes them so.
+enum ItemType {
+  ASSET
+  CONSUMABLE
+
+  @@map("item_type_enum")
+}
+
+/// The **base** unit an item is counted in — roadmap §3's list exactly.
+/// LITER and KG are why quantities are `NUMERIC(14,3)` rather than
+/// integers (§7): half a litre of phenyl is a real issue slip.
+///
+/// A pack (a box of 12, a ream of 500) is NOT a unit here — it is
+/// `pack_size` on the item, so the ledger only ever speaks base units.
+/// See `Item.packSize`.
+enum ItemUnit {
+  PCS
+  BOX
+  REAM
+  SET
+  LITER
+  KG
+  OTHER
+
+  @@map("item_unit_enum")
+}
+
+/// BLACKLISTED is not INACTIVE: a school that stops buying from a
+/// supplier because of a bad delivery needs the history to keep saying
+/// so, and a new purchase against them should be refused with that
+/// reason rather than with "not found".
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLACKLISTED
+
+  @@map("supplier_status_enum")
+}
+
+/// DRAFT is a purchase being typed; RECEIVED is stock that has arrived
+/// and is therefore **immutable** (roadmap §6) — the correction is
+/// CANCELLED, which writes reversing ledger entries rather than deleting
+/// the ones already written. The M20 voucher rule, applied to stock.
+enum PurchaseStatus {
+  DRAFT
+  RECEIVED
+  CANCELLED
+
+  @@map("purchase_status_enum")
+}
+
+/// Why stock moved. Roadmap §3's list; every row in `stock_ledger`
+/// carries one, and the report that answers "where did 40 reams go"
+/// reads nothing else.
+enum StockTxnType {
+  PURCHASE
+  ISSUE
+  RETURN
+  ADJUST
+  DISPOSE
+
+  @@map("stock_txn_enum")
+}
+
+/// An asset's life. DISPOSED and LOST are **excluded from register
+/// counts** (roadmap §6) but never deleted — a school that writes off a
+/// projector still has to be able to say what happened to it, and the
+/// audit that asks is the reason the row exists.
+enum AssetUnitStatus {
+  IN_STORE
+  ASSIGNED
+  UNDER_REPAIR
+  DISPOSED
+  LOST
+
+  @@map("asset_unit_status_enum")
+}
+
+/// Physical condition, recorded independently of status: a projector can
+/// be ASSIGNED and POOR at the same time, and the replacement budget is
+/// built from the condition column, not from the status one.
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  UNSERVICEABLE
+
+  @@map("asset_condition_enum")
+}
+
+/// **Who is holding school property.** Roadmap §3 asks for this on
+/// `stock_issues.issued_to`; `asset_units` uses the identical shape for
+/// its custodian, because "who has it" is one question and answering it
+/// two ways would give the issue desk and the asset register two
+/// different vocabularies for the same fact.
+///
+/// §8's "lab equipment shared custody" is why DEPARTMENT exists: a
+/// microscope belongs to the science department and to no one person,
+/// and forcing a name onto it produces a register that blames whoever
+/// was standing nearest.
+enum InventoryHolderType {
+  DEPARTMENT
+  PERSON
+  ROOM
+
+  @@map("inventory_holder_type_enum")
+}
+
+/// Polymorphic over the two employee tables, no FK — the M12
+/// `staff_attendances` / M21 `leave_applications` / M23 `library_members`
+/// precedent. Students are deliberately absent: a school issues chalk to
+/// a teacher and a lab bench to a department, not a stapler to a child.
+enum InventoryPersonType {
+  TEACHER
+  STAFF
+
+  @@map("inventory_person_type_enum")
+}
+
+/// **Derived, never assigned** — `deriveIssueStatus` in
+/// `issue.engine.ts` computes it from the lines' returned quantities and
+/// the service writes what that returns. The M16 `deriveStatus` / M23
+/// `fine_paid` rule: a status a write path may choose is a status that
+/// will eventually disagree with the rows beneath it.
+enum StockIssueStatus {
+  ISSUED
+  PARTIAL_RETURN
+  RETURNED
+
+  @@map("stock_issue_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1281,6 +1431,15 @@ model School {
   routeStops               RouteStop[]
   transportAssignments     TransportAssignment[]
   vehicleExpenses          VehicleExpense[]
+  suppliers                Supplier[]
+  itemCategories           ItemCategory[]
+  items                    Item[]
+  purchases                Purchase[]
+  purchaseItems            PurchaseItem[]
+  stockLedger              StockLedgerEntry[]
+  assetUnits               AssetUnit[]
+  stockIssues              StockIssue[]
+  stockIssueItems          StockIssueItem[]
 
   @@map("schools")
 }
@@ -1463,6 +1622,10 @@ model Department {
   subjects      Subject[]
   staffProfiles StaffProfile[]
   teachers      Teacher[]
+  /// M24 — a department is one of the three things that can hold school
+  /// property (`InventoryHolderType.DEPARTMENT`).
+  assetUnits    AssetUnit[]
+  stockIssues   StockIssue[]
 
   @@index([schoolId], map: "idx_departments_school")
   @@map("departments")
@@ -5230,4 +5393,448 @@ model VehicleExpense {
   @@index([schoolId, vehicleId, date], map: "idx_vehicle_expenses_vehicle")
   @@index([schoolId, date], map: "idx_vehicle_expenses_date")
   @@map("vehicle_expenses")
+}
+
+// â”€â”€ Module 24: Inventory & Assets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+/// Who the school buys from. Deliberately thin: a supplier is a name and
+/// a phone number to ring when the delivery is short, not an accounts-
+/// payable subledger â€” there is no supplier balance here, because the
+/// ledger of accounts is M20's and inventing a second one would give the
+/// school two answers to "what do we owe".
+model Supplier {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_suppliers_school")
+
+  name          String         @db.VarChar(160)
+  contactPerson String?        @map("contact_person") @db.VarChar(120)
+  phone         String?        @db.VarChar(20)
+  email         String?        @db.VarChar(160)
+  address       String?
+  status        SupplierStatus @default(ACTIVE)
+  /// Why a supplier was blacklisted â€” the M07 status-reason rule. A
+  /// blacklisting with no reason on it is a decision nobody can review.
+  statusReason  String?        @map("status_reason")
+  notes         String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  purchases Purchase[]
+
+  @@index([schoolId, status], map: "idx_suppliers_status")
+  @@map("suppliers")
+}
+
+/// A tree (roadmap Â§3), because a school's store is naturally nested â€”
+/// "Stationery â†’ Paper", "Lab â†’ Chemistry â†’ Glassware". `parent_id` is
+/// self-referential with `ON DELETE RESTRICT`: a category with children
+/// is refused deletion rather than orphaning them, the M06 master rule.
+///
+/// The tree is also the **posting map key** (`INVENTORY_CATEGORY`), so a
+/// school maps "Computers" to `1540` once and every computer it buys
+/// capitalizes correctly without anybody choosing an account per row.
+model ItemCategory {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], map: "fk_item_categories_school")
+  parentId String?       @map("parent_id") @db.Uuid
+  parent   ItemCategory? @relation("ItemCategoryTree", fields: [parentId], references: [id], onDelete: Restrict, map: "fk_item_categories_parent")
+
+  name        String  @db.VarChar(120)
+  nameBn      String? @map("name_bn") @db.VarChar(120)
+  description String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  children ItemCategory[] @relation("ItemCategoryTree")
+  items    Item[]
+
+  @@index([schoolId, parentId], map: "idx_item_categories_parent")
+  @@map("item_categories")
+}
+
+/// What the school stocks â€” the catalogue entry, never a quantity. **The
+/// balance lives in `stock_ledger` and nowhere else** (roadmap Â§6): there
+/// is deliberately no `qty` column here, because a stored quantity is a
+/// second source of truth that drifts from the movements beneath it and
+/// then has to be "corrected" by the very screen that broke it.
+///
+/// `code` is unique among **live** rows, unlike an asset tag. That is the
+/// M25 `uq_vehicles_reg_no` distinction one level in: an item code is a
+/// catalogue label the school chooses and may re-file, while an asset tag
+/// is a sticker on a physical object and is never reused.
+model Item {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String        @map("school_id") @db.Uuid
+  school     School        @relation(fields: [schoolId], references: [id], map: "fk_items_school")
+  categoryId String?       @map("category_id") @db.Uuid
+  category   ItemCategory? @relation(fields: [categoryId], references: [id], onDelete: Restrict, map: "fk_items_category")
+
+  code        String   @db.VarChar(40)
+  name        String   @db.VarChar(160)
+  nameBn      String?  @map("name_bn") @db.VarChar(160)
+  type        ItemType
+  /// The unit the LEDGER speaks. Every movement is normalized to it.
+  unit        ItemUnit @default(PCS)
+  description String?
+
+  /// Section 8's `box_size`, generalized: how many base units are in one
+  /// pack. A ream is 500 sheets, a box is 12 pens, a carton is 24 bottles
+  /// â€” one column rather than one per packaging word, because the school
+  /// buying in packs and issuing in pieces is the case Â§8 names and the
+  /// alternative is a second unit enum that has to agree with the first.
+  ///
+  /// NULL means "no pack" â€” the item is bought and issued in the same
+  /// unit, which is most of a school's store.
+  packSize  Decimal? @map("pack_size") @db.Decimal(14, 3)
+  /// What the pack is called on the supplier's invoice ("Box of 12").
+  /// Cosmetic: the arithmetic is `packSize` alone.
+  packLabel String?  @map("pack_label") @db.VarChar(40)
+
+  /// Roadmap Â§4's low-stock alert threshold, in base units. NULL means
+  /// the school does not want to be told about this item â€” an explicit
+  /// choice, unlike 0, which would alert on every empty shelf.
+  reorderLevel Decimal? @map("reorder_level") @db.Decimal(14, 3)
+
+  /// **The valuation figure**, and the module's documented simplification
+  /// (roadmap Â§4: "valuation FIFO-simple: last price Ã— qty"). Written by
+  /// every RECEIVED purchase line; a school that never buys an item again
+  /// keeps valuing it at what it last paid.
+  lastUnitCost Decimal? @map("last_unit_cost") @db.Decimal(12, 4)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  purchaseItems PurchaseItem[]
+  ledger        StockLedgerEntry[]
+  assetUnits    AssetUnit[]
+  issueItems    StockIssueItem[]
+
+  @@index([schoolId, categoryId], map: "idx_items_category")
+  @@index([schoolId, type], map: "idx_items_type")
+  @@map("items")
+}
+
+/// A delivery. `purchase_no` is gap-free through `SequenceService`
+/// (`PO-{YY}-{SEQ5}`), like every other document number since M07.
+///
+/// **A RECEIVED purchase is immutable** (roadmap Â§6). Receiving is what
+/// writes the stock in, generates the asset units and posts the voucher;
+/// letting somebody then edit a line would leave the ledger describing a
+/// delivery that no longer exists. The correction is `cancel()`, which
+/// writes reversing ledger rows â€” the M20 voucher rule, in a second
+/// ledger.
+model Purchase {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String    @map("school_id") @db.Uuid
+  school     School    @relation(fields: [schoolId], references: [id], map: "fk_purchases_school")
+  supplierId String?   @map("supplier_id") @db.Uuid
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict, map: "fk_purchases_supplier")
+
+  purchaseNo String         @map("purchase_no") @db.VarChar(40)
+  /// A calendar date â€” a delivery happens on a day, like M25's fuel.
+  date       DateTime       @db.Date
+  invoiceRef String?        @map("invoice_ref") @db.VarChar(80)
+  /// Sum of the lines. **Not** a CHECK: a CHECK cannot see child rows
+  /// (the M20 Î£debit = Î£credit reasoning), so the service recomputes it
+  /// on every line change and `purchase.engine.ts` is what tests it.
+  total      Decimal        @default(0) @db.Decimal(12, 2)
+  status     PurchaseStatus @default(DRAFT)
+  remarks    String?
+
+  /// Evidence for the status, pinned by `chk_purchases_status_evidence`
+  /// â€” the M22/M25 rule that a status with no date behind it cannot be
+  /// audited.
+  receivedAt   DateTime? @map("received_at") @db.Timestamptz(6)
+  receivedBy   String?   @map("received_by") @db.Uuid
+  cancelledAt  DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason String?   @map("cancel_reason")
+  /// The M20 voucher this purchase posted to, when accounting is on.
+  voucherId    String?   @map("voucher_id") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  items PurchaseItem[]
+
+  /// Gap-free from `SequenceService`, and unique **ignoring**
+  /// `deleted_at`: the number is printed on a document that went to a
+  /// supplier, so re-issuing it would make two invoices reference one
+  /// delivery. A plain unique, so it is declared here as well as in the
+  /// migration — the expression and partial ones cannot be, which is
+  /// exactly why `migrate diff` is what catches the difference.
+  @@unique([schoolId, purchaseNo], map: "uq_purchases_no")
+  @@index([schoolId, status, date], map: "idx_purchases_status")
+  @@index([schoolId, supplierId], map: "idx_purchases_supplier")
+  @@map("purchases")
+}
+
+/// One line of a delivery. **Hard-deleted and replaced as a set while the
+/// purchase is DRAFT** â€” the M13 `timetable_entries` / M19 `gallery_items`
+/// / M20 `voucher_entries` / M21 `salary_components` precedent â€” because a
+/// draft's lines are edited as a grid and a tombstoned line would have to
+/// be excluded from every total by hand.
+///
+/// Quantities are stored **twice on purpose**: `qty` is what the clerk
+/// typed against the supplier's invoice (4 boxes), `baseQty` is what the
+/// ledger moves (48 pens). `chk_purchase_items_base_qty` pins the second
+/// to `qty Ã— packSize`, so the two can never drift â€” the conversion is a
+/// stored fact rather than a multiplication somebody has to remember to
+/// repeat.
+model PurchaseItem {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  school     School   @relation(fields: [schoolId], references: [id], map: "fk_purchase_items_school")
+  purchaseId String   @map("purchase_id") @db.Uuid
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade, map: "fk_purchase_items_purchase")
+  itemId     String   @map("item_id") @db.Uuid
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Restrict, map: "fk_purchase_items_item")
+
+  /// As entered, in packs when the item has one.
+  qty       Decimal @db.Decimal(14, 3)
+  /// Snapshot of `items.pack_size` at entry â€” a school that later
+  /// re-defines a box as 24 must not silently restate last year's
+  /// deliveries (the M14/M15/M21 snapshot rule).
+  packSize  Decimal @default(1) @map("pack_size") @db.Decimal(14, 3)
+  /// `qty Ã— packSize`, in base units. What the ledger receives.
+  baseQty   Decimal @map("base_qty") @db.Decimal(14, 3)
+  /// Per ENTERED unit â€” the number on the supplier's invoice.
+  unitPrice Decimal @map("unit_price") @db.Decimal(12, 2)
+  /// `qty Ã— unitPrice`, pinned by CHECK (both operands are on this row,
+  /// unlike the purchase total).
+  total     Decimal @db.Decimal(12, 2)
+  remarks   String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assetUnits AssetUnit[]
+
+  /// One line per item per delivery. Without it a clerk entering the same
+  /// item twice produces a purchase whose total is right and whose stock
+  /// movement is double-counted — and both numbers look plausible.
+  @@unique([purchaseId, itemId], map: "uq_purchase_items_identity")
+  @@index([purchaseId], map: "idx_purchase_items_purchase")
+  @@index([schoolId, itemId], map: "idx_purchase_items_item")
+  @@map("purchase_items")
+}
+
+/// **The source of truth for every stock balance** (roadmap Â§6). Append-
+/// only, like `audit_logs`, `sms_credits` and `pf_ledger`: no
+/// `deleted_at`, no `updated_at`, no UPDATE path in the repository. A
+/// mistake is corrected by another row, never by editing one.
+///
+/// `balance_after` is a **running** balance written under a row lock on
+/// the item, so the ledger reads correctly at rest and a concurrent issue
+/// cannot interleave two rows onto the same starting balance. It is also
+/// what makes "how did we get to 12 reams" answerable by reading down a
+/// column rather than by summing everything above it.
+///
+/// `chk_stock_ledger_one_sided` makes each row a movement in exactly one
+/// direction (the M20 `chk_voucher_entries_one_sided` shape), and
+/// `balance_after >= 0` is the invariant the whole module protects: a
+/// school cannot issue what it does not have, and the database says so
+/// even if a service forgets.
+model StockLedgerEntry {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_stock_ledger_school")
+  itemId   String @map("item_id") @db.Uuid
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Restrict, map: "fk_stock_ledger_item")
+
+  txn          StockTxnType
+  /// Base units, always. Exactly one of these is > 0.
+  qtyIn        Decimal      @default(0) @map("qty_in") @db.Decimal(14, 3)
+  qtyOut       Decimal      @default(0) @map("qty_out") @db.Decimal(14, 3)
+  balanceAfter Decimal      @map("balance_after") @db.Decimal(14, 3)
+
+  /// What moved the stock: `PURCHASE` / `ISSUE` / `RETURN` / `ADJUST` /
+  /// `DISPOSE` plus the row id, so the register drills through to the
+  /// document. Free-form rather than an FK because it points at four
+  /// different tables â€” the M20 `source_ref` shape.
+  refType  String?  @map("ref_type") @db.VarChar(40)
+  refId    String?  @map("ref_id") @db.Uuid
+  /// Per base unit at the moment of the movement, for the valuation
+  /// report. Nullable: an issue consumes stock at no new cost.
+  unitCost Decimal? @map("unit_cost") @db.Decimal(12, 4)
+  /// Roadmap Â§4 makes a reason MANDATORY on an adjustment; the service
+  /// enforces it per txn type, since a purchase needs none.
+  remarks  String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy String?  @map("created_by") @db.Uuid
+
+  @@index([schoolId, itemId, createdAt], map: "idx_stock_ledger_item")
+  @@index([schoolId, txn, createdAt], map: "idx_stock_ledger_txn")
+  @@index([refType, refId], map: "idx_stock_ledger_ref")
+  @@map("stock_ledger")
+}
+
+/// One physical thing with a tag on it. Generated by the RECEIVE of an
+/// ASSET purchase line (roadmap Â§4), one row per unit, so ten chairs
+/// bought together become ten rows that can be in ten rooms.
+///
+/// `asset_tag` is unique **ignoring `deleted_at`** â€” the M07 employee-ID
+/// / M09 student-UID / M23 accession rule. It is printed on a sticker
+/// and stuck to a projector; re-issuing it to a different projector
+/// would make every asset register printed since then lie about what was
+/// counted.
+///
+/// The custodian is the `InventoryHolderType` shape shared with
+/// `stock_issues`, and Â§8's shared-custody case is why DEPARTMENT is one
+/// of its values.
+model AssetUnit {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId       String        @map("school_id") @db.Uuid
+  school         School        @relation(fields: [schoolId], references: [id], map: "fk_asset_units_school")
+  itemId         String        @map("item_id") @db.Uuid
+  item           Item          @relation(fields: [itemId], references: [id], onDelete: Restrict, map: "fk_asset_units_item")
+  /// Where it came from. Nullable because a school adopting the system
+  /// enters the furniture it already owns, which no purchase describes.
+  purchaseItemId String?       @map("purchase_item_id") @db.Uuid
+  purchaseItem   PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull, map: "fk_asset_units_purchase_item")
+
+  assetTag  String          @map("asset_tag") @db.VarChar(60)
+  serialNo  String?         @map("serial_no") @db.VarChar(80)
+  status    AssetUnitStatus @default(IN_STORE)
+  condition AssetCondition  @default(GOOD)
+
+  /// Location. Roadmap Â§3's "room/dept text + dept_id NULL": the room is
+  /// free text (this system has no room master â€” see the module doc),
+  /// the department is a real FK because the asset register groups by it.
+  locationText String? @map("location_text") @db.VarChar(160)
+
+  /// The shared holder shape. `chk_asset_units_custodian` pins exactly
+  /// the right columns for the kind, so a PERSON custodian cannot also
+  /// carry a department and leave two reports disagreeing about who has
+  /// the projector. NULL kind = in the store, held by nobody.
+  custodianType       InventoryHolderType? @map("custodian_type")
+  custodianDeptId     String?              @map("custodian_dept_id") @db.Uuid
+  custodianDept       Department?          @relation(fields: [custodianDeptId], references: [id], onDelete: Restrict, map: "fk_asset_units_custodian_dept")
+  /// Polymorphic over teachers/staff, no FK (the M12/M21/M23 precedent).
+  custodianPersonType InventoryPersonType? @map("custodian_person_type")
+  custodianPersonId   String?              @map("custodian_person_id") @db.Uuid
+  custodianRoom       String?              @map("custodian_room") @db.VarChar(160)
+
+  purchasePrice Decimal?  @map("purchase_price") @db.Decimal(12, 2)
+  purchaseDate  DateTime? @map("purchase_date") @db.Date
+  /// Roadmap Â§7: warranty must not predate the purchase â€” pinned by
+  /// `chk_asset_units_warranty`, because a warranty that expired before
+  /// the thing was bought is a typo the register would print forever.
+  warrantyUntil DateTime? @map("warranty_until") @db.Date
+
+  /// Disposal evidence. Roadmap Â§6 makes disposal an approved act, so the
+  /// approver is recorded beside the reason and
+  /// `chk_asset_units_disposal_evidence` refuses a DISPOSED/LOST row
+  /// without them â€” the M23 waiver-evidence rule.
+  disposedAt     DateTime? @map("disposed_at") @db.Date
+  disposalReason String?   @map("disposal_reason")
+  disposedBy     String?   @map("disposed_by") @db.Uuid
+  notes          String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, itemId, status], map: "idx_asset_units_item")
+  @@index([schoolId, status], map: "idx_asset_units_status")
+  @@index([schoolId, custodianDeptId], map: "idx_asset_units_dept")
+  @@index([schoolId, custodianPersonId], map: "idx_asset_units_person")
+  @@index([schoolId, warrantyUntil], map: "idx_asset_units_warranty")
+  @@map("asset_units")
+}
+
+/// A gate pass: consumables going out of the store to a department, a
+/// person or a room. `issue_no` is gap-free (`ISS-{YY}-{SEQ5}`).
+///
+/// Roadmap Â§3 offered "items JSONB **or** child rows"; these are child
+/// rows, because the return flow has to move a quantity on one line of a
+/// multi-item slip and a JSON column cannot be updated in place without
+/// re-writing the other lines beside it.
+model StockIssue {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_stock_issues_school")
+
+  issueNo   String   @map("issue_no") @db.VarChar(40)
+  issueDate DateTime @map("issue_date") @db.Date
+
+  /// The shared holder shape â€” the same three columns the asset register
+  /// uses for a custodian, pinned by `chk_stock_issues_recipient`.
+  issuedToType       InventoryHolderType  @map("issued_to_type")
+  issuedToDeptId     String?              @map("issued_to_dept_id") @db.Uuid
+  issuedToDept       Department?          @relation(fields: [issuedToDeptId], references: [id], onDelete: Restrict, map: "fk_stock_issues_dept")
+  issuedToPersonType InventoryPersonType? @map("issued_to_person_type")
+  issuedToPersonId   String?              @map("issued_to_person_id") @db.Uuid
+  issuedToRoom       String?              @map("issued_to_room") @db.VarChar(160)
+
+  purpose String?
+  /// Derived by `deriveIssueStatus`, never assigned â€” see the enum.
+  status  StockIssueStatus @default(ISSUED)
+  remarks String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  items StockIssueItem[]
+
+  /// Somebody signed for this slip — see `uq_purchases_no`.
+  @@unique([schoolId, issueNo], map: "uq_stock_issues_no")
+  @@index([schoolId, status, issueDate], map: "idx_stock_issues_status")
+  @@index([schoolId, issuedToDeptId], map: "idx_stock_issues_dept")
+  @@map("stock_issues")
+}
+
+/// One line of a gate pass. `returned_qty` is the whole return flow: a
+/// return moves this number up and writes a RETURN row in the ledger, and
+/// `chk_stock_issue_items_returned` refuses a return of more than went
+/// out (roadmap Â§6, "consumable returns â‰¤ issued").
+///
+/// **No soft delete** â€” a line is part of a document that was handed to
+/// somebody, and the correction for a wrong issue is a return, not an
+/// erasure.
+model StockIssueItem {
+  id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String     @map("school_id") @db.Uuid
+  school   School     @relation(fields: [schoolId], references: [id], map: "fk_stock_issue_items_school")
+  issueId  String     @map("issue_id") @db.Uuid
+  issue    StockIssue @relation(fields: [issueId], references: [id], onDelete: Cascade, map: "fk_stock_issue_items_issue")
+  itemId   String     @map("item_id") @db.Uuid
+  item     Item       @relation(fields: [itemId], references: [id], onDelete: Restrict, map: "fk_stock_issue_items_item")
+
+  /// Base units â€” the conversion happened at the desk, and the ledger and
+  /// this line agree because they are written in the same transaction.
+  qty         Decimal @db.Decimal(14, 3)
+  returnedQty Decimal @default(0) @map("returned_qty") @db.Decimal(14, 3)
+  remarks     String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  /// One line per item, so a return has exactly one row to move
+  /// `returned_qty` on and cannot be split ambiguously across two.
+  @@unique([issueId, itemId], map: "uq_stock_issue_items_identity")
+  @@index([issueId], map: "idx_stock_issue_items_issue")
+  @@index([schoolId, itemId], map: "idx_stock_issue_items_item")
+  @@map("stock_issue_items")
 }

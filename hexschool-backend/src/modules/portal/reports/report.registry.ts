@@ -398,6 +398,72 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [],
     formats: ['xlsx'],
   },
+  // ── Inventory (M24) ─────────────────────────────────────────────────
+  {
+    code: 'inventory.stock',
+    name: 'Current stock & valuation',
+    module: 'Inventory',
+    description:
+      'Balance per item with its value at the last price paid, and what is at or below reorder level.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/stock',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'inventory.ledger',
+    name: 'Item ledger',
+    module: 'Inventory',
+    description:
+      'Every movement of one item — in, out and corrected — with the running balance beside it.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/ledger/:itemId',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'inventory.purchases',
+    name: 'Purchases by supplier',
+    module: 'Inventory',
+    description: 'Received deliveries totalled per supplier and per month.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/purchases',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'inventory.assets',
+    name: 'Asset register',
+    module: 'Inventory',
+    description:
+      'Tagged units by location, custodian and status — written-off units excluded.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/assets',
+    params: [],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'inventory.warranty',
+    name: 'Warranties expiring',
+    module: 'Inventory',
+    description:
+      'Assets whose warranty has lapsed, is about to, or was never recorded.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/warranty',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'inventory.consumption',
+    name: 'Consumption by department',
+    module: 'Inventory',
+    description:
+      'What each department, person and room consumed over a window, net of returns.',
+    permission: 'inventory.report',
+    endpoint: '/inventory/reports/consumption',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

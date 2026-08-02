@@ -547,6 +547,42 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['transport.report', 'Run the roster, expense, utilization and fee reports'],
     ['transport.export', 'Download transport reports and the driver’s sheet'],
   ]),
+
+  // ── Module 24: Inventory & Assets ───────────────────────────────────
+  // Three separations, each with a name behind it. Receiving a delivery
+  // is the store keeper's job and **cancelling a received one is not** —
+  // a cancellation reverses stock that may already have been handed out,
+  // which is the M20 `voucher.cancel` rule in a second ledger. Correcting
+  // a count (`inventory.adjust`) and writing an asset off
+  // (`inventory.asset.dispose`) are likewise the two places where things
+  // leave the books without anybody receiving them, so roadmap §4 and §6
+  // ask for a permission on each — the M16/M20/M21/M23/M25 rule,
+  // continued into the store room.
+  ...define('inventory', [
+    ['inventory.view', 'Open the store, the asset register and the reports'],
+    [
+      'inventory.catalog.manage',
+      'Create and edit suppliers, item categories and items',
+    ],
+    ['inventory.purchase.manage', 'Enter and edit draft purchases'],
+    ['inventory.purchase.receive', 'Receive a delivery into stock'],
+    [
+      'inventory.purchase.cancel',
+      'Cancel a received purchase, reversing its stock movements',
+    ],
+    ['inventory.issue', 'Issue consumables out of the store and take them back'],
+    [
+      'inventory.adjust',
+      'Correct a stock balance after a physical count (reason required)',
+    ],
+    ['inventory.asset.manage', 'Register, assign, transfer and repair assets'],
+    [
+      'inventory.asset.dispose',
+      'Write an asset off as disposed or lost (reason required)',
+    ],
+    ['inventory.report', 'Run the stock, ledger, purchase and asset reports'],
+    ['inventory.export', 'Download inventory reports and asset label sheets'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

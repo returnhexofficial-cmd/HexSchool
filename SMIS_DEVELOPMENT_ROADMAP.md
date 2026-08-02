@@ -104,7 +104,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 21 | HR & Payroll | ☑ |
 | 22 | Assignments & Homework | ☑ |
 | 23 | Library Management | ☑ |
-| 24 | Inventory & Assets | ☐ |
+| 24 | Inventory & Assets | ☑ |
 | 25 | Transport Management | ☑ |
 | 26 | Hostel Management | ☐ |
 | 27 | Document Management & Certificates | ☐ |
@@ -1686,12 +1686,12 @@ School assets (furniture, computers, lab equipment) and consumable stock (statio
 - `stock_issues`: `id, issue_no, issued_to ENUM('DEPARTMENT','PERSON','ROOM'), ref, items JSONB or child rows, status ENUM('ISSUED','PARTIAL_RETURN','RETURNED')` + rows (item, qty, returned_qty).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Masters + purchase flow (RECEIVE → ledger in + asset_units generation for ASSET items with tag sequence + label PDF).
-- [ ] Issue/return for consumables (ledger out/in) and asset assignment/transfer (custodian history via audit).
-- [ ] Stock adjustment (count corrections, permission + reason) & disposal flow (approval → status + ledger).
-- [ ] Low-stock alert job (reorder_level) → admin notification.
-- [ ] Optional posting: RECEIVED purchase → expense/asset voucher via posting map.
-- [ ] Reports: current stock (valuation FIFO-simple: last price × qty — document simplification), item ledger, purchases by supplier/period, asset register (by location/custodian/status), warranty-expiring, consumption by department.
+- [x] Masters + purchase flow (RECEIVE → ledger in + asset_units generation for ASSET items with tag sequence + label PDF). *(One transaction: ledger rows, each item's last unit cost, one tagged unit per asset bought with gap-free tags, then the status flip. The **label PDF is the asset-register check sheet** — laid out to be carried round a building with a blank column to tick — rather than a barcode sheet; M23's Code 128-B encoder is ready to reuse and is listed as a TODO.)*
+- [x] Issue/return for consumables (ledger out/in) and asset assignment/transfer (custodian history via audit). *(Assign and transfer are ONE call, because a transfer is an assignment to somebody else — `canTransition` allows ASSIGNED → ASSIGNED for exactly that. Custodian history is the audit diff, as §4 specifies. A return moves `returned_qty` by an **increment** and the slip's status is then re-derived from the rows as they stand.)*
+- [x] Stock adjustment (count corrections, permission + reason) & disposal flow (approval → status + ledger). *(The adjustment endpoint takes **what is on the shelf**, not a delta, and derives the movement — which is also §8's count-sheet wizard. `inventory.adjust` and `inventory.asset.dispose` are two codes the Office Staff deliberately lacks.)*
+- [x] Low-stock alert job (reorder_level) → admin notification. *(Daily, gated on a per-school weekday read in **Dhaka** rather than UTC; one summary naming the worst five rather than one bell per item. `reorder_level = null` means "do not tell me", which is not the same as 0.)*
+- [x] Optional posting: RECEIVED purchase → expense/asset voucher via posting map. *(A real DEBIT voucher through M20's `postAuto`, routed by a new **`PostingMapKind.INVENTORY_CATEGORY`** — the first use of the append-only kind M20 designed for this. Lines merge by account and credit only what they debited.)*
+- [x] Reports: current stock (valuation FIFO-simple: last price × qty — document simplification), item ledger, purchases by supplier/period, asset register (by location/custodian/status), warranty-expiring, consumption by department. *(All six, XLSX for each and PDF for the register. **The simplification is documented on the report itself**, not only in the docs. Consumption is built from the ledger rather than the slips, so it is net of returns even when a return crosses the window.)*
 ### APIs
 ```
 CRUD /api/v1/inventory/suppliers|categories|items
@@ -1701,10 +1701,10 @@ GET  /api/v1/inventory/reports/stock|ledger/:item|assets|low-stock|consumption
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Item catalog + stock badges; purchase entry form (line grid, supplier autocomplete) + receive confirm.
-- [ ] Issue desk (recipient picker, multi-item rows, print gate-pass-style slip); return processing.
-- [ ] Asset register table (filters: location, custodian, status), asset detail (history timeline), tag label printing.
-- [ ] Adjustment & disposal dialogs with reason enforcement; low-stock dashboard widget.
+- [x] Item catalog + stock badges; purchase entry form (line grid, supplier autocomplete) + receive confirm. *(The grid totals in the **same arithmetic the server uses** — each line rounded before the sum — or the header and the stored lines disagree by a paisa and the voucher will not post.)*
+- [x] Issue desk (recipient picker, multi-item rows, print gate-pass-style slip); return processing. *(The Issue button is enabled by the **server's** verdict via `/issues/preview`, never by a client-side sum, and refusals go red per line.)*
+- [x] Asset register table (filters: location, custodian, status), asset detail (history timeline), tag label printing. *(The history timeline is the audit log, which is where §4 puts custodian history; label printing ships as the A4 check sheet — barcode labels are a TODO.)*
+- [x] Adjustment & disposal dialogs with reason enforcement; low-stock dashboard widget. *(The widget is a header badge on the workspace rather than a tab, so an empty exam-paper shelf is not something to discover by clicking through.)*
 
 ## 6. Business Rules
 - Ledger is the source of truth; stock balance never edited directly.
@@ -1721,14 +1721,14 @@ GET  /api/v1/inventory/reports/stock|ledger/:item|assets|low-stock|consumption
 - Physical count mismatch → bulk adjustment wizard from count sheet import.
 
 ## 9. Testing Checklist
-- [ ] Unit: ledger balance math incl. adjustments/reversals; unit conversion.
-- [ ] e2e: purchase→receive→issue→return chain; disposal approval.
-- [ ] Frontend: purchase grid, asset timeline.
+- [x] Unit: ledger balance math incl. adjustments/reversals; unit conversion. *(128 golden engine tests written before a service existed, plus 25 service tests.)*
+- [x] e2e: purchase→receive→issue→return chain; disposal approval. *(81-case `inventory.e2e-spec.ts`, including every database invariant probed, the separation of duties against live requests, and a concurrency race proving the running balance stays exact.)*
+- [x] Frontend: purchase grid, asset timeline. *(The grid's line arithmetic and every validation rule are covered by 61 Vitest cases; the in-browser click-throughs are listed in the completion doc's Remaining TODOs.)*
 
 ## 10. Completion Checklist
-- [ ] Stock + assets + reports
-- [ ] Alerts + labels
-- [ ] Docs: `docs/modules/24-inventory.md`
+- [x] Stock + assets + reports
+- [x] Alerts + labels
+- [x] Docs: `docs/modules/24-inventory.md`
 
 ---
 

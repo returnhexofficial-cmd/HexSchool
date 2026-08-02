@@ -45,6 +45,13 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   // chart (as is `4130 Transport Fee Income`, which the fee head maps to),
   // so a fresh school posts a fuel bill correctly with nothing configured.
   [SYSTEM_SLOTS.TRANSPORT_EXPENSE]: '5800',
+  // M24 — both already in the seeded 61-account BD chart, so a fresh
+  // school posts a delivery correctly with nothing configured. A school
+  // that wants computers on `1540` and library books on `1530` maps those
+  // categories through `PostingMapKind.INVENTORY_CATEGORY`; these are
+  // where everything else lands.
+  [SYSTEM_SLOTS.INVENTORY_CONSUMABLE_EXPENSE]: '5500',
+  [SYSTEM_SLOTS.INVENTORY_ASSET_DEFAULT]: '1520',
 };
 
 export interface ResolvedPostingMap {
@@ -54,6 +61,8 @@ export interface ResolvedPostingMap {
   methods: Map<string, string>;
   /** System slot → account id. */
   system: Map<string, string>;
+  /** M24: `item_categories.id` → the account a purchase of it posts to. */
+  inventoryCategories: Map<string, string>;
 }
 
 @Injectable()
@@ -144,14 +153,26 @@ export class PostingMapService {
     const heads = new Map<string, string>();
     const methods = new Map<string, string>();
     const system = new Map<string, string>();
+    const inventoryCategories = new Map<string, string>();
 
+    // Switched on the kind explicitly rather than falling through to
+    // `system`: when M24 appended `INVENTORY_CATEGORY`, a catch-all
+    // `else` would have quietly filed category mappings among the system
+    // slots, where nothing reads them and a refKey collision would be
+    // invisible. An append-only enum needs an exhaustive reader.
     for (const mapping of mappings) {
-      if (mapping.kind === PostingMapKind.FEE_HEAD) {
-        heads.set(mapping.refKey, mapping.accountId);
-      } else if (mapping.kind === PostingMapKind.PAYMENT_METHOD) {
-        methods.set(mapping.refKey, mapping.accountId);
-      } else {
-        system.set(mapping.refKey, mapping.accountId);
+      switch (mapping.kind) {
+        case PostingMapKind.FEE_HEAD:
+          heads.set(mapping.refKey, mapping.accountId);
+          break;
+        case PostingMapKind.PAYMENT_METHOD:
+          methods.set(mapping.refKey, mapping.accountId);
+          break;
+        case PostingMapKind.INVENTORY_CATEGORY:
+          inventoryCategories.set(mapping.refKey, mapping.accountId);
+          break;
+        default:
+          system.set(mapping.refKey, mapping.accountId);
       }
     }
 
@@ -161,7 +182,7 @@ export class PostingMapService {
       if (account && !account.isGroup) system.set(slot, account.id);
     }
 
-    return { heads, methods, system };
+    return { heads, methods, system, inventoryCategories };
   }
 
   /**

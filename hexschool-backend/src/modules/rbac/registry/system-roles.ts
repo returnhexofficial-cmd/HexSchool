@@ -252,6 +252,17 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'transport.assign.override',
       'transport.report',
       'transport.export',
+      // M24 — the head holds the three codes that take school property
+      // OFF the books: cancelling a received delivery, correcting a count
+      // and writing an asset off. Running the store day to day (buying,
+      // receiving, issuing, tagging) is the office's work, and is
+      // deliberately not here.
+      'inventory.view',
+      'inventory.purchase.cancel',
+      'inventory.adjust',
+      'inventory.asset.dispose',
+      'inventory.report',
+      'inventory.export',
     ],
   },
   {
@@ -417,6 +428,14 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'transport.expense.manage',
       'transport.report',
       'transport.export',
+      // M24 — a received purchase posts to the ledger, so the accountant
+      // reads the store's reports to reconcile what was capitalized
+      // against what was expensed. They do not run it: buying, receiving
+      // and issuing are the office's, and the two write-off codes are the
+      // head's.
+      'inventory.view',
+      'inventory.report',
+      'inventory.export',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.
@@ -561,6 +580,22 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'transport.assign',
       'transport.report',
       'transport.export',
+      // M24 — the office IS the store: the catalogue, the suppliers, the
+      // deliveries, the gate passes and the asset tags. Deliberately NOT
+      // granted: `inventory.purchase.cancel` (reversing stock a school may
+      // already have issued is the head's call — the M20 `voucher.cancel`
+      // rule in a second ledger), `inventory.adjust` (the person who
+      // counts the shelf must not also be the person who decides the
+      // ledger was wrong) and `inventory.asset.dispose` (writing a
+      // projector off is a decision with a name on it).
+      'inventory.view',
+      'inventory.catalog.manage',
+      'inventory.purchase.manage',
+      'inventory.purchase.receive',
+      'inventory.issue',
+      'inventory.asset.manage',
+      'inventory.report',
+      'inventory.export',
     ],
   },
 ];

@@ -278,6 +278,30 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '{{school}}: {{student_name}} is on route {{route}}, boarding at {{stop}} — pickup {{pickup}}, drop {{drop}}. Monthly fare {{fee}} BDT.',
   },
+  // ── Module 24 — inventory ────────────────────────────────────────────
+  {
+    code: 'INVENTORY_LOW_STOCK',
+    module: 'Inventory',
+    description:
+      'Items at or below their reorder level — the weekly store sweep',
+    // IN_APP first for the M22/M23/M25 reason: this is an office problem
+    // that the people who can act on it are already looking at, and a
+    // store with four hundred items would spend real credit weekly.
+    channels: [C.IN_APP, C.SMS],
+    variables: ['count', 'items', 'school'],
+    defaultBody:
+      '{{school}} store: {{count}} item(s) at or below reorder level — {{items}}. Raise a purchase before they run out.',
+  },
+  {
+    code: 'INVENTORY_WARRANTY_EXPIRING',
+    module: 'Inventory',
+    description:
+      'Asset warranties that have lapsed, are about to, or were never recorded',
+    channels: [C.IN_APP, C.SMS],
+    variables: ['count', 'assets', 'school'],
+    defaultBody:
+      '{{school}}: {{count}} asset warranty(ies) need attention — {{assets}}. Claim or renew before cover ends.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

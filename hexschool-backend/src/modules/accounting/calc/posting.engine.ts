@@ -63,6 +63,15 @@ export const SYSTEM_SLOTS = {
    *  voucher is a DEBIT one. Transport fee INCOME needs no slot: it is a
    *  fee head like any other and posts through the head → account map. */
   TRANSPORT_EXPENSE: 'TRANSPORT_EXPENSE',
+  // ── M24 inventory ───────────────────────────────────────────────────
+  // A received purchase posts Dr <where it lands> / Cr cash. WHERE it
+  // lands is the school's accounting policy, not something the store can
+  // infer — so `PostingMapKind.INVENTORY_CATEGORY` maps a category to an
+  // account and these two are the fallbacks when it does not.
+  /** Consumables: expensed on purchase, per the simplification below. */
+  INVENTORY_CONSUMABLE_EXPENSE: 'INVENTORY_CONSUMABLE_EXPENSE',
+  /** Assets: capitalized, defaulting to the broadest fixed-asset line. */
+  INVENTORY_ASSET_DEFAULT: 'INVENTORY_ASSET_DEFAULT',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

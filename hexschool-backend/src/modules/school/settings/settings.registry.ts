@@ -1166,6 +1166,92 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       true,
     ],
   ]),
+
+  // ── Module 24: Inventory & Assets ───────────────────────────────────
+  ...g(SettingsGroup.inventory, [
+    ['inventory.enabled', 'boolean', 'The school runs a store', true],
+    // Document-number patterns, the M07 `general.employee_id_pattern`
+    // convention: the counter is per school and per year, so a school
+    // that restarts numbering each session gets what it expects.
+    [
+      'inventory.purchase_no_pattern',
+      'string',
+      'Purchase number pattern ({YY}, {SEQ5} …)',
+      'PO-{YY}-{SEQ5}',
+    ],
+    [
+      'inventory.issue_no_pattern',
+      'string',
+      'Issue (gate pass) number pattern',
+      'ISS-{YY}-{SEQ5}',
+    ],
+    // Asset tags deliberately carry NO year token by default. A tag is a
+    // sticker on a projector for the whole of its life, and a school
+    // reading `AST-00042` off a label should not have to know which year
+    // it was bought in to find the row.
+    [
+      'inventory.asset_tag_pattern',
+      'string',
+      'Asset tag pattern — printed on the label, never reused',
+      'AST-{SEQ5}',
+    ],
+    [
+      'inventory.low_stock_alert_enabled',
+      'boolean',
+      'Send the low-stock alert for items at or below their reorder level',
+      true,
+    ],
+    // IN_APP for the M22/M23/M25 reason: this is an OFFICE problem, the
+    // people who can act on it are already looking at the bell, and a
+    // store with four hundred items would spend real credit weekly.
+    [
+      'inventory.low_stock_alert_channel',
+      'string',
+      'Channel for store alerts: IN_APP or SMS',
+      'IN_APP',
+    ],
+    [
+      'inventory.low_stock_alert_weekday',
+      'number',
+      'Day of week the low-stock sweep runs (0 = Sunday)',
+      6,
+    ],
+    [
+      'inventory.warranty_alert_days',
+      'number',
+      'Days before an asset warranty expires that it is flagged',
+      30,
+    ],
+    // Roadmap §4's optional posting. On by default, because a school that
+    // has switched accounting on wants its purchases in the books; a
+    // missing account logs and is skipped, never throws (the M20 rule).
+    [
+      'inventory.auto_post_accounting',
+      'boolean',
+      'Post received purchases to the ledger (Module 20)',
+      true,
+    ],
+    // **The valuation method, named in the setting so nobody has to guess
+    // what the total on the report means.** Roadmap §4 asks for last
+    // price × qty and calls it FIFO-simple; it is not FIFO, and the
+    // report says so on its face.
+    [
+      'inventory.valuation_method',
+      'string',
+      'Stock valuation basis (LAST_PRICE — the only method implemented)',
+      'LAST_PRICE',
+    ],
+    // A receipt that generates one tagged unit per asset bought is the
+    // point of the module; a school buying 500 chairs in one delivery
+    // still should not create 500 rows by accident, so the batch is
+    // capped and the message says to split the purchase.
+    [
+      'inventory.max_asset_units_per_receipt',
+      'number',
+      'Most tagged units one purchase receipt may generate',
+      200,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

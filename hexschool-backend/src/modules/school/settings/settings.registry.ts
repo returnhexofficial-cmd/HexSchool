@@ -957,12 +957,37 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
     // teachers: an office assistant borrowing a reference book is doing
     // the same thing a teacher is, and a shorter loan for them would be
     // a distinction the school never asked for.
-    ['library.loan_days_student', 'number', 'Loan period for a student (days)', 7],
-    ['library.loan_days_teacher', 'number', 'Loan period for a teacher (days)', 14],
+    [
+      'library.loan_days_student',
+      'number',
+      'Loan period for a student (days)',
+      7,
+    ],
+    [
+      'library.loan_days_teacher',
+      'number',
+      'Loan period for a teacher (days)',
+      14,
+    ],
     ['library.loan_days_staff', 'number', 'Loan period for staff (days)', 14],
-    ['library.max_books_student', 'number', 'Books a student may hold at once', 2],
-    ['library.max_books_teacher', 'number', 'Books a teacher may hold at once', 5],
-    ['library.max_books_staff', 'number', 'Books a staff member may hold at once', 3],
+    [
+      'library.max_books_student',
+      'number',
+      'Books a student may hold at once',
+      2,
+    ],
+    [
+      'library.max_books_teacher',
+      'number',
+      'Books a teacher may hold at once',
+      5,
+    ],
+    [
+      'library.max_books_staff',
+      'number',
+      'Books a staff member may hold at once',
+      3,
+    ],
     ['library.max_renews', 'number', 'Times one loan may be renewed', 2],
     ['library.fine_per_day', 'number', 'Overdue fine per day (BDT)', 2],
     [
@@ -1059,7 +1084,12 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Days before the same overdue loan is chased again',
       7,
     ],
-    ['library.opac_enabled', 'boolean', 'Show the catalogue in the portal', true],
+    [
+      'library.opac_enabled',
+      'boolean',
+      'Show the catalogue in the portal',
+      true,
+    ],
     [
       'library.opac_allow_reservation',
       'boolean',
@@ -1251,6 +1281,109 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       'Most tagged units one purchase receipt may generate',
       200,
     ],
+  ]),
+
+  // ── Module 26: Hostel Management ────────────────────────────────────
+  ...g(SettingsGroup.hostel, [
+    ['hostel.enabled', 'boolean', 'The school runs a boarding house', true],
+    // The M16 link, twice: a hostel bill is a room charge and a food
+    // charge, and a school wants to see them apart in its fee reports.
+    // An id wins; the NAME is the fallback, so a school that simply
+    // created a fee head called "Hostel" bills correctly with nothing
+    // configured — the M20 posting-map / M25 transport shape.
+    [
+      'hostel.fee_head_id',
+      'string',
+      'Fee head the monthly seat rent is billed under',
+      '',
+    ],
+    [
+      'hostel.fee_head_name',
+      'string',
+      'Fee head name to fall back on when no id is set',
+      'Hostel',
+    ],
+    [
+      'hostel.mess_fee_head_id',
+      'string',
+      'Fee head the monthly mess charge is billed under',
+      '',
+    ],
+    [
+      'hostel.mess_fee_head_name',
+      'string',
+      'Mess fee head name to fall back on when no id is set',
+      'Mess',
+    ],
+    [
+      'hostel.auto_invoice',
+      'boolean',
+      'Add hostel and mess lines to the monthly fee batch',
+      true,
+    ],
+    [
+      'hostel.prorate_enabled',
+      'boolean',
+      'Charge part of a month when a boarder arrives or leaves mid-month',
+      true,
+    ],
+    [
+      'hostel.default_security_deposit',
+      'number',
+      'Deposit suggested when a new boarder is allocated a bed',
+      0,
+    ],
+    // Roadmap §6's "meal-off min duration setting (e.g., ≥ 3 days)". The
+    // kitchen buys ahead, so a one-night absence saves the school
+    // nothing and crediting it would cost money to be told about.
+    [
+      'hostel.meal_off_min_days',
+      'number',
+      'Shortest meal-off a boarder may claim a credit for',
+      3,
+    ],
+    // Zero means "derive from the plan's monthly charge over the days of
+    // that month", which is the only form that can never over-credit.
+    // A flat rate above zero is the school's own figure — see
+    // `mess.engine.ts` for why the credit is then capped.
+    [
+      'hostel.mess_day_rate',
+      'number',
+      'Flat per-day mess credit; 0 derives it from the plan',
+      0,
+    ],
+    // Deliberately OFF, mirroring `fees.dues_block_exit_status` (M16) and
+    // `library.clearance_block_exit` (M23): a school moving a student out
+    // mid-dispute still has to be able to record it, so the default is a
+    // warning the office reads.
+    [
+      'hostel.vacate_block_dues',
+      'boolean',
+      'Refuse to release a bed while fees are outstanding',
+      false,
+    ],
+    [
+      'hostel.notify_guardian_on_allocation',
+      'boolean',
+      'Tell the guardian the hostel, room and bed when a boarder is allocated',
+      false,
+    ],
+    [
+      'hostel.auto_post_accounting',
+      'boolean',
+      'Post security deposits and their refunds to the ledger (Module 20)',
+      true,
+    ],
+    [
+      'hostel.bed_no_prefix',
+      'string',
+      'Prefix bulk bed generation uses ("B" → B1, B2, B3 …)',
+      'B',
+    ],
+    // The M23 200-copy / M24 transaction-budget cap: an unbounded loop
+    // inserting rows inside one transaction is how a fat-fingered number
+    // takes the request down.
+    ['hostel.max_beds_per_room', 'number', 'Most beds one room may hold', 20],
   ]),
 ];
 

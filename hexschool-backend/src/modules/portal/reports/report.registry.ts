@@ -464,6 +464,50 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [P.from, P.to],
     formats: ['xlsx'],
   },
+  // ── Hostel (M26) ────────────────────────────────────────────────────
+  {
+    code: 'hostel.occupancy',
+    name: 'Occupancy',
+    module: 'Hostel',
+    description:
+      'Beds taken, free and out of service — by hostel, by floor and by room.',
+    permission: 'hostel.report',
+    endpoint: '/hostel/reports/occupancy',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'hostel.residents',
+    name: 'Resident register',
+    module: 'Hostel',
+    description:
+      'Who sleeps where, with the guardian to ring — the register a warden carries.',
+    permission: 'hostel.report',
+    endpoint: '/hostel/reports/residents',
+    params: [],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'hostel.dues',
+    name: 'Resident fee dues',
+    module: 'Hostel',
+    description: 'What each boarder still owes, read from the fee ledger.',
+    permission: 'hostel.report',
+    endpoint: '/hostel/reports/dues',
+    params: [],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'hostel.mealoffs',
+    name: 'Meal-off summary',
+    module: 'Hostel',
+    description:
+      'Days claimed, approved and credited per boarder over a window.',
+    permission: 'hostel.report',
+    endpoint: '/hostel/reports/meal-offs',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

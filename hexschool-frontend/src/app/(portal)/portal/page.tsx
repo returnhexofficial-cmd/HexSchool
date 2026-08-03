@@ -28,6 +28,8 @@ import { AssignmentPanels } from "./assignment-panels";
 import { LibraryPanels } from "./library-panels";
 import { opacApi } from "@/lib/api/library";
 import { TransportPanels } from "./transport-panels";
+import { HostelPanels } from "./hostel-panels";
+import { hostelPortalApi } from "@/lib/api/hostel";
 import { portalTransportApi } from "@/lib/api/transport";
 import { StudentPanels } from "./student-panels";
 
@@ -100,6 +102,7 @@ function StudentView() {
       />
       <LibraryPanels fetchers={{ key: "self", me: opacApi.me }} />
       <TransportPanels fetchers={{ key: "self", get: portalTransportApi.me }} />
+      <HostelPanels fetchers={{ key: "self", get: hostelPortalApi.mine }} />
       <MessagesPanel />
       <ContactSchoolCard />
     </>
@@ -193,6 +196,17 @@ function ParentView({
           fetchers={{
             key: `child-${selected}`,
             get: () => portalTransportApi.child(selected),
+          }}
+        />
+      )}
+      {selected && (
+        /* Same reasoning as transport: there is nothing a boarder can DO
+           here, so parent and child see one panel. */
+        <HostelPanels
+          key={`hostel-${selected}`}
+          fetchers={{
+            key: `child-${selected}`,
+            get: () => hostelPortalApi.forChild(selected),
           }}
         />
       )}

@@ -15,6 +15,7 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StudentModule } from '../student/student.module';
 import { TeacherModule } from '../teacher/teacher.module';
 import { TimetableModule } from '../timetable/timetable.module';
+import { HostelModule } from '../hostel/hostel.module';
 import { TransportModule } from '../transport/transport.module';
 import { WebsiteModule } from '../website/website.module';
 import { DashboardController } from './controllers/dashboard.controller';
@@ -82,6 +83,11 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // projection (no other rider, no capacity, no licence dates) and
     // PortalModule only says which student is asking.
     TransportModule,
+    // M26 — the same shape a sixth time: HostelModule returns a thin
+    // projection (the building, the room, the bed, the mess plan and the
+    // child's own meal-offs — no other boarder, no occupancy figure) and
+    // PortalModule only answers which student is asking.
+    HostelModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

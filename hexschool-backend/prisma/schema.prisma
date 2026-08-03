@@ -101,6 +101,7 @@ enum SettingsGroup {
   library
   transport
   inventory
+  hostel
 
   @@map("settings_group_enum")
 }
@@ -738,6 +739,11 @@ enum VoucherSource {
   /// first auto-posted voucher in the system that spends money rather
   /// than receiving it, which is why it posts as a DEBIT voucher.
   TRANSPORT
+  /// M26 — the hostel security deposit, and the only auto-posted pair in
+  /// the system: a CONTRA-shaped receipt raising a liability when the
+  /// deposit is taken, and a DEBIT discharging it when it is handed back.
+  /// Hostel and mess FEES are ordinary fee heads and post as `FEES`.
+  HOSTEL
 
   @@map("voucher_source_enum")
 }
@@ -1223,6 +1229,88 @@ enum StockIssueStatus {
   @@map("stock_issue_status_enum")
 }
 
+/// Who a hostel is for. Deliberately two values and no `MIXED`: a BD
+/// school's boarding house is a boys' house or a girls' house, and the
+/// gender check the module exists to enforce has no meaning without that.
+/// A school running staff quarters keeps them out of here — they are not
+/// student accommodation and none of this module's billing applies.
+enum HostelType {
+  BOYS
+  GIRLS
+
+  @@map("hostel_type_enum")
+}
+
+/// Shared by `hostels` and `mess_plans` — both are things a school turns
+/// off without deleting (a wing closed for the monsoon, a plan withdrawn
+/// at the end of a term), and a second identical enum would only be a
+/// second thing to keep in step.
+enum HostelStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("hostel_status_enum")
+}
+
+enum HostelRoomType {
+  STANDARD
+  AC
+  SHARED
+
+  @@map("hostel_room_type_enum")
+}
+
+/// Roadmap §8's "room under maintenance with occupants → transfer wizard
+/// before status change". A room is MAINTENANCE as a fact about the room
+/// (the ceiling fan is out), which is why it lives here and not on the
+/// beds: putting it on each bed would let a room be half under repair,
+/// which is not a thing a school means.
+enum HostelRoomStatus {
+  ACTIVE
+  MAINTENANCE
+
+  @@map("hostel_room_status_enum")
+}
+
+/// A bed's own availability. **OCCUPIED is a SHADOW, not the truth** —
+/// `uq_hostel_allocations_live_bed` is what makes one bed hold one
+/// boarder, and this column is written in the same transaction so the
+/// occupancy grid can be drawn from one table instead of a join (the M23
+/// `book_copies.status`-shadows-a-reservation precedent). MAINTENANCE is
+/// the one value that is genuinely the bed's own fact, and it is why the
+/// column exists at all.
+enum HostelBedStatus {
+  VACANT
+  OCCUPIED
+  MAINTENANCE
+
+  @@map("hostel_bed_status_enum")
+}
+
+/// The residency lifecycle. SUSPENDED is a boarder who has gone home for
+/// a term and **is still holding their bed** — exactly M25's suspended
+/// rider holding their seat, which is why the live-bed unique excludes
+/// only VACATED.
+enum HostelAllocationStatus {
+  ACTIVE
+  SUSPENDED
+  VACATED
+
+  @@map("hostel_allocation_status_enum")
+}
+
+/// CANCELLED is the M21 lesson repeated: a boarder who withdraws their
+/// own meal-off request is not a school that refused it, and collapsing
+/// the two would make the mess manager's rejection rate a lie.
+enum MealOffStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+
+  @@map("meal_off_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1440,6 +1528,13 @@ model School {
   assetUnits               AssetUnit[]
   stockIssues              StockIssue[]
   stockIssueItems          StockIssueItem[]
+  hostels                  Hostel[]
+  hostelRooms              HostelRoom[]
+  hostelBeds               HostelBed[]
+  hostelAllocations        HostelAllocation[]
+  messPlans                MessPlan[]
+  messEnrollments          MessEnrollment[]
+  mealOffs                 MealOff[]
 
   @@map("schools")
 }
@@ -1869,6 +1964,7 @@ model StaffProfile {
   documents     StaffDocument[]
   /// M25 — set when the school employs its own bus driver.
   driverRecords Driver[]
+  hostels       Hostel[]
 
   // Deliberately NOT deleted_at-scoped: employee IDs are never reused
   // (hand-written in the M07 migration; declared here so drift detection
@@ -2473,6 +2569,7 @@ model Enrollment {
   invoices              Invoice[]
   assignmentSubmissions AssignmentSubmission[]
   transportAssignments  TransportAssignment[]
+  hostelAllocations     HostelAllocation[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -5837,4 +5934,307 @@ model StockIssueItem {
   @@index([issueId], map: "idx_stock_issue_items_issue")
   @@index([schoolId, itemId], map: "idx_stock_issue_items_item")
   @@map("stock_issue_items")
+}
+
+// â”€â”€ Module 26: Hostel Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+/// A boarding house. `type` is what makes the module's one structural
+/// refusal possible â€” a boy may not be given a bed in the girls' hostel,
+/// and no permission reaches that (the M23 structural-vs-policy split).
+///
+/// `capacity` is the school's DECLARED capacity, kept beside the real one
+/// (the number of live beds) rather than instead of it: the two
+/// disagreeing is a fact the occupancy report prints, because a warden
+/// who has quietly put a fourth bed in a three-bed room is exactly what
+/// the head needs to see. It is never used in an allocation decision â€”
+/// the M24 rule that a stored total must not become a second source of
+/// truth, softened to "may exist, may not be believed".
+model Hostel {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_hostels_school")
+
+  name   String     @db.VarChar(160)
+  nameBn String?    @map("name_bn") @db.VarChar(160)
+  type   HostelType
+
+  /// M07 staff record of the warden. Optional: a small school's hostel is
+  /// run by whoever is on duty, and refusing to record the building until
+  /// a warden is appointed would simply mean the building is not recorded.
+  wardenStaffId String?       @map("warden_staff_id") @db.Uuid
+  wardenStaff   StaffProfile? @relation(fields: [wardenStaffId], references: [id], onDelete: Restrict, map: "fk_hostels_warden")
+
+  address  String?
+  phone    String?      @db.VarChar(20)
+  /// Declared capacity â€” see the model note. Zero means "not declared".
+  capacity Int          @default(0)
+  status   HostelStatus @default(ACTIVE)
+  notes    String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  rooms           HostelRoom[]
+  beds            HostelBed[]
+  allocations     HostelAllocation[]
+  messPlans       MessPlan[]
+  messEnrollments MessEnrollment[]
+
+  @@index([schoolId, status], map: "idx_hostels_status")
+  @@map("hostels")
+}
+
+/// A room, and **the price of living in one** â€” the seat rent lives here
+/// rather than on the hostel, for the same reason M25 put the fare on the
+/// stop rather than the route: an AC double and a six-bed shared room in
+/// the same building are not the same product, and a school charges
+/// accordingly.
+///
+/// `bed_count` is the school's intent (roadmap Â§7: "bed_count = generated
+/// beds"); the beds themselves are rows, and generating them is what makes
+/// the two agree. The service refuses to leave them disagreeing.
+model HostelRoom {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_hostel_rooms_school")
+  hostelId String @map("hostel_id") @db.Uuid
+  hostel   Hostel @relation(fields: [hostelId], references: [id], onDelete: Restrict, map: "fk_hostel_rooms_hostel")
+
+  roomNo     String           @map("room_no") @db.VarChar(40)
+  floor      Int              @default(0)
+  type       HostelRoomType   @default(STANDARD)
+  /// How many beds this room is meant to hold.
+  bedCount   Int              @default(1) @map("bed_count")
+  /// Monthly seat rent per boarder, billed through M16.
+  monthlyFee Decimal          @default(0) @map("monthly_fee") @db.Decimal(12, 2)
+  status     HostelRoomStatus @default(ACTIVE)
+  notes      String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  beds HostelBed[]
+
+  /// Composite-FK target: a bed's denormalized `hostel_id` must be the
+  /// hostel this room is actually in. `id` is already unique, so this
+  /// index adds no constraint the table did not have.
+  @@unique([hostelId, id], map: "uq_hostel_rooms_hostel_room")
+  @@index([schoolId, hostelId, floor], map: "idx_hostel_rooms_hostel")
+  @@map("hostel_rooms")
+}
+
+/// One bed. The unit a boarder is actually given, and the reason this
+/// module can answer "is there room" without anybody counting.
+///
+/// **`hostel_id` is denormalized and pinned by a composite foreign key**
+/// to the room's hostel â€” the M25 `(route_id, stop_id)` technique. A bed
+/// never changes room and a room never changes building, so the column
+/// cannot drift; what it buys is that `hostel_allocations` can carry the
+/// hostel too, which is what lets a mess enrolment be pinned to a plan of
+/// the boarder's OWN hostel rather than somebody else's.
+model HostelBed {
+  id       String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String     @map("school_id") @db.Uuid
+  school   School     @relation(fields: [schoolId], references: [id], map: "fk_hostel_beds_school")
+  hostelId String     @map("hostel_id") @db.Uuid
+  hostel   Hostel     @relation(fields: [hostelId], references: [id], onDelete: Restrict, map: "fk_hostel_beds_hostel")
+  roomId   String     @map("room_id") @db.Uuid
+  room     HostelRoom @relation(fields: [hostelId, roomId], references: [hostelId, id], onDelete: Restrict, map: "fk_hostel_beds_room")
+
+  bedNo  String          @map("bed_no") @db.VarChar(20)
+  /// A SHADOW of the live allocation, plus the one fact of its own
+  /// (MAINTENANCE) â€” see the enum.
+  status HostelBedStatus @default(VACANT)
+  notes  String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  allocations HostelAllocation[]
+
+  /// Composite-FK target for `hostel_allocations`.
+  @@unique([hostelId, id], map: "uq_hostel_beds_hostel_bed")
+  @@index([schoolId, roomId], map: "idx_hostel_beds_room")
+  @@index([schoolId, hostelId, status], map: "idx_hostel_beds_status")
+  @@map("hostel_beds")
+}
+
+/// A boarder. Keyed on **`enrollment_id`**, never `student_id` â€” the rule
+/// since M11, and what keeps last year's hostel billing untouched by a
+/// promotion.
+///
+/// The residency window is `[resumed_at ?? start_date,
+/// end_date ?? suspended_at ?? âˆž)`: M25's service window, applied to a
+/// bed. Every lifecycle move writes a **date** and not merely a status,
+/// because "how much of March does this boarder owe" has no answer
+/// otherwise (the M21 `exit_date` lesson, third time).
+///
+/// The deposit is the one piece of money this module holds rather than
+/// charges: it is taken at allocation, sits as a liability on the school's
+/// books, and is handed back â€” in part or in full â€” at vacate. That is why
+/// `deposit_refunded` may not be true while somebody still lives here.
+model HostelAllocation {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String     @map("school_id") @db.Uuid
+  school       School     @relation(fields: [schoolId], references: [id], map: "fk_hostel_allocations_school")
+  enrollmentId String     @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, map: "fk_hostel_allocations_enrollment")
+  /// Denormalized and pinned to the bed by a composite FK â€” see
+  /// `HostelBed`. It is also what every occupancy read groups by.
+  hostelId     String     @map("hostel_id") @db.Uuid
+  hostel       Hostel     @relation(fields: [hostelId], references: [id], onDelete: Restrict, map: "fk_hostel_allocations_hostel")
+  bedId        String     @map("bed_id") @db.Uuid
+  bed          HostelBed  @relation(fields: [hostelId, bedId], references: [hostelId, id], onDelete: Restrict, map: "fk_hostel_allocations_hostel_bed")
+
+  startDate DateTime               @map("start_date") @db.Date
+  endDate   DateTime?              @map("end_date") @db.Date
+  status    HostelAllocationStatus @default(ACTIVE)
+
+  /// Billing stops here while SUSPENDED; billing resumes from here.
+  suspendedAt DateTime? @map("suspended_at") @db.Date
+  resumedAt   DateTime? @map("resumed_at") @db.Date
+
+  /// Held, not earned. Refundable in whole or in part at vacate.
+  securityDeposit     Decimal   @default(0) @map("security_deposit") @db.Decimal(12, 2)
+  depositRefunded     Boolean   @default(false) @map("deposit_refunded")
+  depositRefundAmount Decimal?  @map("deposit_refund_amount") @db.Decimal(12, 2)
+  depositRefundedAt   DateTime? @map("deposit_refunded_at") @db.Date
+  depositRefundNote   String?   @map("deposit_refund_note")
+  /// The M20 vouchers, when accounting is on: one raising the liability
+  /// at allocation, one discharging it at refund.
+  depositVoucherId    String?   @map("deposit_voucher_id") @db.Uuid
+  refundVoucherId     String?   @map("refund_voucher_id") @db.Uuid
+
+  /// Why the boarder was suspended or left â€” the M07 status-reason rule.
+  statusReason String? @map("status_reason")
+  remarks      String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  messEnrollments MessEnrollment[]
+  mealOffs        MealOff[]
+
+  /// Composite-FK target for `mess_enrollments`.
+  @@unique([hostelId, id], map: "uq_hostel_allocations_hostel_alloc")
+  @@index([schoolId, hostelId, status], map: "idx_hostel_allocations_hostel")
+  @@index([schoolId, bedId], map: "idx_hostel_allocations_bed")
+  @@index([enrollmentId], map: "idx_hostel_allocations_enrollment")
+  @@map("hostel_allocations")
+}
+
+/// What the kitchen charges, per hostel. A plan is a monthly figure, not
+/// a menu: the module bills, it does not cater.
+model MessPlan {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_mess_plans_school")
+  hostelId String @map("hostel_id") @db.Uuid
+  hostel   Hostel @relation(fields: [hostelId], references: [id], onDelete: Restrict, map: "fk_mess_plans_hostel")
+
+  name          String       @db.VarChar(160)
+  description   String?
+  monthlyCharge Decimal      @default(0) @map("monthly_charge") @db.Decimal(12, 2)
+  status        HostelStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  enrollments MessEnrollment[]
+
+  /// Composite-FK target: a mess enrolment names a plan **of the
+  /// boarder's own hostel**.
+  @@unique([hostelId, id], map: "uq_mess_plans_hostel_plan")
+  @@index([schoolId, hostelId, status], map: "idx_mess_plans_hostel")
+  @@map("mess_plans")
+}
+
+/// A boarder on a plan, for a period. A window again, and for the same
+/// reason: a boarder who joins the mess on the 10th of a 31-day month
+/// owes twenty-two thirty-firsts of it, not all of it.
+///
+/// **Both foreign keys are composite** over the denormalized `hostel_id`,
+/// so "eating on another building's plan" is refused by Postgres rather
+/// than remembered by a service. Without it the error is invisible: the
+/// invoice still balances, it is simply the wrong number.
+model MessEnrollment {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_mess_enrollments_school")
+  hostelId     String           @map("hostel_id") @db.Uuid
+  hostel       Hostel           @relation(fields: [hostelId], references: [id], onDelete: Restrict, map: "fk_mess_enrollments_hostel")
+  allocationId String           @map("allocation_id") @db.Uuid
+  allocation   HostelAllocation @relation(fields: [hostelId, allocationId], references: [hostelId, id], onDelete: Restrict, map: "fk_mess_enrollments_allocation")
+  planId       String           @map("plan_id") @db.Uuid
+  plan         MessPlan         @relation(fields: [hostelId, planId], references: [hostelId, id], onDelete: Restrict, map: "fk_mess_enrollments_plan")
+
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, allocationId], map: "idx_mess_enrollments_allocation")
+  @@index([schoolId, planId], map: "idx_mess_enrollments_plan")
+  @@map("mess_enrollments")
+}
+
+/// "I am going home from the 12th to the 20th â€” do not cook for me."
+///
+/// **`credit_month` is the whole design.** Roadmap Â§4 says the credit
+/// lands on the NEXT invoice, so the month it belongs to is decided ONCE,
+/// at approval (the month after the later of the last day off and the day
+/// it was approved) and stored. Billing then reads it. That keeps the
+/// credit deterministic â€” regenerating a month produces the same number â€”
+/// without an "already credited" flag that an invoice PREVIEW would have
+/// to consume, and it means a meal-off approved late is credited late
+/// rather than lost.
+model MealOff {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId     String           @map("school_id") @db.Uuid
+  school       School           @relation(fields: [schoolId], references: [id], map: "fk_meal_offs_school")
+  allocationId String           @map("allocation_id") @db.Uuid
+  allocation   HostelAllocation @relation(fields: [allocationId], references: [id], onDelete: Restrict, map: "fk_meal_offs_allocation")
+
+  /// Inclusive calendar dates â€” a boarder is away for whole days.
+  fromDate DateTime      @map("from_date") @db.Date
+  toDate   DateTime      @map("to_date") @db.Date
+  reason   String
+  status   MealOffStatus @default(PENDING)
+
+  approvedBy   String?   @map("approved_by") @db.Uuid
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz(6)
+  decisionNote String?   @map("decision_note")
+  /// First day of the month whose invoice carries the credit. NULL until
+  /// approved; pinned to the 1st by CHECK, or the index below would be
+  /// grouping by something other than a month.
+  creditMonth  DateTime? @map("credit_month") @db.Date
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([schoolId, allocationId, status], map: "idx_meal_offs_allocation")
+  @@index([schoolId, creditMonth], map: "idx_meal_offs_credit_month")
+  @@map("meal_offs")
 }

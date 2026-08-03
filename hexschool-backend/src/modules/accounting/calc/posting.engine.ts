@@ -72,6 +72,14 @@ export const SYSTEM_SLOTS = {
   INVENTORY_CONSUMABLE_EXPENSE: 'INVENTORY_CONSUMABLE_EXPENSE',
   /** Assets: capitalized, defaulting to the broadest fixed-asset line. */
   INVENTORY_ASSET_DEFAULT: 'INVENTORY_ASSET_DEFAULT',
+  // ── M26 hostel ──────────────────────────────────────────────────────
+  /** The security deposit a boarder leaves with the school. It is the
+   *  first slot in the system that is neither income nor expense: the
+   *  money is HELD, so taking it raises a liability and refunding it
+   *  discharges one, and it must never touch the income statement. Hostel
+   *  and mess FEES need no slot — they are fee heads like any other and
+   *  post through the head → account map. */
+  HOSTEL_DEPOSIT_LIABILITY: 'HOSTEL_DEPOSIT_LIABILITY',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

@@ -8,6 +8,8 @@ import { SchoolModule } from '../school/school.module';
 import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { SequenceModule } from '../sequence/sequence.module';
 import { StudentGuardiansRepository } from '../student/repositories/student-guardians.repository';
+import { HostelFeeService } from '../hostel/services/hostel-fee.service';
+import { HOSTEL_FEE_SOURCE } from '../hostel/hostel.constants';
 import { TransportFeeService } from '../transport/services/transport-fee.service';
 import { TRANSPORT_FEE_SOURCE } from '../transport/transport.constants';
 import { FeeHeadsController } from './controllers/fee-setup.controller';
@@ -107,6 +109,13 @@ import { PaymentGatewayService } from './services/payment-gateway.service';
     // empty map (the M08/M14 "the call site is what gets forgotten"
     // rule).
     { provide: TRANSPORT_FEE_SOURCE, useClass: TransportFeeService },
+    // M26 — the hostel and mess lines on a monthly bill. Same shape and
+    // the same reason, one module later: `HostelFeeService` depends on
+    // PrismaService + SettingsService alone, and HostelModule imports
+    // THIS module (for `LedgerService.outstandingFor` at the vacate
+    // gate), so importing HostelModule here would close the cycle
+    // directly. Always bound — a school with no hostel gets an empty map.
+    { provide: HOSTEL_FEE_SOURCE, useClass: HostelFeeService },
   ],
   // M09 exit-status clearance, M14 admit cards and M27 certificates all
   // read the ledger; M18 portals render dues and invoices.

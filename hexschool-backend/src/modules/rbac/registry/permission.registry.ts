@@ -513,9 +513,15 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ],
     ['library.fine.collect', 'Take payment for a library fine'],
     ['library.fine.waive', 'Write off a library fine (with a reason)'],
-    ['library.reservation.manage', 'Place and cancel holds on behalf of a member'],
+    [
+      'library.reservation.manage',
+      'Place and cancel holds on behalf of a member',
+    ],
     ['library.stock.verify', 'Run a physical stock verification'],
-    ['library.report', 'Run the overdue, popular-title, stock and member reports'],
+    [
+      'library.report',
+      'Run the overdue, popular-title, stock and member reports',
+    ],
     ['library.export', 'Download library reports and barcode label sheets'],
   ]),
 
@@ -543,8 +549,14 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'transport.assign.override',
       'Assign past a full bus when the capacity block is on',
     ],
-    ['transport.expense.manage', 'Record fuel, maintenance and repair spending'],
-    ['transport.report', 'Run the roster, expense, utilization and fee reports'],
+    [
+      'transport.expense.manage',
+      'Record fuel, maintenance and repair spending',
+    ],
+    [
+      'transport.report',
+      'Run the roster, expense, utilization and fee reports',
+    ],
     ['transport.export', 'Download transport reports and the driver’s sheet'],
   ]),
 
@@ -570,7 +582,10 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
       'inventory.purchase.cancel',
       'Cancel a received purchase, reversing its stock movements',
     ],
-    ['inventory.issue', 'Issue consumables out of the store and take them back'],
+    [
+      'inventory.issue',
+      'Issue consumables out of the store and take them back',
+    ],
     [
       'inventory.adjust',
       'Correct a stock balance after a physical count (reason required)',
@@ -582,6 +597,49 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ],
     ['inventory.report', 'Run the stock, ledger, purchase and asset reports'],
     ['inventory.export', 'Download inventory reports and asset label sheets'],
+  ]),
+
+  // ── Module 26: Hostel Management ────────────────────────────────────
+  // Three separations, each with a name behind it — the M16/M20/M21/M23/
+  // M24/M25 rule, continued into the boarding house.
+  //
+  //   * `hostel.allocate.override` is what it takes to put a child in a
+  //     room that is under repair, in a hostel that has been switched
+  //     off, or where the gender on the record matches neither building.
+  //     None of those is a decision a duty clerk should make alone.
+  //   * `hostel.vacate.override` releases a bed over unpaid fees. The
+  //     person who runs the hostel must not also be the person who
+  //     decides a family's debt no longer matters.
+  //   * `hostel.deposit.refund` hands money back, and is deliberately NOT
+  //     part of running the hostel: the warden records that a boarder has
+  //     gone, the accountant records that the deposit went with them.
+  ...define('hostel', [
+    ['hostel.view', 'Open the hostel workspace, occupancy and reports'],
+    [
+      'hostel.manage',
+      'Create hostels, rooms and beds, and take a room out of service',
+    ],
+    [
+      'hostel.allocate',
+      'Give a student a bed, transfer them, suspend or resume a residency',
+    ],
+    [
+      'hostel.allocate.override',
+      'Allocate into a room under maintenance, an inactive hostel, or against an unmatched gender',
+    ],
+    ['hostel.vacate', 'Release a bed when a boarder leaves'],
+    [
+      'hostel.vacate.override',
+      'Release a bed while fees are still outstanding',
+    ],
+    [
+      'hostel.deposit.refund',
+      'Record the return of a security deposit, in whole or in part',
+    ],
+    ['hostel.mess.manage', 'Create mess plans and put boarders on them'],
+    ['hostel.mealoff.approve', 'Approve or refuse a meal-off request'],
+    ['hostel.report', 'Run the occupancy, resident, dues and meal-off reports'],
+    ['hostel.export', 'Download hostel reports and the resident register'],
   ]),
 ];
 

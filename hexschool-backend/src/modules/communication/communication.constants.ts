@@ -302,6 +302,46 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '{{school}}: {{count}} asset warranty(ies) need attention — {{assets}}. Claim or renew before cover ends.',
   },
+  // ── Module 26 — hostel ───────────────────────────────────────────────
+  {
+    code: 'HOSTEL_ALLOCATED',
+    module: 'Hostel',
+    description:
+      'A student was given a bed — which building, which room, and from when',
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'student_name',
+      'hostel',
+      'room',
+      'bed',
+      'start_date',
+      'warden',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: {{student_name}} has been allocated bed {{bed}}, room {{room}} at {{hostel}} from {{start_date}}. Warden: {{warden}}.',
+  },
+  {
+    code: 'MEAL_OFF_DECISION',
+    module: 'Hostel',
+    description: 'A meal-off request was approved or refused',
+    // IN_APP first for the M22/M23/M24/M25 reason: the boarder and the
+    // guardian are already looking at the bell, and a school with two
+    // hundred boarders going home for Eid would spend a term's credit in
+    // a week.
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'student_name',
+      'from_date',
+      'to_date',
+      'days',
+      'decision',
+      'note',
+      'school',
+    ],
+    defaultBody:
+      '{{school}} hostel: the meal-off for {{student_name}} from {{from_date}} to {{to_date}} ({{days}} day(s)) was {{decision}}. {{note}}',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

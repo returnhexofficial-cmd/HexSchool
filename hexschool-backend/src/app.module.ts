@@ -43,6 +43,7 @@ import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TransportModule } from './modules/transport/transport.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { HostelModule } from './modules/hostel/hostel.module';
 import { QueuesModule } from './queues/queues.module';
 
 @Module({
@@ -171,6 +172,15 @@ import { QueuesModule } from './queues/queues.module';
     // PrismaService, the M12/M17/M18/M19/M22/M23/M25 precedent — and
     // nothing imports it back.
     InventoryModule,
+    // HostelModule (M26) imports Enrollment (a boarder is an enrollment),
+    // Communication (the allocation and meal-off notices), Accounting
+    // (the deposit voucher pair) and — unlike M25 — **FeeModule**, for
+    // `LedgerService.outstandingFor`: the vacate clearance reads the same
+    // dues source every other gate in the system reads. The hostel and
+    // mess fee LINES still reach M16 through the `HOSTEL_FEE_SOURCE`
+    // token bound inside FeeModule, because the reverse import would now
+    // close a cycle directly.
+    HostelModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

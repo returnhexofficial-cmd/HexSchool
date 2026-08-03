@@ -6,6 +6,7 @@ import {
   BookUser,
   BriefcaseBusiness,
   Bus,
+  BedDouble,
   Boxes,
   CalendarCheck,
   CalendarClock,
@@ -157,6 +158,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     href: "/admin/inventory",
     icon: Boxes,
     permission: "inventory.view",
+  },
+  {
+    label: "Hostel",
+    href: "/admin/hostel",
+    icon: BedDouble,
+    permission: "hostel.view",
   },
   {
     label: "Fees & Payments",

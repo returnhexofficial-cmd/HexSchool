@@ -263,6 +263,17 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'inventory.asset.dispose',
       'inventory.report',
       'inventory.export',
+      // M26 — the head holds the two hostel codes that override a
+      // refusal: putting a child in a room that is under repair or whose
+      // gender matches neither building, and releasing a bed over unpaid
+      // fees. Running the boarding house day to day — the rooms, the
+      // beds, the allocations, the kitchen — is the office's work and is
+      // deliberately not here, and neither is handing a deposit back.
+      'hostel.view',
+      'hostel.allocate.override',
+      'hostel.vacate.override',
+      'hostel.report',
+      'hostel.export',
     ],
   },
   {
@@ -436,6 +447,15 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'inventory.view',
       'inventory.report',
       'inventory.export',
+      // M26 — the security deposit is money the school HOLDS, and handing
+      // it back is a payment, so the person who keeps the books records
+      // it. Giving a student a bed is the office's job and is
+      // deliberately not here — the warden records that a boarder has
+      // gone, the accountant records that the deposit went with them.
+      'hostel.view',
+      'hostel.deposit.refund',
+      'hostel.report',
+      'hostel.export',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.
@@ -596,6 +616,22 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'inventory.asset.manage',
       'inventory.report',
       'inventory.export',
+      // M26 — the office runs the boarding house: the buildings, the
+      // rooms, the beds, who sleeps in them, the kitchen's plans and the
+      // meal-off inbox. Deliberately NOT granted: the two overrides
+      // (`hostel.allocate.override`, `hostel.vacate.override`), which are
+      // the head's, and `hostel.deposit.refund`, which is the
+      // accountant's — the office may record that a boarder has left, and
+      // may not hand their money back (the M16/M20/M21/M23/M24/M25
+      // separation-of-duties rule, continued into the hostel).
+      'hostel.view',
+      'hostel.manage',
+      'hostel.allocate',
+      'hostel.vacate',
+      'hostel.mess.manage',
+      'hostel.mealoff.approve',
+      'hostel.report',
+      'hostel.export',
     ],
   },
 ];

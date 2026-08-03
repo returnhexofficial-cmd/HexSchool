@@ -23,6 +23,11 @@ import {
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
 import { SequenceService } from '../../sequence/sequence.service';
 import {
+  HOSTEL_FEE_SOURCE,
+  type HostelCharge,
+  type HostelFeeSource,
+} from '../../hostel/hostel.constants';
+import {
   TRANSPORT_FEE_SOURCE,
   type TransportCharge,
   type TransportFeeSource,
@@ -35,11 +40,7 @@ import {
 } from '../calc/invoice.engine';
 import { deriveStatus } from '../calc/fine.engine';
 import { money } from '../calc/money.util';
-import {
-  CancelInvoiceDto,
-  GenerateInvoicesDto,
-  InvoiceQueryDto,
-} from '../dto';
+import { CancelInvoiceDto, GenerateInvoicesDto, InvoiceQueryDto } from '../dto';
 import { FeeOverridesRepository } from '../repositories/fee-overrides.repository';
 import { FeeStructuresRepository } from '../repositories/fee-structures.repository';
 import {
@@ -112,6 +113,13 @@ export class InvoiceService {
      */
     @Inject(TRANSPORT_FEE_SOURCE)
     private readonly transportFees: TransportFeeSource,
+    /**
+     * M26. Always bound (to `HostelFeeService`, over PrismaService and
+     * SettingsService only) — see `fee.module.ts` for why the binding
+     * lives there rather than an import.
+     */
+    @Inject(HOSTEL_FEE_SOURCE)
+    private readonly hostelFees: HostelFeeSource,
   ) {}
 
   // ── read ────────────────────────────────────────────────────────────
@@ -200,7 +208,9 @@ export class InvoiceService {
       : this.defaultDueDate(billingMonth, config.dueDayOfMonth);
     const issueDate = billingMonth ?? new Date();
     if (dueDate < issueDate) {
-      throw new BadRequestException('Due date must be on or after the issue date');
+      throw new BadRequestException(
+        'Due date must be on or after the issue date',
+      );
     }
 
     // M25: the transport line, one query for the whole batch. It arrives
@@ -218,6 +228,20 @@ export class InvoiceService {
           ).padStart(2, '0')}`,
         )
       : new Map<string, TransportCharge>();
+
+    // M26: the hostel lines, on the same terms — already prorated against
+    // the boarder's residency window, and TWO of them (seat rent and
+    // mess), because a hostel bill is a room charge and a food charge and
+    // a parent asks about one or the other.
+    const hostel = billingMonth
+      ? await this.hostelFees.monthlyCharges(
+          schoolId,
+          candidates.map((c) => c.id),
+          `${billingMonth.getUTCFullYear()}-${String(
+            billingMonth.getUTCMonth() + 1,
+          ).padStart(2, '0')}`,
+        )
+      : new Map<string, HostelCharge>();
 
     const rows: GenerationPreviewRow[] = [];
     const writes: Array<{
@@ -274,6 +298,20 @@ export class InvoiceService {
           amount: rider.amount,
           prorated: false,
         });
+      }
+
+      // M26, same rule: only the monthly batch carries a hostel bill, and
+      // each line arrives already prorated against the residency window.
+      const boarder = billingMonth ? hostel.get(enrollment.id) : undefined;
+      if (boarder) {
+        for (const line of boarder.lines) {
+          heads.push({
+            feeHeadId: line.feeHeadId,
+            feeHeadName: line.description,
+            amount: line.amount,
+            prorated: false,
+          });
+        }
       }
 
       if (heads.length === 0) {
@@ -560,9 +598,7 @@ export class InvoiceService {
         return {
           feeHeadId: line.feeHeadId,
           feeHeadName:
-            line.description?.trim() ||
-            structure?.feeHead.name ||
-            'Fee',
+            line.description?.trim() || structure?.feeHead.name || 'Fee',
           amount: money(line.amount),
           // An ad-hoc charge is never prorated — it is not a monthly fee.
           prorated: false,

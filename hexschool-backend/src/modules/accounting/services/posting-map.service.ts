@@ -52,6 +52,10 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   // where everything else lands.
   [SYSTEM_SLOTS.INVENTORY_CONSUMABLE_EXPENSE]: '5500',
   [SYSTEM_SLOTS.INVENTORY_ASSET_DEFAULT]: '1520',
+  // M26 — `2140 Security Deposits` is already in the seeded 61-account BD
+  // chart (as is `4140 Hostel Fee Income`, which the fee head maps to), so
+  // a fresh school records a deposit correctly with nothing configured.
+  [SYSTEM_SLOTS.HOSTEL_DEPOSIT_LIABILITY]: '2140',
 };
 
 export interface ResolvedPostingMap {

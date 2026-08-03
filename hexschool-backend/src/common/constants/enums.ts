@@ -107,4 +107,11 @@ export {
   InventoryHolderType,
   InventoryPersonType,
   StockIssueStatus,
+  HostelType,
+  HostelStatus,
+  HostelRoomType,
+  HostelRoomStatus,
+  HostelBedStatus,
+  HostelAllocationStatus,
+  MealOffStatus,
 } from '@prisma/client';

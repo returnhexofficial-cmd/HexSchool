@@ -37,6 +37,7 @@ import { InitOnlinePaymentDto } from '../../fee/dto';
 import { CreateReservationDto, OpacQueryDto } from '../../library/dto';
 import { OpacService } from '../../library/services/opac.service';
 import type { ExportFile } from '../../result/services/result-export.service';
+import { HostelPortalService } from '../../hostel/services/hostel-portal.service';
 import { TransportPortalService } from '../../transport/services/transport-portal.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
 import { PortalContactDto, PortalLeaveDto } from '../dto';
@@ -71,6 +72,7 @@ export class PortalController {
     private readonly uploads: AssignmentUploadsService,
     private readonly opac: OpacService,
     private readonly transport: TransportPortalService,
+    private readonly hostel: HostelPortalService,
   ) {}
 
   @Get('me')
@@ -314,6 +316,33 @@ export class PortalController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.transport.forStudent(user.schoolId, childId);
+  }
+
+  // ── hostel (M26) ────────────────────────────────────────────────────
+  //
+  // Roadmap M26 §5's "parent portal shows allocation details". Same thin
+  // projection as transport: the building, the room, the bed, the mess
+  // plan and the child's OWN meal-offs — because the commonest question a
+  // boarder's parent has is whether the leave they asked for was
+  // approved, and making them ring the office to find out is the sort of
+  // thing a portal exists to stop. A day student gets a self-describing
+  //  rather than an empty card.
+
+  @Get('hostel')
+  @ApiOperation({ summary: 'My hostel, room, bed and mess plan' })
+  async myHostel(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.selfStudentId(user);
+    return this.hostel.forStudent(user.schoolId, id);
+  }
+
+  @Get('parent/child/:childId/hostel')
+  @OwnsStudent('childId')
+  @ApiOperation({ summary: "A child's hostel, room, bed and mess plan" })
+  childHostel(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.hostel.forStudent(user.schoolId, childId);
   }
 
   // ── parent (per child) ──────────────────────────────────────────────

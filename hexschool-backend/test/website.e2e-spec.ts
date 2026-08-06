@@ -662,13 +662,29 @@ describe('Website CMS (e2e)', () => {
         .expect(404);
     });
 
-    it('answers the certificate stub self-describingly (Module 27 fills it)', async () => {
+    /**
+     * **Live since Module 27.** This endpoint answered
+     * `{ available: false, reason }` from M19 so that printed certificates
+     * could already carry the URL; M27 bound the real verifier behind
+     * `CERTIFICATE_VERIFIER` inside this module.
+     *
+     * The lookup itself is covered by `certificate.e2e-spec.ts`. What is
+     * asserted HERE is the wiring: that the token is bound at all, and
+     * that an unresolvable code still answers 200 rather than throwing —
+     * a public endpoint must not confirm what it cannot show.
+     */
+    it('performs a real certificate lookup (the M19 stub is gone)', async () => {
       const res = await server()
         .get('/api/v1/public/verify/certificate?code=TC-26-0001')
         .expect(200);
-      const body = dataOf<{ available: boolean; reason: string }>(res);
-      expect(body.available).toBe(false);
-      expect(body.reason).toMatch(/27/);
+      const body = dataOf<{
+        available: boolean;
+        outcome: string;
+        certificate?: unknown;
+      }>(res);
+      expect(body.available).toBe(true);
+      expect(body.outcome).toBe('NOT_FOUND');
+      expect(body.certificate).toBeUndefined();
     });
   });
 

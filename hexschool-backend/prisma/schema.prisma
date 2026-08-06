@@ -102,6 +102,7 @@ enum SettingsGroup {
   transport
   inventory
   hostel
+  documents
 
   @@map("settings_group_enum")
 }
@@ -1311,6 +1312,60 @@ enum MealOffStatus {
   @@map("meal_off_status_enum")
 }
 
+/// Roadmap M27 §3's certificate types. CUSTOM is the escape hatch a BD
+/// school always needs — a "no objection" letter, a bona-fide certificate,
+/// a sports participation slip — and it exists so those do not get filed
+/// under TESTIMONIAL and corrupt the per-type numbering.
+enum CertificateType {
+  TRANSFER
+  CHARACTER
+  TESTIMONIAL
+  PRIZE
+  PARTICIPATION
+  CUSTOM
+
+  @@map("certificate_type_enum")
+}
+
+/// A DRAFT has no number, no verify code and no public existence; ISSUED
+/// is the only status that verifies VALID (roadmap §6); REVOKED keeps the
+/// file and the register entry and says so publicly.
+enum CertificateStatus {
+  DRAFT
+  ISSUED
+  REVOKED
+
+  @@map("certificate_status_enum")
+}
+
+/// Why this certificate exists, and it is the whole of roadmap §8's two
+/// re-issue cases. A DUPLICATE is the same certificate printed again
+/// because the family lost the original (watermarked, referencing the
+/// original number); a CORRECTION is a *different* certificate that
+/// replaces one revoked for a wrong name or date. Both point at the row
+/// they came from, so the register reads as a chain rather than as two
+/// unrelated documents.
+enum CertificateIssueKind {
+  ORIGINAL
+  DUPLICATE
+  CORRECTION
+
+  @@map("certificate_issue_kind_enum")
+}
+
+/// What an archived file is *about*. Polymorphic with no FK — the M12
+/// `staff_attendances` / M21 `leave_applications` / M23 `library_members`
+/// precedent — because a filing cabinet spans tables that share no
+/// supertype, and NULL (an unlinked file) is the common case.
+enum ArchiveLinkType {
+  STUDENT
+  TEACHER
+  STAFF
+  CERTIFICATE
+
+  @@map("archive_link_type_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1535,6 +1590,10 @@ model School {
   messPlans                MessPlan[]
   messEnrollments          MessEnrollment[]
   mealOffs                 MealOff[]
+  certificateTemplates     CertificateTemplate[]
+  certificates             Certificate[]
+  archiveFolders           ArchiveFolder[]
+  archiveFiles             ArchiveFile[]
 
   @@map("schools")
 }
@@ -1643,6 +1702,7 @@ model AcademicSession {
   leaveBalances            LeaveBalance[]
   assignments              Assignment[]
   learningMaterials        LearningMaterial[]
+  certificates             Certificate[]
 
   @@index([schoolId], map: "idx_academic_sessions_school")
   @@map("academic_sessions")
@@ -2228,6 +2288,7 @@ model Student {
   enrollments           Enrollment[]
   promotionItems        PromotionItem[]
   leaveApplications     StudentLeaveApplication[]
+  certificates          Certificate[]
 
   // Deliberately NOT deleted_at-scoped: student UIDs are never reused.
   @@unique([schoolId, studentUid], map: "uq_students_uid")
@@ -2570,6 +2631,7 @@ model Enrollment {
   assignmentSubmissions AssignmentSubmission[]
   transportAssignments  TransportAssignment[]
   hostelAllocations     HostelAllocation[]
+  certificates          Certificate[]
 
   // uq(student, session) and uq(session, section, roll) are hand-written
   // PARTIAL unique indexes in the migration (excluding soft-deleted +
@@ -6237,4 +6299,202 @@ model MealOff {
   @@index([schoolId, allocationId, status], map: "idx_meal_offs_allocation")
   @@index([schoolId, creditMonth], map: "idx_meal_offs_credit_month")
   @@map("meal_offs")
+}
+
+// ── Module 27: Document Management & Certificates ─────────────────────
+
+/// The layout a certificate is printed from: the HTML body with
+/// `{{variable}}` placeholders, an optional full-page background (the
+/// school's pre-printed stationery, scanned), and the signatories block.
+///
+/// A template is a **living** row and a certificate is a **frozen** one.
+/// Editing this body must never restate a testimonial already in a
+/// family's hands, which is why `certificates.data_snapshot` and
+/// `certificates.body_html` are both copied at issue — the M14/M15
+/// grading-snapshot rule, applied to a document.
+model CertificateTemplate {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_certificate_templates_school")
+
+  type          CertificateType
+  name          String          @db.VarChar(160)
+  /// Handlebars-lite markup, sanitized on WRITE through M19's allow-list
+  /// sanitizer — this HTML is rendered into a PDF and, for the preview,
+  /// into an editor's browser.
+  bodyHtml      String          @map("body_html")
+  /// S3 key or URL of the stationery scan drawn behind the text.
+  backgroundUrl String?         @map("background_url") @db.VarChar(500)
+  /// `[{ name, designation, imageUrl }]` — the block printed at the foot.
+  signatories   Json            @default("[]")
+  isActive      Boolean         @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  certificates Certificate[]
+
+  @@index([schoolId, type, isActive], map: "idx_certificate_templates_type")
+  @@map("certificate_templates")
+}
+
+/// One issued document. **Everything printed on it is frozen here**: the
+/// snapshot carries the name, class, session, GPA and conduct as they
+/// stood at issue, and `body_html` carries the layout it was rendered
+/// through — so re-printing a 2024 testimonial in 2027 produces the same
+/// page even after the template was redesigned and the student's name was
+/// corrected (roadmap §6, "data immutable post-issue").
+///
+/// `certificate_no` is unique **ignoring `deleted_at`** — the M07
+/// employee-ID / M09 student-UID / M23 accession / M24 asset-tag rule.
+/// A certificate number has been written on a piece of paper that left the
+/// building; re-issuing it to a different document would make every
+/// register printed since then lie about what it recorded.
+///
+/// `verify_code` is the public handle and is deliberately NOT the row id:
+/// it is short enough to type off a printed page, random enough not to be
+/// enumerable, and — like M09's `qr_token` — revocable without touching a
+/// primary key.
+model Certificate {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_certificates_school")
+
+  /// A certificate is about a PERSON and their whole time at the school,
+  /// which is why this keys on the student rather than on an enrollment —
+  /// the one deliberate exception to the enrollment-id spine, and the
+  /// reason `enrollment_id` sits beside it as *where the snapshot was
+  /// taken from* rather than as the record's identity.
+  studentId    String           @map("student_id") @db.Uuid
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_certificates_student")
+  enrollmentId String?          @map("enrollment_id") @db.Uuid
+  enrollment   Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Restrict, map: "fk_certificates_enrollment")
+  sessionId    String?          @map("session_id") @db.Uuid
+  session      AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Restrict, map: "fk_certificates_session")
+
+  /// NULL for a legacy backfill — a certificate the school issued on
+  /// paper before this system existed has no template to point at.
+  templateId String?              @map("template_id") @db.Uuid
+  template   CertificateTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict, map: "fk_certificates_template")
+
+  type          CertificateType
+  certificateNo String?              @map("certificate_no") @db.VarChar(60)
+  verifyCode    String?              @map("verify_code") @db.VarChar(16)
+  status        CertificateStatus    @default(DRAFT)
+  issueKind     CertificateIssueKind @default(ORIGINAL) @map("issue_kind")
+
+  /// The original this DUPLICATE reprints or this CORRECTION replaces.
+  originalCertificateId String?       @map("original_certificate_id") @db.Uuid
+  original              Certificate?  @relation("CertificateReissue", fields: [originalCertificateId], references: [id], onDelete: Restrict, map: "fk_certificates_original")
+  reissues              Certificate[] @relation("CertificateReissue")
+
+  /// Everything the page prints, resolved once. See the model note.
+  dataSnapshot Json    @default("{}") @map("data_snapshot")
+  /// The rendered layout, frozen with the data it was rendered against.
+  bodyHtml     String? @map("body_html")
+  /// S3 key of the generated PDF; regenerated on demand from the two
+  /// columns above, so a missing object is a re-render and not a loss.
+  fileUrl      String? @map("file_url") @db.VarChar(500)
+
+  /// Roadmap §8: entered by hand for a pre-system certificate, with its
+  /// own number. Gated by `certificate.legacy`, because writing a number
+  /// the system did not generate is exactly the act that needs a name.
+  isLegacy Boolean @default(false) @map("is_legacy")
+
+  /// The clearance verdict as it stood at issue, and who waived it.
+  clearanceSnapshot     Json?   @map("clearance_snapshot")
+  clearanceOverrideBy   String? @map("clearance_override_by") @db.Uuid
+  clearanceOverrideNote String? @map("clearance_override_note")
+
+  issuedBy String?   @map("issued_by") @db.Uuid
+  issuedAt DateTime? @map("issued_at") @db.Timestamptz(6)
+
+  revokedBy     String?   @map("revoked_by") @db.Uuid
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz(6)
+  revokedReason String?   @map("revoked_reason")
+
+  remarks String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_certificates_no` and `uq_certificates_verify_code` are
+  // hand-written in the migration: both must hold across soft-deleted
+  // rows and must tolerate the NULLs a DRAFT carries.
+  @@index([schoolId, type, status], map: "idx_certificates_type")
+  @@index([studentId], map: "idx_certificates_student")
+  @@index([schoolId, issuedAt], map: "idx_certificates_issued_at")
+  @@map("certificates")
+}
+
+/// A node of the document filing tree. `parent_id` NULL is a root folder.
+model ArchiveFolder {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_archive_folders_school")
+
+  name     String          @db.VarChar(160)
+  parentId String?         @map("parent_id") @db.Uuid
+  parent   ArchiveFolder?  @relation("ArchiveFolderTree", fields: [parentId], references: [id], onDelete: Restrict, map: "fk_archive_folders_parent")
+  children ArchiveFolder[] @relation("ArchiveFolderTree")
+
+  description String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  files ArchiveFile[]
+
+  @@index([schoolId, parentId], map: "idx_archive_folders_parent")
+  @@map("archive_folders")
+}
+
+/// A filed document. `tags` is a real `TEXT[]` with a GIN index, because
+/// roadmap §4 asks for search by tag and a comma-joined string would make
+/// "exam" match "exams-2026" — a filing cabinet whose search is fuzzy is
+/// a filing cabinet nobody uses twice.
+model ArchiveFile {
+  id       String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String        @map("school_id") @db.Uuid
+  school   School        @relation(fields: [schoolId], references: [id], map: "fk_archive_files_school")
+  folderId String        @map("folder_id") @db.Uuid
+  folder   ArchiveFolder @relation(fields: [folderId], references: [id], onDelete: Restrict, map: "fk_archive_files_folder")
+
+  title     String   @db.VarChar(250)
+  fileUrl   String   @map("file_url") @db.VarChar(500)
+  mimeType  String   @map("mime_type") @db.VarChar(120)
+  sizeBytes Int      @map("size_bytes")
+  tags      String[] @default([])
+
+  /// Polymorphic and FK-less. Both columns are NULL or both are set —
+  /// `chk_archive_files_link` says so, because a link half-recorded is a
+  /// file the "documents of this student" tab will never find.
+  linkedType ArchiveLinkType? @map("linked_type")
+  linkedId   String?          @map("linked_id") @db.Uuid
+
+  notes      String?
+  uploadedBy String? @map("uploaded_by") @db.Uuid
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@index([folderId], map: "idx_archive_files_folder")
+  @@index([schoolId, linkedType, linkedId], map: "idx_archive_files_linked")
+  /// Roadmap §4's tag search. Declared here as well as in the migration
+  /// because Prisma CAN express a GIN index — the M24 rule: only an index
+  /// Prisma cannot express (partial, expression-based) is migration-only.
+  @@index([tags(ops: ArrayOps)], map: "idx_archive_files_tags", type: Gin)
+  @@map("archive_files")
 }

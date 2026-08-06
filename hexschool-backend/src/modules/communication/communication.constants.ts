@@ -342,6 +342,43 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       '{{school}} hostel: the meal-off for {{student_name}} from {{from_date}} to {{to_date}} ({{days}} day(s)) was {{decision}}. {{note}}',
   },
+  // ── Module 27 — documents & certificates ─────────────────────────────
+  {
+    code: 'CERTIFICATE_ISSUED',
+    module: 'Certificates',
+    description:
+      'A certificate was issued — what it is, its number, and how to verify it',
+    // SMS carries the verify code deliberately: the guardian is the person
+    // who will be asked to prove the document is genuine, and a code they
+    // already have on their phone is one they cannot lose with the paper.
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'student_name',
+      'type',
+      'certificate_no',
+      'verify_code',
+      'verify_url',
+      'issue_date',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: a {{type}} certificate ({{certificate_no}}) was issued for {{student_name}} on {{issue_date}}. Verify it with code {{verify_code}} at {{verify_url}}.',
+  },
+  {
+    code: 'CERTIFICATE_REVOKED',
+    module: 'Certificates',
+    description: 'An issued certificate was revoked, and why',
+    channels: [C.IN_APP, C.SMS],
+    variables: [
+      'student_name',
+      'type',
+      'certificate_no',
+      'reason',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: the {{type}} certificate {{certificate_no}} issued for {{student_name}} has been revoked. Reason: {{reason}}. Please contact the office.',
+  },
   {
     code: 'LOW_SMS_CREDIT',
     module: 'Communication',

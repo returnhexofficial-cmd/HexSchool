@@ -114,4 +114,8 @@ export {
   HostelBedStatus,
   HostelAllocationStatus,
   MealOffStatus,
+  CertificateType,
+  CertificateStatus,
+  CertificateIssueKind,
+  ArchiveLinkType,
 } from '@prisma/client';

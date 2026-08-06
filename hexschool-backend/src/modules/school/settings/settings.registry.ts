@@ -1385,6 +1385,125 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
     // takes the request down.
     ['hostel.max_beds_per_room', 'number', 'Most beds one room may hold', 20],
   ]),
+
+  // ── Module 27 — documents & certificates ─────────────────────────────
+  ...g(SettingsGroup.documents, [
+    [
+      'documents.enabled',
+      'boolean',
+      'The school issues certificates from this system',
+      true,
+    ],
+    // PROJECT_CONTEXT §3 records `TC-{YY}-{SEQ4}` (per type). `{TYPE}` is
+    // resolved from the prefix map below before the shared SequenceService
+    // renderer sees the pattern — one pattern language, one place that
+    // knows `{SEQ4}`.
+    [
+      'documents.certificate_no_pattern',
+      'string',
+      'Certificate number pattern',
+      '{TYPE}-{YY}-{SEQ4}',
+    ],
+    [
+      'documents.certificate_type_prefixes',
+      'json',
+      'Number prefix per certificate type',
+      {
+        TRANSFER: 'TC',
+        CHARACTER: 'CC',
+        TESTIMONIAL: 'TS',
+        PRIZE: 'PR',
+        PARTICIPATION: 'PA',
+        CUSTOM: 'CE',
+      },
+    ],
+    // Roadmap §6 gates the TC and only the TC. A character certificate is
+    // a reference, and refusing to say a child is of good character over
+    // two months' unpaid tuition is a different and meaner act — see
+    // `clearance.engine.ts`. A school may widen the list.
+    [
+      'documents.clearance_required_types',
+      'json',
+      'Certificate types that require full clearance',
+      ['TRANSFER'],
+    ],
+    [
+      'documents.clearance_include_library',
+      'boolean',
+      'Count unreturned books and unpaid library fines as clearance',
+      true,
+    ],
+    [
+      'documents.clearance_include_hostel',
+      'boolean',
+      'Count a bed still held and an unreturned deposit as clearance',
+      true,
+    ],
+    // Roadmap §4 makes this the rule; the knob exists because a school
+    // that issues a TC weeks before the child actually leaves would
+    // otherwise lose them off every register in the meantime.
+    [
+      'documents.tc_sets_transferred',
+      'boolean',
+      'Issuing a transfer certificate marks the student TRANSFERRED',
+      true,
+    ],
+    [
+      'documents.notify_on_issue',
+      'boolean',
+      'Tell the guardian when a certificate is issued',
+      true,
+    ],
+    // Empty means "use website.site_url" — a QR pointing at localhost is
+    // worse than one carrying the bare code (the M19 sitemap rule).
+    [
+      'documents.verify_url_base',
+      'string',
+      'Public base URL the certificate QR encodes (blank = the website URL)',
+      '',
+    ],
+    ['documents.conduct_default', 'string', 'Default conduct wording', 'Good'],
+    [
+      'documents.duplicate_watermark_text',
+      'string',
+      'Watermark printed across a duplicate re-issue',
+      'DUPLICATE',
+    ],
+    // Roadmap §7: "signatory images ≤ 500 KB".
+    [
+      'documents.signatory_max_kb',
+      'number',
+      'Largest signature image, in KB',
+      500,
+    ],
+    [
+      'documents.archive_max_file_mb',
+      'number',
+      'Largest file the archive accepts, in MB',
+      20,
+    ],
+    [
+      'documents.archive_allowed_types',
+      'json',
+      'MIME types the archive accepts',
+      [
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ],
+    ],
+    [
+      'documents.bulk_prize_max',
+      'number',
+      'Most prize certificates one wizard run may raise',
+      200,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

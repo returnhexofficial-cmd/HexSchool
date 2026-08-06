@@ -641,6 +641,48 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['hostel.report', 'Run the occupancy, resident, dues and meal-off reports'],
     ['hostel.export', 'Download hostel reports and the resident register'],
   ]),
+
+  // ── Module 27: Document Management & Certificates ───────────────────
+  // The separation of duties here follows the M16/M20/M21/M23/M24/M25/M26
+  // line, and the split is sharper than usual because a certificate is
+  // the only artifact in the system that leaves the building on
+  // letterhead:
+  //   * the office ISSUES certificates — that is the counter's work,
+  //   * `certificate.revoke` disowns a document that is already in
+  //     somebody's file, which is the head's call and not the clerk's,
+  //   * `certificate.clearance.override` lets a transfer certificate out
+  //     over unpaid fees, unreturned books or a bed still held — the last
+  //     moment the school has any leverage, so releasing it needs a name,
+  //   * `certificate.legacy` writes a certificate number the system did
+  //     not generate. Backdating the register is exactly the act that
+  //     needs its own code.
+  ...define('certificates', [
+    ['certificate.view', 'Open the certificate register and read an entry'],
+    [
+      'certificate.template.manage',
+      'Create and edit certificate templates, backgrounds and signatories',
+    ],
+    [
+      'certificate.issue',
+      'Issue a certificate, a duplicate or a correction, and print it',
+    ],
+    [
+      'certificate.clearance.override',
+      'Issue a certificate over unmet fee, library or hostel clearance',
+    ],
+    ['certificate.revoke', 'Revoke an issued certificate, with a reason'],
+    [
+      'certificate.legacy',
+      'Enter a pre-system certificate into the register with its own number',
+    ],
+    ['certificate.export', 'Download the issuance register'],
+  ]),
+  ...define('archive', [
+    ['archive.view', 'Browse the document archive and open a filed document'],
+    ['archive.upload', 'File a document into the archive'],
+    ['archive.manage', 'Create, rename and move archive folders'],
+    ['archive.delete', 'Remove a filed document from the archive'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

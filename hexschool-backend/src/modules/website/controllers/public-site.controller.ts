@@ -244,7 +244,7 @@ export class PublicSiteController {
   @Public()
   @Throttle(VERIFY_THROTTLE)
   @ApiOperation({
-    summary: 'Certificate verification — self-describing stub until Module 27',
+    summary: 'Verify a certificate by its printed code (VALID/REVOKED)',
   })
   verifyCertificate(@Query('code') code: string) {
     return this.site.verifyCertificate(code ?? '');

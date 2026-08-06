@@ -37,6 +37,7 @@ import { InitOnlinePaymentDto } from '../../fee/dto';
 import { CreateReservationDto, OpacQueryDto } from '../../library/dto';
 import { OpacService } from '../../library/services/opac.service';
 import type { ExportFile } from '../../result/services/result-export.service';
+import { DocumentPortalService } from '../../document/services/document-portal.service';
 import { HostelPortalService } from '../../hostel/services/hostel-portal.service';
 import { TransportPortalService } from '../../transport/services/transport-portal.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
@@ -73,6 +74,7 @@ export class PortalController {
     private readonly opac: OpacService,
     private readonly transport: TransportPortalService,
     private readonly hostel: HostelPortalService,
+    private readonly certificates: DocumentPortalService,
   ) {}
 
   @Get('me')
@@ -343,6 +345,32 @@ export class PortalController {
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.hostel.forStudent(user.schoolId, childId);
+  }
+
+  // ── certificates (M27) ──────────────────────────────────────────────
+  //
+  // Roadmap M27 §5's "Student portal: my certificates download list". A
+  // REVOKED certificate stays on the list, marked: the family is holding
+  // the paper, so hiding it tells them nothing when somebody checks the
+  // code and gets REVOKED — and the school's own reason is what they need
+  // in order to come and sort it out. A DRAFT never appears at all
+  // (roadmap §6, "DRAFTs invisible publicly").
+
+  @Get('certificates')
+  @ApiOperation({ summary: 'Certificates issued to me' })
+  async myCertificates(@CurrentUser() user: AccessTokenPayload) {
+    const id = await this.selfStudentId(user);
+    return this.certificates.forStudent(id, user.schoolId);
+  }
+
+  @Get('parent/child/:childId/certificates')
+  @OwnsStudent('childId')
+  @ApiOperation({ summary: 'Certificates issued to a child' })
+  childCertificates(
+    @Param('childId', ParseUUIDPipe) childId: string,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.certificates.forStudent(childId, user.schoolId);
   }
 
   // ── parent (per child) ──────────────────────────────────────────────

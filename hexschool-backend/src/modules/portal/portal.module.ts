@@ -15,6 +15,7 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StudentModule } from '../student/student.module';
 import { TeacherModule } from '../teacher/teacher.module';
 import { TimetableModule } from '../timetable/timetable.module';
+import { DocumentModule } from '../document/document.module';
 import { HostelModule } from '../hostel/hostel.module';
 import { TransportModule } from '../transport/transport.module';
 import { WebsiteModule } from '../website/website.module';
@@ -88,6 +89,9 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // child's own meal-offs — no other boarder, no occupancy figure) and
     // PortalModule only answers which student is asking.
     HostelModule,
+    // M27 — the student/parent "my certificates" list. DocumentModule is
+    // itself a near-leaf; this is the only module that imports it.
+    DocumentModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

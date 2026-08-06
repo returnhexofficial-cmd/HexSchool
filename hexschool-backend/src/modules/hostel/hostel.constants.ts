@@ -74,3 +74,34 @@ export interface HostelFeeSource {
 
 /** The empty answer: no hostel, no boarders, or hostel switched off. */
 export const NO_HOSTEL_CHARGES = new Map<string, HostelCharge>();
+
+/**
+ * The hostel's answer to "has this student finished with us?" — the third
+ * of the three halves M27's clearance aggregate reads, beside M16's
+ * `LedgerService.outstandingFor` and M23's
+ * `LibraryClearanceService.clearanceForPerson`.
+ *
+ * Deliberately the **same shape** as the library's result (cleared, a
+ * count, an amount, detail lines), so M27's `clearance.engine` folds all
+ * three through one code path rather than special-casing each source.
+ *
+ * A student who never boarded is **cleared**, not an error — the M23 rule:
+ * most of a school never sleeps here, and an issue flow that 404'd on them
+ * would be a worse bug than the one this prevents.
+ */
+export interface HostelClearanceResult {
+  cleared: boolean;
+  /** Beds still held — ACTIVE or SUSPENDED (a suspended boarder keeps
+   *  theirs, so both count as "not finished"). */
+  bedsHeld: number;
+  /** Security deposit the school is still holding, in BDT. */
+  depositHeld: number;
+  details: string[];
+}
+
+export const HOSTEL_CLEAR: HostelClearanceResult = {
+  cleared: true,
+  bedsHeld: 0,
+  depositHeld: 0,
+  details: [],
+};

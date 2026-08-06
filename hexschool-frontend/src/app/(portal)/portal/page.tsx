@@ -29,7 +29,9 @@ import { LibraryPanels } from "./library-panels";
 import { opacApi } from "@/lib/api/library";
 import { TransportPanels } from "./transport-panels";
 import { HostelPanels } from "./hostel-panels";
+import { CertificatePanels } from "./certificate-panels";
 import { hostelPortalApi } from "@/lib/api/hostel";
+import { certificatePortalApi } from "@/lib/api/documents";
 import { portalTransportApi } from "@/lib/api/transport";
 import { StudentPanels } from "./student-panels";
 
@@ -103,6 +105,9 @@ function StudentView() {
       <LibraryPanels fetchers={{ key: "self", me: opacApi.me }} />
       <TransportPanels fetchers={{ key: "self", get: portalTransportApi.me }} />
       <HostelPanels fetchers={{ key: "self", get: hostelPortalApi.mine }} />
+      <CertificatePanels
+        fetchers={{ key: "self", get: certificatePortalApi.mine }}
+      />
       <MessagesPanel />
       <ContactSchoolCard />
     </>
@@ -207,6 +212,17 @@ function ParentView({
           fetchers={{
             key: `child-${selected}`,
             get: () => hostelPortalApi.forChild(selected),
+          }}
+        />
+      )}
+      {selected && (
+        /* Same reasoning again: a certificate is a document a family holds,
+           and there is nothing to DO with it here but read and download. */
+        <CertificatePanels
+          key={`certificates-${selected}`}
+          fetchers={{
+            key: `child-${selected}`,
+            get: () => certificatePortalApi.forChild(selected),
           }}
         />
       )}

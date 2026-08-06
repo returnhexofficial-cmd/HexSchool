@@ -17,6 +17,7 @@ describe('PublicSiteService', () => {
   let preview: { authorises: jest.Mock };
   let cache: { wrap: jest.Mock };
   let recaptcha: { assertValid: jest.Mock };
+  let verifier: { verify: jest.Mock };
   let service: PublicSiteService;
 
   const defaults = {
@@ -61,6 +62,25 @@ describe('PublicSiteService', () => {
       ),
     };
     recaptcha = { assertValid: jest.fn().mockResolvedValue(undefined) };
+    // M27 bound the real verifier behind CERTIFICATE_VERIFIER; the service
+    // now delegates, so the double is what these tests assert against.
+    verifier = {
+      verify: jest.fn().mockResolvedValue({
+        outcome: 'VALID',
+        message: 'This is a genuine certificate issued by the school.',
+        certificate: {
+          certificateNo: 'TC-26-0001',
+          type: 'TRANSFER',
+          studentName: 'Rafiqul Islam',
+          className: 'Class 9',
+          session: '2026',
+          issueDate: '2026-08-06',
+          isDuplicate: false,
+          originalNo: null,
+          revokedAt: null,
+        },
+      }),
+    };
 
     service = new PublicSiteService(
       pages as never,
@@ -77,6 +97,7 @@ describe('PublicSiteService', () => {
       preview as never,
       cache as never,
       recaptcha as never,
+      verifier,
     );
   });
 
@@ -279,11 +300,25 @@ describe('PublicSiteService', () => {
   });
 
   describe('certificate verification', () => {
-    it('describes itself as unavailable until Module 27', () => {
-      const result = service.verifyCertificate('TC-26-0001');
-      expect(result.available).toBe(false);
-      expect(result.code).toBe('TC-26-0001');
-      expect(result.reason).toContain('27');
+    // M19 answered `{ available: false }` here; M27 replaced the body with
+    // a real lookup through the CERTIFICATE_VERIFIER token.
+    it('delegates to the bound verifier and reports availability', async () => {
+      const result = await service.verifyCertificate('tc-26-0001');
+      expect(verifier.verify).toHaveBeenCalledWith('tc-26-0001');
+      expect(result.available).toBe(true);
+      expect(result.code).toBe('tc-26-0001');
+      expect(result.outcome).toBe('VALID');
+      expect(result.certificate?.certificateNo).toBe('TC-26-0001');
+    });
+
+    it('passes a missing code through as an empty string rather than throwing', async () => {
+      verifier.verify.mockResolvedValueOnce({
+        outcome: 'NOT_FOUND',
+        message: 'No certificate matches this code.',
+      });
+      const result = await service.verifyCertificate('');
+      expect(result.outcome).toBe('NOT_FOUND');
+      expect(result.certificate).toBeUndefined();
     });
   });
 });

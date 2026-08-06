@@ -508,6 +508,29 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [P.from, P.to],
     formats: ['xlsx'],
   },
+  // ── Certificates (M27) ──────────────────────────────────────────────
+  {
+    code: 'certificate.register',
+    name: 'Issuance register',
+    module: 'Certificates',
+    description:
+      'Every certificate issued over a window — number, type, student, who signed it, and whether it still stands.',
+    permission: 'certificate.export',
+    endpoint: '/certificates/reports/register',
+    params: [P.from, P.to],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'certificate.summary',
+    name: 'Certificates by type',
+    module: 'Certificates',
+    description:
+      'How many of each type were issued, duplicated and revoked over a window.',
+    permission: 'certificate.export',
+    endpoint: '/certificates/reports/summary',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

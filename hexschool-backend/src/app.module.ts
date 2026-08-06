@@ -43,6 +43,7 @@ import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TransportModule } from './modules/transport/transport.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { DocumentModule } from './modules/document/document.module';
 import { HostelModule } from './modules/hostel/hostel.module';
 import { QueuesModule } from './queues/queues.module';
 
@@ -181,6 +182,18 @@ import { QueuesModule } from './queues/queues.module';
     // token bound inside FeeModule, because the reverse import would now
     // close a cycle directly.
     HostelModule,
+    // DocumentModule (M27) is a near-leaf like Portal (M18) and Website
+    // (M19): only the leaf PortalModule imports it back, which is what
+    // makes its long import list cycle-free. It imports Student,
+    // Enrollment, Result, Attendance and Fee because a certificate quotes
+    // a fact each of them owns, and deliberately imports NEITHER Library
+    // nor Hostel — both expose their third of the clearance aggregate
+    // through a PrismaService-only service that DocumentModule provides a
+    // second time (the M23 `LIBRARY_CLEARANCE` shape). Its own outbound
+    // edge is the same trick in reverse: `CertificateVerifierService` is
+    // bound inside WebsiteModule behind `CERTIFICATE_VERIFIER`, replacing
+    // the stub M19 left at `GET /public/verify/certificate`.
+    DocumentModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

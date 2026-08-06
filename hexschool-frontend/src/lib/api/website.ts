@@ -1,4 +1,5 @@
 import { api, ApiEnvelope, PaginationMeta } from "./axios";
+import type { CertificateVerification } from "./documents";
 
 /**
  * Mirrors the backend Website CMS API (Module 19): the admin CRUD surface
@@ -360,12 +361,12 @@ export const publicSiteApi = {
       })
       .then(unwrap),
 
+  /** Live since M27 — the stub that answered `{available:false}` is gone. */
   verifyCertificate: (code: string) =>
     api
-      .get<ApiEnvelope<{ available: boolean; code: string; reason: string }>>(
-        "/public/verify/certificate",
-        { params: { code } },
-      )
+      .get<ApiEnvelope<CertificateVerification>>("/public/verify/certificate", {
+        params: { code },
+      })
       .then(unwrap),
 
   /** Counts the click and hands back the URL to open. */

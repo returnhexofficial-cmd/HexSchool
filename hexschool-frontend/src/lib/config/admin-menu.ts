@@ -166,6 +166,12 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     permission: "hostel.view",
   },
   {
+    label: "Certificates",
+    href: "/admin/certificates",
+    icon: Award,
+    permission: "certificate.view",
+  },
+  {
     label: "Fees & Payments",
     href: "/admin/fees",
     icon: Wallet,

@@ -274,6 +274,21 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'hostel.vacate.override',
       'hostel.report',
       'hostel.export',
+      // M27 — the head signs the certificates, so the head holds the three
+      // codes the office deliberately lacks: revoking a document that has
+      // already left the building, letting one out over unmet clearance,
+      // and entering a pre-system certificate with its own number.
+      'certificate.view',
+      'certificate.template.manage',
+      'certificate.issue',
+      'certificate.clearance.override',
+      'certificate.revoke',
+      'certificate.legacy',
+      'certificate.export',
+      'archive.view',
+      'archive.upload',
+      'archive.manage',
+      'archive.delete',
     ],
   },
   {
@@ -349,6 +364,14 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'assignment.all',
       'assignment.export',
       'material.view',
+      // M27 — the deputy signs certificates in the head's absence and
+      // reads the register, but the three codes that disown a document,
+      // waive clearance or backdate the register stay with the head.
+      'certificate.view',
+      'certificate.issue',
+      'certificate.export',
+      'archive.view',
+      'archive.upload',
     ],
   },
   {
@@ -632,6 +655,22 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'hostel.mealoff.approve',
       'hostel.report',
       'hostel.export',
+      // M27 — the counter issues certificates and keeps the archive, which
+      // is exactly the office's work. Deliberately NOT granted:
+      // `certificate.revoke` (disowning a document already in a family's
+      // file is the head's call), `certificate.clearance.override`
+      // (letting a TC out over unpaid fees and unreturned books is the
+      // last moment the school has leverage) and `certificate.legacy`
+      // (writing a number the system did not generate is backdating the
+      // register). `archive.delete` is likewise the head's — the point of
+      // a filing cabinet is that things stay in it.
+      'certificate.view',
+      'certificate.template.manage',
+      'certificate.issue',
+      'certificate.export',
+      'archive.view',
+      'archive.upload',
+      'archive.manage',
     ],
   },
 ];

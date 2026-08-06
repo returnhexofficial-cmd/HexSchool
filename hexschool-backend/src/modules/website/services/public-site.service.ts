@@ -1,10 +1,15 @@
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { NewsCategory } from '../../../common/constants';
 import { RecaptchaService } from '../../admission/services/recaptcha.service';
+import {
+  CERTIFICATE_VERIFIER,
+  type CertificateVerifier,
+} from '../../document/document.constants';
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
 import { excerptFrom } from '../calc/html-sanitize.util';
 import { PreviewQueryDto, PublicFeedQueryDto } from '../dto';
@@ -55,6 +60,8 @@ export class PublicSiteService {
     private readonly preview: PreviewTokenService,
     private readonly cache: WebsiteCacheService,
     private readonly recaptcha: RecaptchaService,
+    @Inject(CERTIFICATE_VERIFIER)
+    private readonly certificates: CertificateVerifier,
   ) {}
 
   /**
@@ -552,18 +559,25 @@ export class PublicSiteService {
   }
 
   /**
-   * Certificate verification is Module 27's (`docs/modules` roadmap M27
-   * §10 "Public verification live — Module 19 stub replaced"). Until then
-   * the endpoint exists and describes itself, rather than 404-ing and
-   * leaving the page to guess — the M09 `attendance-history` precedent.
+   * Certificate verification — **live since Module 27**, which replaced
+   * the `{ available: false }` stub this endpoint answered with from M19.
+   *
+   * The lookup itself is `CertificateVerifierService`, bound here behind
+   * the `CERTIFICATE_VERIFIER` token: it depends on PrismaService alone,
+   * so WebsiteModule provides it a second time rather than importing
+   * DocumentModule and pulling Student, Result, Fee and Attendance into
+   * the public site's graph (the M13 `RoutineConflictChecker` / M23
+   * `LIBRARY_CLEARANCE` shape, and the direction this module's own doc
+   * predicted).
+   *
+   * It never throws and never 404s: a wrong code, a malformed code and a
+   * draft all get the same `NOT_FOUND` answer, because a public endpoint
+   * must not confirm that something exists (the M15 result-search / M19
+   * draft-preview rule).
    */
-  verifyCertificate(code: string) {
-    return {
-      available: false,
-      code,
-      reason:
-        'Certificate verification arrives with the Documents & Certificates module (27).',
-    };
+  async verifyCertificate(code: string) {
+    const result = await this.certificates.verify(code ?? '');
+    return { available: true, code, ...result };
   }
 
   // ── helpers ─────────────────────────────────────────────────────────

@@ -107,7 +107,7 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 24 | Inventory & Assets | ☑ |
 | 25 | Transport Management | ☑ |
 | 26 | Hostel Management | ☑ |
-| 27 | Document Management & Certificates | ☐ |
+| 27 | Document Management & Certificates | ☑ |
 | 28 | Complaint, Visitor & Alumni Management | ☐ |
 | 29 | Reports & Analytics v2 | ☐ |
 
@@ -1863,13 +1863,13 @@ Central document archive plus certificate engine: testimonial, transfer certific
 - `document_archive`: generalizes student/staff documents already built — adds `archive_folders(id, school_id, name, parent_id)` + `archive_files(id, folder_id, title, file_url, tags TEXT[], linked_type NULL, linked_id NULL, uploaded_by)`, audit/soft-delete.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Template CRUD with variable palette per type + live preview render.
-- [ ] Issue flow: pick student+type → auto-fill snapshot (enrollment, results, attendance %, conduct default) → clearance check (dues, library, hostel — aggregated clearance service) → generate PDF (QR encodes verify URL+code) → ISSUED + register entry + optional SMS.
-- [ ] TC special rule: issuing TC sets student status TRANSFERRED (confirm step) and locks portal.
-- [ ] Revoke endpoint (reason, keeps file, verification shows REVOKED).
-- [ ] Public verification: `GET /public/verify/certificate/:code` → type, student name, class, issue date, VALID/REVOKED (rate-limited).
-- [ ] Bulk prize certificates (e.g., merit top-3 per class from an exam) wizard endpoint.
-- [ ] Archive CRUD with folder tree + search by tag/title.
+- [x] Template CRUD with variable palette per type + live preview render.
+- [x] Issue flow: pick student+type → auto-fill snapshot (enrollment, results, attendance %, conduct default) → clearance check (dues, library, hostel — aggregated clearance service) → generate PDF (QR encodes verify URL+code) → ISSUED + register entry + optional SMS.
+- [x] TC special rule: issuing TC sets student status TRANSFERRED (confirm step) and locks portal.
+- [x] Revoke endpoint (reason, keeps file, verification shows REVOKED).
+- [x] Public verification: `GET /public/verify/certificate/:code` → type, student name, class, issue date, VALID/REVOKED (rate-limited).
+- [x] Bulk prize certificates (e.g., merit top-3 per class from an exam) wizard endpoint.
+- [x] Archive CRUD with folder tree + search by tag/title.
 ### APIs
 ```
 CRUD /api/v1/certificate-templates (+ /:id/preview)
@@ -1881,12 +1881,12 @@ CRUD /api/v1/archive/folders|files
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Template designer (HTML editor + variable chips + preview pane + background upload).
-- [ ] Issue wizard (student search → data review/edit → clearance status panel → confirm → download/print).
-- [ ] Certificate register table (filters, reprint, revoke).
-- [ ] Archive explorer (folder tree, upload, tag filter, preview).
-- [ ] Public verification page (code entry / QR-scan landing) — polished, branded.
-- [ ] Student portal: my certificates download list.
+- [x] Template designer (HTML editor + variable chips + preview pane + background upload).
+- [x] Issue wizard (student search → data review/edit → clearance status panel → confirm → download/print).
+- [x] Certificate register table (filters, reprint, revoke).
+- [x] Archive explorer (folder tree, upload, tag filter, preview).
+- [x] Public verification page (code entry / QR-scan landing) — polished, branded.
+- [x] Student portal: my certificates download list.
 
 ## 6. Business Rules
 - Certificate numbers sequential per type/year, never reused; data immutable post-issue (snapshot).
@@ -1902,15 +1902,15 @@ CRUD /api/v1/archive/folders|files
 - Duplicate TC request (lost original) → "Duplicate" watermark reissue referencing original number.
 
 ## 9. Testing Checklist
-- [ ] Unit: numbering, snapshot completeness, clearance aggregation.
-- [ ] e2e: issue TC → student status change → public verify VALID → revoke → verify shows REVOKED.
-- [ ] Manual: print fidelity on A4 with background.
+- [x] Unit: numbering, snapshot completeness, clearance aggregation.
+- [x] e2e: issue TC → student status change → public verify VALID → revoke → verify shows REVOKED.
+- [ ] Manual: print fidelity on A4 with background. *(outstanding — see `docs/modules/27-documents-certificates.md` Remaining TODOs)*
 
 ## 10. Completion Checklist
-- [ ] Templates + issuance + register + revoke
-- [ ] Public verification live (Module 19 stub replaced)
-- [ ] Archive
-- [ ] Docs: `docs/modules/27-documents-certificates.md`
+- [x] Templates + issuance + register + revoke
+- [x] Public verification live (Module 19 stub replaced)
+- [x] Archive
+- [x] Docs: `docs/modules/27-documents-certificates.md`
 
 ---
 

@@ -28,6 +28,7 @@ import {
   MessPlansRepository,
 } from './repositories/mess.repository';
 import { HostelAllocationsService } from './services/hostel-allocations.service';
+import { HostelClearanceService } from './services/hostel-clearance.service';
 import { HostelExportService } from './services/hostel-export.service';
 import { HostelFeeService } from './services/hostel-fee.service';
 import { HostelNotificationsService } from './services/hostel-notifications.service';
@@ -94,6 +95,7 @@ import { MessService } from './services/mess.service';
     HostelSettingsService,
     HostelsService,
     HostelAllocationsService,
+    HostelClearanceService,
     MessService,
     HostelFeeService,
     HostelPostingService,
@@ -118,6 +120,7 @@ import { MessService } from './services/mess.service';
   exports: [
     HostelPortalService,
     HostelAllocationsService,
+    HostelClearanceService,
     HostelReportsService,
     HostelSettingsService,
   ],

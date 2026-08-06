@@ -1,16 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageBanner, Section } from "../../_components/ui";
+import { CertificateVerifyForm } from "./verify-form";
 
 /**
- * Certificate verification. The page exists now and says plainly that the
- * capability is not live yet, rather than 404-ing — the school's printed
- * certificates can already carry this URL, and Module 27 fills in the
- * lookup behind it (the API endpoint already answers
- * `{ available: false, reason }`).
+ * Certificate verification — **live since Module 27**, replacing the
+ * placeholder M19 shipped so that printed certificates could already carry
+ * this URL.
+ *
+ * Rendered dynamically: a verification is a per-visitor lookup, and a
+ * cached answer about whether a document is genuine is exactly the answer
+ * that must never be stale (the M19 result-search reasoning).
  */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Certificate verification",
   description:
@@ -18,7 +22,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "/verify/certificate" },
 };
 
-export default function VerifyCertificatePage() {
+export default async function VerifyCertificatePage({
+  searchParams,
+}: {
+  // Next 16: `searchParams` is a promise and synchronous access is gone.
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const { code } = await searchParams;
+
   return (
     <>
       <PageBanner
@@ -26,30 +37,16 @@ export default function VerifyCertificatePage() {
         subtitle="Check that a certificate issued by the school is genuine."
         breadcrumb="Verification"
       />
-      <Section className="max-w-xl">
-        <Card>
-          <CardHeader>
-            <CardTitle>Not available yet</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4 text-sm text-muted-foreground">
-            <p>
-              Online certificate verification is being rolled out with the
-              school&rsquo;s document and certificate system. Until then,
-              please contact the office to confirm a certificate.
-            </p>
-            <p>
-              A student ID card can already be verified online.
-            </p>
-            <div className="flex flex-wrap gap-3 pt-2">
-              <Button asChild size="sm">
-                <Link href="/verify/student">Verify a student ID</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/contact">Contact the office</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <Section className="max-w-xl space-y-6">
+        <CertificateVerifyForm initialCode={code} />
+        <div className="flex flex-wrap gap-3">
+          <Button asChild size="sm" variant="outline">
+            <Link href="/verify/student">Verify a student ID</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline">
+            <Link href="/contact">Contact the office</Link>
+          </Button>
+        </div>
       </Section>
     </>
   );

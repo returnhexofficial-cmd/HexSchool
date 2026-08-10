@@ -55,6 +55,15 @@ describe('Portals & Dashboards (e2e)', () => {
     await prisma.contactMessage.deleteMany({
       where: { schoolId: DEFAULT_SCHOOL_ID, name: { startsWith: NAME } },
     });
+    // M28 — "Contact School" now opens a ticket rather than filing an
+    // office-inbox message, so this suite creates rows in a second table
+    // and has to take them away again.
+    await prisma.ticketComment.deleteMany({
+      where: { ticket: { subject: { startsWith: NAME } } },
+    });
+    await prisma.ticket.deleteMany({
+      where: { schoolId: DEFAULT_SCHOOL_ID, subject: { startsWith: NAME } },
+    });
     await prisma.leaveApplication.deleteMany({
       where: { schoolId: DEFAULT_SCHOOL_ID, reason: { contains: NAME } },
     });
@@ -476,7 +485,9 @@ describe('Portals & Dashboards (e2e)', () => {
       .set(auth(studentAToken))
       .expect(200);
     expect(
-      Array.isArray(dataOf<{ payableInvoices: unknown[] }>(res).payableInvoices),
+      Array.isArray(
+        dataOf<{ payableInvoices: unknown[] }>(res).payableInvoices,
+      ),
     ).toBe(true);
   });
 
@@ -490,19 +501,34 @@ describe('Portals & Dashboards (e2e)', () => {
     expect(Array.isArray(dataOf<{ items: unknown[] }>(res).items)).toBe(true);
   });
 
-  it('accepts a portal contact message and files it under the account’s own name', async () => {
-    await server()
+  /**
+   * **Changed by M28.** This used to file into the M19 `contact_messages`
+   * inbox; it now opens a real M28 ticket the family can follow, reply on
+   * and rate. The property being asserted is unchanged and is the one that
+   * mattered all along: **the sender comes from the account, never from
+   * the request body.**
+   */
+  it('accepts a portal contact message and files it under the account’s own row', async () => {
+    const res = await server()
       .post('/api/v1/portal/contact-school')
       .set(auth(parentToken))
-      .send({ subject: 'E2EPORTAL question', body: 'Is there class on Sunday?' })
+      .send({
+        subject: 'E2EPORTAL question',
+        body: 'Is there class on Sunday?',
+      })
       .expect(201);
 
-    const row = await prisma.contactMessage.findFirst({
-      where: { schoolId: DEFAULT_SCHOOL_ID, subject: 'E2EPORTAL question' },
+    const ticketNo = dataOf<{ ticketNo: string }>(res).ticketNo;
+    expect(ticketNo).toMatch(/^CMP-/);
+
+    const guardian = await prisma.guardian.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, name: `${NAME} Parent` },
     });
-    // The sender is taken from the guardian row, never the request body.
-    expect(row?.name).toBe(`${NAME} Parent`);
-    expect(row?.phone).toBe('01990001111');
+    const row = await prisma.ticket.findFirst({
+      where: { schoolId: DEFAULT_SCHOOL_ID, ticketNo },
+    });
+    expect(row?.raisedByType).toBe('GUARDIAN');
+    expect(row?.raisedById).toBe(guardian?.id);
   });
 
   it('refuses a contact message that tries to set its own sender', async () => {
@@ -645,9 +671,9 @@ describe('Portals & Dashboards (e2e)', () => {
     // Exactly 30 days, oldest first, with unmarked days as null rather than
     // a zero that would read as "everybody was absent".
     expect(d.attendanceTrend).toHaveLength(30);
-    expect(d.attendanceTrend.every((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date))).toBe(
-      true,
-    );
+    expect(
+      d.attendanceTrend.every((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.date)),
+    ).toBe(true);
     expect(
       d.attendanceTrend.every(
         (p) => p.percentage === null || typeof p.percentage === 'number',

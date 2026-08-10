@@ -30,6 +30,7 @@ import { opacApi } from "@/lib/api/library";
 import { TransportPanels } from "./transport-panels";
 import { HostelPanels } from "./hostel-panels";
 import { CertificatePanels } from "./certificate-panels";
+import { MyTicketsCard } from "./my-tickets";
 import { hostelPortalApi } from "@/lib/api/hostel";
 import { certificatePortalApi } from "@/lib/api/documents";
 import { portalTransportApi } from "@/lib/api/transport";
@@ -109,7 +110,7 @@ function StudentView() {
         fetchers={{ key: "self", get: certificatePortalApi.mine }}
       />
       <MessagesPanel />
-      <ContactSchoolCard />
+      <MyTicketsCard />
     </>
   );
 }
@@ -227,7 +228,7 @@ function ParentView({
         />
       )}
       <MessagesPanel />
-      <ContactSchoolCard />
+      <MyTicketsCard />
     </>
   );
 }
@@ -259,64 +260,6 @@ function MessagesPanel() {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-/**
- * "Contact School" (roadmap M18 §5) — lands in the M19 office inbox, which
- * already has a UI and a NEW/READ/REPLIED flow. Module 28's ticket system
- * replaces this with a real thread.
- */
-function ContactSchoolCard() {
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-
-  const send = useMutation({
-    mutationFn: () => portalApi.contactSchool(body, subject || undefined),
-    onSuccess: (res) => {
-      toast.success(res.message);
-      setSubject("");
-      setBody("");
-    },
-    onError: () => toast.error("Could not send the message"),
-  });
-
-  return (
-    <div className="space-y-3 rounded-md border p-4">
-      <div>
-        <h3 className="font-medium">Contact the school</h3>
-        <p className="text-sm text-muted-foreground">
-          The office sees your name and phone from your account.
-        </p>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contact-subject">Subject</Label>
-        <Input
-          id="contact-subject"
-          value={subject}
-          maxLength={200}
-          placeholder="Optional"
-          onChange={(e) => setSubject(e.target.value)}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="contact-body">Message</Label>
-        <Textarea
-          id="contact-body"
-          value={body}
-          rows={4}
-          maxLength={5000}
-          onChange={(e) => setBody(e.target.value)}
-        />
-      </div>
-      <Button
-        size="sm"
-        disabled={body.trim().length < 5 || send.isPending}
-        onClick={() => send.mutate()}
-      >
-        {send.isPending ? "Sending…" : "Send"}
-      </Button>
     </div>
   );
 }

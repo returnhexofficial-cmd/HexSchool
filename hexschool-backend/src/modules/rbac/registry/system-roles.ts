@@ -289,6 +289,33 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'archive.upload',
       'archive.manage',
       'archive.delete',
+      // M28 — the head reads everything, including the complaints that
+      // name a colleague. `ticket.sensitive.view` is granted HERE first
+      // and to almost nobody else, because roadmap §8's restriction is
+      // only meaningful if the list of people who hold it is short.
+      'ticket.view',
+      'ticket.sensitive.view',
+      'ticket.create',
+      'ticket.assign',
+      'ticket.respond',
+      'ticket.delete',
+      'ticket.report',
+      'ticket.export',
+      'visitor.view',
+      'visitor.manage',
+      'appointment.view',
+      'appointment.manage',
+      'appointment.decide',
+      'visitor.report',
+      'visitor.export',
+      'alumni.view',
+      'alumni.manage',
+      'alumni.approve',
+      'alumni.event.manage',
+      'alumni.donation.view',
+      'alumni.donation.cancel',
+      'alumni.report',
+      'alumni.export',
     ],
   },
   {
@@ -372,6 +399,23 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'certificate.export',
       'archive.view',
       'archive.upload',
+      // M28 — the deputy works the complaints inbox day to day, including
+      // the sensitive ones: an allegation about a teacher is exactly the
+      // thing a deputy head handles, and a school with only one person
+      // able to read them has no cover when that person is away.
+      'ticket.view',
+      'ticket.sensitive.view',
+      'ticket.create',
+      'ticket.assign',
+      'ticket.respond',
+      'ticket.report',
+      'ticket.export',
+      'appointment.view',
+      'appointment.decide',
+      'alumni.view',
+      'alumni.approve',
+      'alumni.event.manage',
+      'alumni.report',
     ],
   },
   {
@@ -479,6 +523,16 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'hostel.deposit.refund',
       'hostel.report',
       'hostel.export',
+      // M28 — a donation is money arriving, so the accountant sees the
+      // register, reads the summaries and holds the one code that makes a
+      // receipt disappear. Recording the gift at the reunion desk is the
+      // office's job and is deliberately not here: the same separation as
+      // the hostel deposit one line above, and the M16/M20/M21/M23/M24/
+      // M25/M26/M27 rule underneath both.
+      'alumni.donation.view',
+      'alumni.donation.cancel',
+      'alumni.report',
+      'alumni.export',
       // Deliberately NOT granted: `fee.override.approve` (a waiver needs
       // a senior's sign-off) and `fee.overpay` — the two places where
       // taking the money and authorising it must be different people.
@@ -671,6 +725,41 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'archive.view',
       'archive.upload',
       'archive.manage',
+      // M28 — the front desk IS this module for two thirds of it: the
+      // office triages complaints, works the gate register and runs the
+      // alumni desk. Three codes are deliberately withheld, and each has
+      // a person behind it:
+      //   `ticket.sensitive.view` — roadmap §8. A complaint naming a
+      //     colleague must not be readable by the colleague's colleagues;
+      //     it goes to the head and the deputy.
+      //   `ticket.delete` — the public form guarantees spam, and the
+      //     office may triage it, but deciding a complaint never happened
+      //     is not the counter's call.
+      //   `alumni.donation.cancel` — the office takes the money at the
+      //     reunion desk; the accountant is who can make a receipt
+      //     disappear (the separation this codebase has applied at every
+      //     till since M16).
+      'ticket.view',
+      'ticket.create',
+      'ticket.assign',
+      'ticket.respond',
+      'ticket.report',
+      'ticket.export',
+      'visitor.view',
+      'visitor.manage',
+      'visitor.delete',
+      'appointment.view',
+      'appointment.manage',
+      'appointment.decide',
+      'visitor.report',
+      'visitor.export',
+      'alumni.view',
+      'alumni.manage',
+      'alumni.event.manage',
+      'alumni.donation.view',
+      'alumni.donation.create',
+      'alumni.report',
+      'alumni.export',
     ],
   },
 ];

@@ -1313,7 +1313,7 @@ GET /api/v1/dashboard/accountant        (today collection by method, pending inv
 ## 5. Frontend Tasks (Next.js)
 - [x] `(portal)` layouts per user_type with tailored nav. — **one mobile-first shell with a role dispatcher**, not three layouts: parents are mobile-first, and three near-identical shells would have been three places to fix a bug.
 - [x] Student portal pages: Overview, Profile, Routine, Attendance (calendar heat view), Results (+ report card download), Payments/Dues (+ Pay Now), Notices, Documents/Certificates (downloads). — shipped as **seven tabs on one page** rather than seven routes (same reasoning as the shell). Certificates are M27's, so that panel is a self-describing stub.
-- [x] Parent portal: child switcher, mirrors student pages + SMS history + contact-school form (creates complaint ticket in Module 28 — stub as message to admin inbox now). — the contact form files into the **M19 office inbox**, which already has a UI and a NEW/READ/REPLIED flow, rather than a second inbox.
+- [x] Parent portal: child switcher, mirrors student pages + SMS history + contact-school form (creates complaint ticket in Module 28 — stub as message to admin inbox now). — the contact form files into the **M19 office inbox**, which already has a UI and a NEW/READ/REPLIED flow, rather than a second inbox. **Closed by M28 (2026-08-10):** it now creates a real ticket the family can follow, reply on and rate — the destination moved from the Website contact inbox to Complaints.
 - [x] Teacher portal: Today view, My Routine, Take Attendance shortcut, Mark Entry shortcut, My Students (performance snapshot), Leaves, Notices.
 - [x] Principal/Admin dashboard: stat cards + charts (attendance trend 30d, collection trend, class-wise strength, GPA distribution last exam), quick links, activity feed (audit tail).
 - [x] Accountant workspace home.
@@ -1928,9 +1928,9 @@ Three light workflow modules bundled: (a) complaints/suggestions/feedback with t
 - `alumni`: `id, school_id, student_id NULL (linked if in system), name, batch_year, last_class, phone, email, profession, organization, photo_url, is_public_profile BOOL, status ENUM('PENDING','APPROVED','REJECTED')`, audit; `alumni_events(id, title, date, venue, description, fee NUMERIC NULL)` + registrations; `donations(id, alumni_id NULL, donor_name, amount, purpose, method, received_at, receipt_no uq)`, audit.
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Tickets: create (portal + public form w/ reCAPTCHA), assignment & status flow, SLA reminder job (OPEN > 72 h → escalation notification), comment threads (internal vs visible), satisfaction prompt on RESOLVED, reports (by category/status/avg resolution time).
-- [ ] Visitors: quick check-in (photo webcam capture optional), gate pass PDF, checkout, appointment request→approve (SMS confirm), daily register report; auto-checkout job at day end (flag).
-- [ ] Alumni: public self-registration → approval queue (match hint against past GRADUATED students), directory (public: only approved+is_public), events + registration, donation entry + receipt PDF + summary reports (accounting posting optional).
+- [x] Tickets: create (portal + public form w/ reCAPTCHA), assignment & status flow, SLA reminder job (OPEN > 72 h → escalation notification), comment threads (internal vs visible), satisfaction prompt on RESOLVED, reports (by category/status/avg resolution time).
+- [x] Visitors: quick check-in (photo webcam capture optional), gate pass PDF, checkout, appointment request→approve (SMS confirm), daily register report; auto-checkout job at day end (flag).
+- [x] Alumni: public self-registration → approval queue (match hint against past GRADUATED students), directory (public: only approved+is_public), events + registration, donation entry + receipt PDF + summary reports (accounting posting optional).
 ### APIs
 ```
 CRUD /api/v1/tickets (+ /:id/assign|status|comments)   POST /api/v1/public/tickets
@@ -1941,9 +1941,9 @@ GET  /api/v1/reports/tickets|visitors|donations
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Ticket inbox (kanban by status + table view, priority chips, assignment dropdown, comment thread drawer); portal "Contact School" (replaces Module 18 stub); public complaint form.
-- [ ] Visitor desk screen (fast form, camera capture, gate pass print, live in-building list, checkout button); appointment calendar.
-- [ ] Alumni: public register page + directory (search by batch); admin approval queue; events manager; donation entry + receipts; donation dashboard.
+- [x] Ticket inbox (kanban by status + table view, priority chips, assignment dropdown, comment thread drawer); portal "Contact School" (replaces Module 18 stub); public complaint form.
+- [x] Visitor desk screen (fast form, camera capture, gate pass print, live in-building list, checkout button); appointment calendar.
+- [x] Alumni: public register page + directory (search by batch); admin approval queue; events manager; donation entry + receipts; donation dashboard.
 
 ## 6. Business Rules
 - Anonymous complaints allowed (setting) — no requester notifications.
@@ -1960,14 +1960,14 @@ GET  /api/v1/reports/tickets|visitors|donations
 - Visitor for exam duty (external invigilator) → purpose OFFICIAL + multi-day pass flag.
 
 ## 9. Testing Checklist
-- [ ] Unit: SLA escalation, reopen window, directory privacy filter.
-- [ ] e2e: public complaint→resolve→rating; visitor in/out; alumni register→approve→directory.
-- [ ] Frontend: kanban drag, camera capture fallback.
+- [x] Unit: SLA escalation, reopen window, directory privacy filter.
+- [x] e2e: public complaint→resolve→rating; visitor in/out; alumni register→approve→directory.
+- [ ] Frontend: kanban drag, camera capture fallback. — **neither built, both deliberately.** The board is read-only and the thread drawer does the work: a drag to RESOLVED cannot carry the resolution `chk_tickets_status_evidence` demands, so the gesture would either pop a dialog anyway or write an empty one. The camera capture waits on the media library (the M19/M20/M21/M23/M25/M26/M27 gap) — there is nowhere to put the frame, so the field takes a URL.
 
 ## 10. Completion Checklist
-- [ ] Tickets + Visitors + Alumni all live
-- [ ] Public forms integrated on website
-- [ ] Docs: `docs/modules/28-complaint-visitor-alumni.md`
+- [x] Tickets + Visitors + Alumni all live
+- [x] Public forms integrated on website
+- [x] Docs: `docs/modules/28-complaint-visitor-alumni.md`
 
 ---
 

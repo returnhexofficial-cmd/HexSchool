@@ -150,8 +150,9 @@ export class StudentPortalService {
         payable: Number(invoice.payable),
         paidTotal: Number(invoice.paidTotal),
         outstanding:
-          Math.round((Number(invoice.payable) - Number(invoice.paidTotal)) * 100) /
-          100,
+          Math.round(
+            (Number(invoice.payable) - Number(invoice.paidTotal)) * 100,
+          ) / 100,
         status: invoice.status,
       }))
       .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)));
@@ -285,7 +286,7 @@ export class StudentPortalService {
     }
     const cards = await this.resultReports.reportCards(
       examId,
-      { enrollmentId: row.enrollmentId } as ResultExportQueryDto,
+      { enrollmentId: row.enrollmentId },
       schoolId,
     );
     if (cards.length === 0) {

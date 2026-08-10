@@ -107,11 +107,12 @@ export class PortalActionsService {
     return {
       reference,
       outcome,
-      total: Math.round(
-        payments
-          .filter((p) => p.status === 'SUCCESS')
-          .reduce((sum, p) => sum + p.amount, 0) * 100,
-      ) / 100,
+      total:
+        Math.round(
+          payments
+            .filter((p) => p.status === 'SUCCESS')
+            .reduce((sum, p) => sum + p.amount, 0) * 100,
+        ) / 100,
       payments: payments.map(({ studentId: _studentId, ...rest }) => rest),
     };
   }

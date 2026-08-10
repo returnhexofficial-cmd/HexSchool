@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { TicketRaiserType } from '@prisma/client';
 import { NotificationRecipientType } from '../../../common/constants';
 import { NotificationsRepository } from '../../communication/repositories/notifications.repository';
-import { ContactService } from '../../website/services/contact.service';
+import { TicketsService } from '../../community/services/tickets.service';
 import { PortalResolverService } from './portal-resolver.service';
 import type { AccessTokenPayload } from '../../auth/interfaces/token-payload.interface';
-import type { PortalContactDto } from '../dto';
+import type { PortalContactDto, PortalTicketReplyDto } from '../dto';
 
 /** How far back the portal's message history reaches. */
 const HISTORY_TAKE = 50;
@@ -16,20 +17,25 @@ const HISTORY_TAKE = 50;
  * Both are **self-scoped by construction**. The history is keyed on the
  * guardian or student row the `PortalResolverService` resolved from the
  * token — there is no id parameter to tamper with, so the IDOR question
- * never arises. The contact form takes the sender's name and phone from
- * that same profile rather than the request body, so a signed-in sender
- * cannot write to the office inbox under someone else's name.
+ * never arises. The contact form takes the sender from that same profile
+ * rather than the request body, so a signed-in sender cannot write to the
+ * school under someone else's name.
  *
- * The form lands in the **M19 contact inbox** rather than a second table:
- * the office already has a UI, a NEW/READ/REPLIED flow and an in-app alert
- * for it. Module 28's ticket system is what finally replaces this.
+ * **Closed by M28.** The form used to file into the M19 office inbox,
+ * which had a UI and a NEW/READ/REPLIED flow but no way for the family to
+ * see what happened next. It now opens a real **ticket**: the parent gets
+ * a reference number, a status they can watch, a thread they can reply on
+ * and a satisfaction prompt when it is resolved — exactly what M18's own
+ * module doc said M28 would replace it with.
+ *
+ * The one thing that did **not** change is where the sender comes from.
  */
 @Injectable()
 export class PortalMessagesService {
   constructor(
     private readonly resolver: PortalResolverService,
     private readonly notifications: NotificationsRepository,
-    private readonly contact: ContactService,
+    private readonly tickets: TicketsService,
   ) {}
 
   /**
@@ -70,12 +76,86 @@ export class PortalMessagesService {
     };
   }
 
-  /** Portal "Contact School" → the M19 office inbox. */
+  /** Portal "Contact School" → an M28 ticket the family can follow. */
   async contactSchool(actor: AccessTokenPayload, dto: PortalContactDto) {
-    const sender = await this.resolver.senderIdentity(actor);
-    return this.contact.submitFromPortal(actor.schoolId, sender, {
-      subject: dto.subject,
-      body: dto.body,
+    const sender = await this.senderKey(actor);
+    return this.tickets.submitFromPortal(actor.schoolId, sender, {
+      type: dto.type ?? 'COMPLAINT',
+      category: dto.category ?? 'OTHER',
+      subject: dto.subject ?? 'Message from the portal',
+      description: dto.body,
     });
+  }
+
+  /** The family's own list of tickets, with the visible half of each thread. */
+  async myTickets(actor: AccessTokenPayload) {
+    const sender = await this.senderKey(actor);
+    return this.tickets.mine(
+      actor.schoolId,
+      sender.raiserType,
+      sender.raiserId,
+    );
+  }
+
+  /** A reply on their own ticket. Ownership is checked in the service. */
+  async replyToTicket(
+    actor: AccessTokenPayload,
+    ticketId: string,
+    dto: PortalTicketReplyDto,
+  ) {
+    const sender = await this.senderKey(actor);
+    const identity = await this.resolver.senderIdentity(actor);
+    return this.tickets.replyFromPortal(
+      ticketId,
+      actor.schoolId,
+      { ...sender, name: identity.name },
+      dto.body,
+    );
+  }
+
+  /** Roadmap M28 §4's satisfaction prompt, answered by the person who asked. */
+  async rateTicket(
+    actor: AccessTokenPayload,
+    ticketId: string,
+    dto: { rating: number; comment?: string },
+  ) {
+    const sender = await this.senderKey(actor);
+    const identity = await this.resolver.senderIdentity(actor);
+    return this.tickets.rateFromPortal(
+      ticketId,
+      actor.schoolId,
+      { ...sender, name: identity.name },
+      dto,
+    );
+  }
+
+  /**
+   * The requester key a ticket is filed under, resolved from the token
+   * and never from a request body — the M18 rule this service was built
+   * on, unchanged by M28.
+   *
+   * A **teacher** using the portal has no guardian or student row, so
+   * there is nothing to file a ticket against: staff raise complaints
+   * through the admin inbox, which is where the office already works.
+   */
+  private async senderKey(
+    actor: AccessTokenPayload,
+  ): Promise<{ raiserType: TicketRaiserType; raiserId: string }> {
+    const principal = await this.resolver.principal(actor);
+    if (principal.guardianId) {
+      return {
+        raiserType: TicketRaiserType.GUARDIAN,
+        raiserId: principal.guardianId,
+      };
+    }
+    if (principal.studentId) {
+      return {
+        raiserType: TicketRaiserType.STUDENT,
+        raiserId: principal.studentId,
+      };
+    }
+    throw new BadRequestException(
+      'Only a student or a guardian may raise a ticket from the portal — staff use the office inbox',
+    );
   }
 }

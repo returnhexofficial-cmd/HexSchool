@@ -43,6 +43,7 @@ import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TransportModule } from './modules/transport/transport.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { CommunityModule } from './modules/community/community.module';
 import { DocumentModule } from './modules/document/document.module';
 import { HostelModule } from './modules/hostel/hostel.module';
 import { QueuesModule } from './queues/queues.module';
@@ -194,6 +195,20 @@ import { QueuesModule } from './queues/queues.module';
     // bound inside WebsiteModule behind `CERTIFICATE_VERIFIER`, replacing
     // the stub M19 left at `GET /public/verify/certificate`.
     DocumentModule,
+    // CommunityModule (M28) is a near-leaf for the fourth time: only the
+    // leaf PortalModule imports it back, and that edge is what finally
+    // turns M18's contact-school stub into a real ticket thread. What is
+    // NOT in its import list is the interesting part — all three of its
+    // thirds are about people the system already knows, and it imports
+    // neither Student, Teacher, Staff nor Enrollment for them. A narrow
+    // `CommunityDirectoryRepository` over PrismaService supplies the
+    // handful of columns it needs, the M12/M17/M18/M19/M22/M23/M24
+    // precedent, eighth use. It imports School (settings), Sequence (three
+    // gap-free number series), Communication (every message), Accounting
+    // (a donation posts through `postAuto`, new `VoucherSource.DONATION`),
+    // Rbac (the sensitive-complaint check shapes the QUERY, so it lives in
+    // the service) and Storage.
+    CommunityModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

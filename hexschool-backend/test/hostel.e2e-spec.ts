@@ -94,6 +94,29 @@ describe('Hostel Management (e2e)', () => {
 
   const thisMonth = (): string => day(0).slice(0, 7);
 
+  /**
+   * `YYYY-MM-DD`, `n` days before the **last day of the previous month**,
+   * in Dhaka.
+   *
+   * The suspend/resume pair has to land entirely in the previous month, or
+   * M26's documented rule — "a resumed boarder's residency window starts
+   * at the resume date" — shortens the current month's billable window and
+   * the full-month rent assertion below stops being true.
+   *
+   * `day(-10)` / `day(-5)` looked date-independent and was not: run on the
+   * 10th, the resume falls on the 5th of THIS month and the rent prorates
+   * to 27/31. This is the M18 attendance-on-Friday / M25 Dhaka-midnight
+   * lesson a third time — **a suite that passes on the 3rd and fails on
+   * the 10th is not flaky, it is wrong.**
+   */
+  const beforeThisMonth = (n: number): string => {
+    const now = new Date(Date.now() + DHAKA_OFFSET_MS);
+    const firstOfMonth = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    return new Date(firstOfMonth - (n + 1) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  };
+
   const cleanup = async () => {
     await prisma.mealOff.deleteMany({
       where: { allocation: { hostel: { name: { startsWith: NAME } } } },
@@ -684,7 +707,10 @@ describe('Hostel Management (e2e)', () => {
       await server()
         .post(`/api/v1/hostel-allocations/${allocationId}/suspend`)
         .set(auth(officeToken))
-        .send({ reason: 'Home for the term', effectiveDate: day(-10) })
+        .send({
+          reason: 'Home for the term',
+          effectiveDate: beforeThisMonth(2),
+        })
         .expect(201);
 
       const [row, bed] = await Promise.all([
@@ -709,7 +735,7 @@ describe('Hostel Management (e2e)', () => {
       await server()
         .post(`/api/v1/hostel-allocations/${allocationId}/resume`)
         .set(auth(officeToken))
-        .send({ effectiveDate: day(-5) })
+        .send({ effectiveDate: beforeThisMonth(0) })
         .expect(201);
 
       const row = await prisma.hostelAllocation.findUnique({

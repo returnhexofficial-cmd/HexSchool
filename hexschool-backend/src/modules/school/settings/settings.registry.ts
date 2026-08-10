@@ -1504,6 +1504,173 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       200,
     ],
   ]),
+
+  // ── Module 28: Complaint, Visitor & Alumni Management ───────────────
+  // One group for three areas, prefixed by area. They share a module, a
+  // migration and a settings tab, and splitting them into three PG enum
+  // values would buy nothing a prefix does not.
+  ...g(SettingsGroup.community, [
+    ['community.enabled', 'boolean', 'Complaints, visitors and alumni', true],
+    // ── complaints ──────────────────────────────────────────────────
+    [
+      'community.ticket_no_pattern',
+      'string',
+      'Ticket number pattern',
+      'CMP-{YY}-{SEQ5}',
+    ],
+    // Roadmap §6: "anonymous complaints allowed (setting)". A school that
+    // turns this OFF is making a real choice — some will, because an
+    // anonymous box is also an anonymous grudge box — and the public form
+    // simply stops offering the option.
+    [
+      'community.ticket_allow_anonymous',
+      'boolean',
+      'Accept anonymous complaints',
+      true,
+    ],
+    [
+      'community.ticket_allow_public',
+      'boolean',
+      'Accept complaints from the public website form',
+      true,
+    ],
+    // Roadmap §4 names one number, 72 hours. A single threshold is the
+    // wrong shape for a school: a broken toilet and an allegation about a
+    // teacher do not deserve the same clock. MEDIUM keeps the roadmap's
+    // 72, so a school that never touches this gets exactly the specified
+    // behaviour.
+    [
+      'community.ticket_sla_hours',
+      'json',
+      'Hours before a ticket escalates, per priority',
+      { LOW: 120, MEDIUM: 72, HIGH: 48, URGENT: 24 },
+    ],
+    // Roadmap §6: "REOPENED allowed within 7 days of CLOSED".
+    [
+      'community.ticket_reopen_days',
+      'number',
+      'Days a closed ticket may still be reopened',
+      7,
+    ],
+    // Roadmap §8. Stored per ticket at creation, so widening or narrowing
+    // this list never retroactively exposes complaints already filed —
+    // the people who wrote those were told they would be handled
+    // discreetly, and a settings edit is not their consent.
+    [
+      'community.ticket_sensitive_categories',
+      'json',
+      'Categories whose complaints are restricted to senior staff',
+      ['TEACHER'],
+    ],
+    [
+      'community.ticket_notify_requester',
+      'boolean',
+      'Tell the requester when their ticket moves',
+      true,
+    ],
+    [
+      'community.ticket_satisfaction_prompt',
+      'boolean',
+      'Ask for a rating when a ticket is resolved',
+      true,
+    ],
+    [
+      'community.ticket_public_hourly_limit',
+      'number',
+      'Complaints one connection may file per hour',
+      5,
+    ],
+    // ── visitors ────────────────────────────────────────────────────
+    [
+      'community.visitor_gate_pass_required',
+      'boolean',
+      'Print a gate pass for every visitor',
+      false,
+    ],
+    [
+      'community.visitor_gate_pass_pattern',
+      'string',
+      'Gate pass number pattern',
+      'GP-{YY}{MM}-{SEQ5}',
+    ],
+    // Roadmap §6: "visitor must checkout same day (auto-flag otherwise)".
+    // The sweep runs at this time in school-local terms and writes the
+    // flag that says a machine, not a human, closed the visit.
+    [
+      'community.visitor_auto_checkout_time',
+      'string',
+      'Day-end auto check-out time (HH:mm)',
+      '21:00',
+    ],
+    [
+      'community.visitor_photo_required',
+      'boolean',
+      'Require a photo at check-in',
+      false,
+    ],
+    // Roadmap §8's multi-day OFFICIAL pass, bounded — an open-ended pass
+    // into a building full of children is the thing the register exists
+    // to prevent.
+    [
+      'community.visitor_max_pass_days',
+      'number',
+      'Longest multi-day visitor pass, in days',
+      7,
+    ],
+    [
+      'community.appointment_notify',
+      'boolean',
+      'SMS the visitor when an appointment is decided',
+      true,
+    ],
+    // ── alumni ──────────────────────────────────────────────────────
+    [
+      'community.alumni_public_registration',
+      'boolean',
+      'Let former students register themselves on the website',
+      true,
+    ],
+    [
+      'community.alumni_directory_public',
+      'boolean',
+      'Publish the alumni directory on the website',
+      true,
+    ],
+    ['community.alumni_min_batch_year', 'number', 'Earliest batch year', 1950],
+    // Defaults OFF, and deliberately: an approval queue whose whole
+    // purpose is roadmap §8's identity conflict cannot auto-approve.
+    [
+      'community.alumni_auto_approve',
+      'boolean',
+      'Approve alumni registrations automatically',
+      false,
+    ],
+    [
+      'community.alumni_notify_on_approval',
+      'boolean',
+      'Tell an alumnus when their registration is approved',
+      true,
+    ],
+    // ── donations ───────────────────────────────────────────────────
+    [
+      'community.donation_receipt_pattern',
+      'string',
+      'Donation receipt number pattern',
+      'DON-{YY}-{SEQ5}',
+    ],
+    [
+      'community.donation_post_to_accounts',
+      'boolean',
+      'Post donations to the ledger (Dr cash, Cr donation income)',
+      true,
+    ],
+    [
+      'community.donation_thank_you',
+      'boolean',
+      'Send a thank-you SMS when a donation is recorded',
+      true,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

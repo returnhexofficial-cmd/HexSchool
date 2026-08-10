@@ -15,6 +15,7 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { StudentModule } from '../student/student.module';
 import { TeacherModule } from '../teacher/teacher.module';
 import { TimetableModule } from '../timetable/timetable.module';
+import { CommunityModule } from '../community/community.module';
 import { DocumentModule } from '../document/document.module';
 import { HostelModule } from '../hostel/hostel.module';
 import { TransportModule } from '../transport/transport.module';
@@ -92,6 +93,14 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // M27 — the student/parent "my certificates" list. DocumentModule is
     // itself a near-leaf; this is the only module that imports it.
     DocumentModule,
+    // M28 — the ticket thread behind "Contact School". This is the edge
+    // that CLOSES the M18 stub: the form used to drop a message in the
+    // M19 office inbox (which `WebsiteModule` is still imported for — the
+    // career and contact surfaces), and now it opens a real ticket the
+    // family can follow, reply on and rate. Same shape a seventh time:
+    // CommunityModule decides what a requester may see and do,
+    // PortalModule answers only which guardian or student is asking.
+    CommunityModule,
   ],
   controllers: [PortalController, DashboardController, ReportsController],
   providers: [

@@ -56,6 +56,12 @@ export const SYSTEM_SLOT_CODES: Readonly<Record<SystemSlot, string>> = {
   // chart (as is `4140 Hostel Fee Income`, which the fee head maps to), so
   // a fresh school records a deposit correctly with nothing configured.
   [SYSTEM_SLOTS.HOSTEL_DEPOSIT_LIABILITY]: '2140',
+  // M28 — `4300 Donation Income` is already in the seeded 61-account BD
+  // chart, so a fresh school records the first reunion cheque correctly
+  // with nothing configured. A school that wants a restricted fund
+  // separated out maps the slot to its own account (`3300 Donations &
+  // Grants Fund` is seeded for exactly that conversation).
+  [SYSTEM_SLOTS.DONATION_INCOME]: '4300',
 };
 
 export interface ResolvedPostingMap {

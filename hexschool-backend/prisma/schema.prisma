@@ -103,6 +103,7 @@ enum SettingsGroup {
   inventory
   hostel
   documents
+  community
 
   @@map("settings_group_enum")
 }
@@ -745,6 +746,12 @@ enum VoucherSource {
   /// deposit is taken, and a DEBIT discharging it when it is handed back.
   /// Hostel and mess FEES are ordinary fee heads and post as `FEES`.
   HOSTEL
+  /// M28 — alumni and community donations. Its own value rather than
+  /// `MANUAL` because "what did the school raise this year" is the one
+  /// question the donation register exists to answer, and a source the
+  /// income statement cannot name is a number somebody has to reconstruct
+  /// by hand.
+  DONATION
 
   @@map("voucher_source_enum")
 }
@@ -1366,6 +1373,150 @@ enum ArchiveLinkType {
   @@map("archive_link_type_enum")
 }
 
+/// Roadmap M28 §3. The three are one table because they share every
+/// column and the whole workflow — a suggestion that turns out to be a
+/// complaint is a dropdown change, not a migration — but they are
+/// separate VALUES because the reports a head reads are "how many
+/// complaints" and "how many suggestions", and folding them would make
+/// the one number this third of the module exists to produce meaningless.
+enum TicketType {
+  COMPLAINT
+  SUGGESTION
+  FEEDBACK
+
+  @@map("ticket_type_enum")
+}
+
+/// What the ticket is about. TEACHER is not just another category: it is
+/// the one that makes a ticket **sensitive** by default (roadmap §8), so
+/// a complaint naming a member of staff is not sitting in the inbox the
+/// staff room can read.
+enum TicketCategory {
+  ACADEMIC
+  FEES
+  TRANSPORT
+  HOSTEL
+  TEACHER
+  FACILITY
+  OTHER
+
+  @@map("ticket_category_enum")
+}
+
+/// Who raised it. **ANONYMOUS is structural, not cosmetic** — the DB
+/// CHECK refuses an anonymous ticket that carries a raiser id or a contact
+/// block, because an "anonymous" complaint with a phone number on it is
+/// the promise this module makes being broken silently. PUBLIC is the
+/// unauthenticated website form: a real contact, no account behind it.
+enum TicketRaiserType {
+  GUARDIAN
+  STUDENT
+  STAFF
+  ANONYMOUS
+  PUBLIC
+
+  @@map("ticket_raiser_type_enum")
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@map("ticket_priority_enum")
+}
+
+/// Roadmap §3's five states. REOPENED is a real state rather than a
+/// return to OPEN, because "was this ever settled and then disputed" is
+/// the question a head asks about the office's resolution rate, and
+/// rewinding to OPEN would erase it.
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
+
+  @@map("ticket_status_enum")
+}
+
+/// Roadmap §3. OFFICIAL is the one that earns a multi-day pass (§8's
+/// external invigilator), which is why it is a value rather than free
+/// text — the pass-length rule has to be able to name it.
+enum VisitorPurpose {
+  MEETING
+  ADMISSION_QUERY
+  GUARDIAN_VISIT
+  VENDOR
+  OFFICIAL
+  OTHER
+
+  @@map("visitor_purpose_enum")
+}
+
+/// Whether the person being visited is on the teaching roll or the office
+/// roll. Polymorphic with no FK — the M12 `staff_attendances` / M21
+/// `leave_applications` / M23 `library_members` / M24 asset-custodian
+/// precedent, because `teachers` and `staff_profiles` are two tables with
+/// no supertype and a visitor asks for a person, not for a table.
+enum VisitorHostType {
+  TEACHER
+  STAFF
+
+  @@map("visitor_host_type_enum")
+}
+
+/// NO_SHOW is separate from REJECTED for the M21 reason: a school that
+/// refused an appointment and a visitor who never turned up are different
+/// facts, and one register that cannot tell them apart is a register the
+/// office stops trusting.
+enum AppointmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  NO_SHOW
+
+  @@map("appointment_status_enum")
+}
+
+/// An alumni registration is a **claim**, and PENDING is where it waits.
+/// Roadmap §8's conflict queue needs no table of its own: a second claim
+/// on an already-claimed student record is simply a PENDING row the
+/// partial unique refuses to let anyone approve.
+enum AlumniStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("alumni_status_enum")
+}
+
+enum AlumniRegistrationStatus {
+  REGISTERED
+  ATTENDED
+  CANCELLED
+
+  @@map("alumni_registration_status_enum")
+}
+
+/// How a donation arrived. Deliberately NOT `payment_method_enum`: that
+/// enum carries gateway values (SSLCOMMERZ, BKASH, NAGAD) whose semantics
+/// are "a server-side verify() concluded this", and a donation handed over
+/// as a cheque at the alumni dinner has no such evidence behind it.
+/// Sharing the enum would invite sharing the rules.
+enum DonationMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  MOBILE_BANKING
+  IN_KIND
+  OTHER
+
+  @@map("donation_method_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1594,6 +1745,14 @@ model School {
   certificates             Certificate[]
   archiveFolders           ArchiveFolder[]
   archiveFiles             ArchiveFile[]
+  tickets                  Ticket[]
+  ticketComments           TicketComment[]
+  visitors                 Visitor[]
+  appointments             Appointment[]
+  alumni                   Alumni[]
+  alumniEvents             AlumniEvent[]
+  alumniEventRegistrations AlumniEventRegistration[]
+  donations                Donation[]
 
   @@map("schools")
 }
@@ -2289,6 +2448,7 @@ model Student {
   promotionItems        PromotionItem[]
   leaveApplications     StudentLeaveApplication[]
   certificates          Certificate[]
+  alumniClaims          Alumni[]
 
   // Deliberately NOT deleted_at-scoped: student UIDs are never reused.
   @@unique([schoolId, studentUid], map: "uq_students_uid")
@@ -6497,4 +6657,409 @@ model ArchiveFile {
   /// Prisma cannot express (partial, expression-based) is migration-only.
   @@index([tags(ops: ArrayOps)], map: "idx_archive_files_tags", type: Gin)
   @@map("archive_files")
+}
+
+// ── Module 28: Complaint, Visitor & Alumni Management ─────────────────
+
+/// A complaint, a suggestion or a piece of feedback, and everything that
+/// happened to it.
+///
+/// **The load-bearing column is `raised_by_type`, and ANONYMOUS is the
+/// reason.** A school that offers an anonymous complaint box and then
+/// stores the sender's phone number beside the complaint has not offered
+/// one; it has built a trap. So anonymity is enforced at the database by
+/// `chk_tickets_raiser` — an ANONYMOUS ticket carries no raiser id and no
+/// contact block — and the service can neither notify nor accidentally
+/// join its way back to a person, because there is nothing there to join.
+///
+/// `ticket_no` is unique **ignoring `deleted_at`** — the M07 employee-ID /
+/// M09 student-UID / M23 accession / M24 asset-tag / M27 certificate rule.
+/// It is the reference a parent was told to quote, and handing it to a
+/// different complaint would make every earlier reply about it wrong.
+///
+/// `escalated_at` is the SLA sweep's idempotency, the M12
+/// `absent_notified_at` column-as-dedupe pattern: a job that runs hourly
+/// must not chase the head hourly.
+model Ticket {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_tickets_school")
+
+  ticketNo String         @map("ticket_no") @db.VarChar(40)
+  type     TicketType     @default(COMPLAINT)
+  category TicketCategory @default(OTHER)
+
+  subject     String @db.VarChar(200)
+  description String
+
+  /// `[{ url, name, mimeType, sizeBytes }]`. JSONB rather than a child
+  /// table because nothing queries an attachment — it is opened from the
+  /// ticket or not at all (the M27 `signatories` precedent).
+  attachments Json @default("[]")
+
+  /// Who raised it. `raised_by_id` points at a guardian, student or staff
+  /// row depending on the type — polymorphic and FK-less, the M12/M21/M23
+  /// precedent, because those three tables share no supertype.
+  raisedByType TicketRaiserType @map("raised_by_type")
+  raisedById   String?          @map("raised_by_id") @db.Uuid
+  /// `{ name, phone, email }` for a PUBLIC submission that has no account
+  /// behind it. NULL for ANONYMOUS, by CHECK.
+  contact      Json?
+
+  assignedTo String?        @map("assigned_to") @db.Uuid
+  priority   TicketPriority @default(MEDIUM)
+  status     TicketStatus   @default(OPEN)
+
+  /// Roadmap §8: a complaint about a named teacher is visible only to the
+  /// head and to whoever holds `ticket.sensitive.view`. Stored rather than
+  /// derived from the category, because a FEES complaint naming the
+  /// accountant is just as sensitive and the office must be able to say so.
+  isSensitive Boolean @default(false) @map("is_sensitive")
+
+  resolution         String?
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz(6)
+  closedAt           DateTime? @map("closed_at") @db.Timestamptz(6)
+  reopenedAt         DateTime? @map("reopened_at") @db.Timestamptz(6)
+  /// Roadmap §4's "satisfaction prompt on RESOLVED", 1–5 by CHECK, and
+  /// only ever present on a ticket that reached RESOLVED or CLOSED.
+  satisfactionRating Int?      @map("satisfaction_rating")
+
+  /// When somebody first said anything back — the number a school actually
+  /// wants when it asks whether the office is responsive, and not the same
+  /// as the time to resolve.
+  firstResponseAt DateTime? @map("first_response_at") @db.Timestamptz(6)
+  /// The SLA sweep's dedupe. Set once; a reopen clears it, because that is
+  /// a new clock.
+  escalatedAt     DateTime? @map("escalated_at") @db.Timestamptz(6)
+
+  /// Kept for the public form's per-IP hourly cap (the M19 contact rule).
+  /// Never set for ANONYMOUS — an IP is a contact detail.
+  ip String? @db.VarChar(45)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  comments TicketComment[]
+
+  /// **A ticket number is never reused** — the M07/M09/M23/M24/M27 rule.
+  /// It is a PLAIN unique (it deliberately ignores `deleted_at`, and a
+  /// plain index is exactly what that takes), so it is declared here as
+  /// well as in the migration — the M24 rule: only a partial or
+  /// expression index is migration-only, or a clean replay reports drift.
+  @@unique([schoolId, ticketNo], map: "uq_tickets_no")
+  @@index([schoolId, status, priority], map: "idx_tickets_status")
+  @@index([schoolId, assignedTo], map: "idx_tickets_assignee")
+  @@index([schoolId, raisedByType, raisedById], map: "idx_tickets_raiser")
+  @@index([schoolId, createdAt], map: "idx_tickets_created")
+  @@map("tickets")
+}
+
+/// One entry in the thread. **Append-only** — no `updated_at`, no
+/// `deleted_at`, no update path — the M03 audit / M17 notifications / M20
+/// ledger / M24 stock-ledger precedent, and roadmap §3 gives it exactly
+/// these columns and only `created_at`.
+///
+/// `is_internal` is the whole point of the table: an internal note is what
+/// the office says to itself while it works out what to tell the parent,
+/// and a thread that cannot hold both ends up holding neither.
+model TicketComment {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_ticket_comments_school")
+  ticketId String @map("ticket_id") @db.Uuid
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade, map: "fk_ticket_comments_ticket")
+
+  /// NULL when the requester wrote it through the portal without a staff
+  /// account behind them, and for the system's own entries.
+  authorId   String? @map("author_id") @db.Uuid
+  /// Denormalized at write time so a thread still reads correctly after a
+  /// member of staff leaves (the M12 `section_id`-at-marking-time rule).
+  authorName String  @map("author_name") @db.VarChar(160)
+
+  body       String
+  isInternal Boolean @default(false) @map("is_internal")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([ticketId, createdAt], map: "idx_ticket_comments_ticket")
+  @@map("ticket_comments")
+}
+
+/// One person, one visit. A row is created at check-in and closed at
+/// check-out; `check_out IS NULL` **is** the in-building list, which is
+/// why there is no status column to disagree with it (the M26 bed-status
+/// lesson: when an index can be the truth, a column should not try).
+///
+/// `gate_pass_no` is unique ignoring `deleted_at` — it is printed on a
+/// card somebody is carrying around the building.
+model Visitor {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_visitors_school")
+
+  name    String  @db.VarChar(160)
+  phone   String  @db.VarChar(20)
+  nid     String? @db.VarChar(20)
+  address String? @db.VarChar(250)
+
+  purpose    VisitorPurpose   @default(MEETING)
+  /// Who they came to see. Both columns are set or neither is
+  /// (`chk_visitors_host`); `whom_to_meet` is the free-text fallback
+  /// roadmap §3 asks for beside the id, because a vendor asks for "the
+  /// store room" and a parent asks for "my daughter's class teacher".
+  hostType   VisitorHostType? @map("host_type")
+  hostId     String?          @map("host_id") @db.Uuid
+  whomToMeet String?          @map("whom_to_meet") @db.VarChar(160)
+
+  cardNo     String? @map("card_no") @db.VarChar(30)
+  photoUrl   String? @map("photo_url") @db.VarChar(500)
+  gatePassNo String? @map("gate_pass_no") @db.VarChar(40)
+
+  checkIn  DateTime  @default(now()) @map("check_in") @db.Timestamptz(6)
+  checkOut DateTime? @map("check_out") @db.Timestamptz(6)
+
+  /// Roadmap §8's multi-day pass — an external invigilator sitting three
+  /// days of exams should not queue at the gate three times. NULL is the
+  /// ordinary same-day visit.
+  validUntil DateTime? @map("valid_until") @db.Date
+
+  /// Roadmap §4's day-end sweep set this rather than a human. It matters:
+  /// "we do not know when this person left" is a different fact from "they
+  /// signed out at 16:40", and the daily register has to be able to say so.
+  autoCheckedOut Boolean @default(false) @map("auto_checked_out")
+
+  appointmentId String?      @map("appointment_id") @db.Uuid
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull, map: "fk_visitors_appointment")
+
+  remarks String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_visitors_gate_pass` is hand-written: partial (the column is
+  // nullable) and it must hold across soft-deleted rows.
+  @@index([schoolId, checkIn], map: "idx_visitors_check_in")
+  @@index([schoolId, hostType, hostId], map: "idx_visitors_host")
+  @@index([schoolId, phone], map: "idx_visitors_phone")
+  @@map("visitors")
+}
+
+/// A visit arranged in advance. It is deliberately NOT a visitor row: an
+/// appointment that was approved and never kept is a fact the register has
+/// to keep (NO_SHOW), and creating the visitor row at approval time would
+/// put somebody in the building who never came.
+model Appointment {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_appointments_school")
+
+  visitorName String  @map("visitor_name") @db.VarChar(160)
+  phone       String  @db.VarChar(20)
+  email       String? @db.VarChar(160)
+
+  purpose  VisitorPurpose  @default(MEETING)
+  hostType VisitorHostType @map("host_type")
+  hostId   String          @map("host_id") @db.Uuid
+
+  scheduledAt DateTime          @map("scheduled_at") @db.Timestamptz(6)
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+
+  decidedBy   String?   @map("decided_by") @db.Uuid
+  decidedAt   DateTime? @map("decided_at") @db.Timestamptz(6)
+  decidedNote String?   @map("decided_note")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  visitors Visitor[]
+
+  @@index([schoolId, scheduledAt], map: "idx_appointments_scheduled")
+  @@index([schoolId, hostType, hostId, status], map: "idx_appointments_host")
+  @@map("appointments")
+}
+
+/// A former student, and their claim on a student record.
+///
+/// `student_id` is **optional and does not identify the row** — a school
+/// that opened in 1978 has forty years of alumni who were never in this
+/// system, and the directory is worth more with them in it. When it IS
+/// set, `uq_alumni_student` (partial: APPROVED, live rows only) makes the
+/// claim exclusive, which is roadmap §8's conflict queue with no queue
+/// table: a second claimant may register, sits PENDING, and the index is
+/// what stops two people being approved as the same person.
+model Alumni {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_alumni_school")
+
+  studentId String?  @map("student_id") @db.Uuid
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull, map: "fk_alumni_student")
+
+  name      String  @db.VarChar(160)
+  batchYear Int     @map("batch_year")
+  lastClass String? @map("last_class") @db.VarChar(80)
+
+  phone   String? @db.VarChar(20)
+  email   String? @db.VarChar(160)
+  address String? @db.VarChar(250)
+
+  profession   String? @db.VarChar(160)
+  organization String? @db.VarChar(160)
+  photoUrl     String? @map("photo_url") @db.VarChar(500)
+  bio          String?
+
+  /// Roadmap §6: "the alumni directory exposes only opted-in fields". This
+  /// is the opt-in, it defaults to **false**, and the public query filters
+  /// on it rather than the serializer trimming a richer row — the M19 rule
+  /// that the SELECT list is the privacy policy.
+  isPublicProfile Boolean @default(false) @map("is_public_profile")
+
+  status         AlumniStatus @default(PENDING)
+  approvedBy     String?      @map("approved_by") @db.Uuid
+  approvedAt     DateTime?    @map("approved_at") @db.Timestamptz(6)
+  rejectedReason String?      @map("rejected_reason")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  registrations AlumniEventRegistration[]
+  donations     Donation[]
+
+  @@index([schoolId, status], map: "idx_alumni_status")
+  @@index([schoolId, batchYear], map: "idx_alumni_batch")
+  @@map("alumni")
+}
+
+/// A reunion, a fundraiser, a prize-giving. `fee` NULL is a free event,
+/// which is not the same as 0.00 — one has no money attached, the other
+/// has a price the committee set to nothing, and the accounts read
+/// differently.
+model AlumniEvent {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_alumni_events_school")
+
+  title       String   @db.VarChar(200)
+  eventDate   DateTime @map("event_date") @db.Date
+  venue       String?  @db.VarChar(200)
+  description String?
+  fee         Decimal? @db.Decimal(12, 2)
+  capacity    Int?
+
+  registrationDeadline DateTime? @map("registration_deadline") @db.Date
+  isPublished          Boolean   @default(false) @map("is_published")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  registrations AlumniEventRegistration[]
+
+  @@index([schoolId, eventDate], map: "idx_alumni_events_date")
+  @@map("alumni_events")
+}
+
+model AlumniEventRegistration {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_alumni_event_registrations_school")
+
+  eventId  String      @map("event_id") @db.Uuid
+  event    AlumniEvent @relation(fields: [eventId], references: [id], onDelete: Restrict, map: "fk_alumni_event_registrations_event")
+  alumniId String      @map("alumni_id") @db.Uuid
+  alumni   Alumni      @relation(fields: [alumniId], references: [id], onDelete: Restrict, map: "fk_alumni_event_registrations_alumni")
+
+  /// Guests are counted against capacity too — a reunion where sixty
+  /// alumni each bring a spouse needs a hundred and twenty chairs.
+  guests     Int                      @default(0)
+  amountPaid Decimal                  @default(0) @map("amount_paid") @db.Decimal(12, 2)
+  status     AlumniRegistrationStatus @default(REGISTERED)
+  notes      String?
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // `uq_alumni_event_registrations_identity` is hand-written: partial,
+  // excluding CANCELLED so a withdrawal frees the seat and the person can
+  // register again (the M11/M21 cancelled-frees-the-slot rule).
+  @@index([eventId], map: "idx_alumni_event_registrations_event")
+  @@index([alumniId], map: "idx_alumni_event_registrations_alumni")
+  @@map("alumni_event_registrations")
+}
+
+/// Money given to the school, and the receipt handed back for it.
+///
+/// **A receipt is immutable** (roadmap §6). There is no update path: a
+/// mistake is CANCELLED with a reason and stays in the register, which is
+/// the M15 re-issue / M20 reversal / M24 purchase / M27 certificate rule
+/// arriving in a fifth ledger. `receipt_no` is unique ignoring
+/// `deleted_at`, because it is printed on a document a donor may claim
+/// tax relief against.
+model Donation {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_donations_school")
+
+  /// NULL when the donor is not an alumnus — a local business, a parent,
+  /// a trust. `donor_name` is always present, and is a **snapshot** even
+  /// when the alumni row exists, because a receipt says what it said.
+  alumniId String? @map("alumni_id") @db.Uuid
+  alumni   Alumni? @relation(fields: [alumniId], references: [id], onDelete: SetNull, map: "fk_donations_alumni")
+
+  donorName  String  @map("donor_name") @db.VarChar(160)
+  donorPhone String? @map("donor_phone") @db.VarChar(20)
+  donorEmail String? @map("donor_email") @db.VarChar(160)
+
+  amount     Decimal        @db.Decimal(12, 2)
+  purpose    String?        @db.VarChar(200)
+  method     DonationMethod @default(CASH)
+  receivedAt DateTime       @map("received_at") @db.Timestamptz(6)
+  receiptNo  String         @map("receipt_no") @db.VarChar(40)
+
+  /// The M20 voucher this posted as, when
+  /// `community.donation_post_to_accounts` is on. NULL means the ledger was
+  /// switched off or the posting failed — never that the money did not
+  /// arrive (the M21/M24/M25/M26 rule: a bookkeeping problem may not take
+  /// the receipt down).
+  voucherId String? @map("voucher_id") @db.Uuid
+
+  remarks    String?
+  receivedBy String? @map("received_by") @db.Uuid
+
+  cancelledAt     DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancelledBy     String?   @map("cancelled_by") @db.Uuid
+  cancelledReason String?   @map("cancelled_reason")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  /// Same rule as `uq_tickets_no`: a receipt number is never reused (it
+  /// is printed on a document a donor may claim tax relief against), which
+  /// makes it a PLAIN unique ignoring `deleted_at` — and a plain index
+  /// belongs in the schema as well as the migration (the M24 rule).
+  @@unique([schoolId, receiptNo], map: "uq_donations_receipt")
+  @@index([schoolId, receivedAt], map: "idx_donations_received")
+  @@index([alumniId], map: "idx_donations_alumni")
+  @@map("donations")
 }

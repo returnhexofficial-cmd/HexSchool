@@ -41,7 +41,12 @@ import { DocumentPortalService } from '../../document/services/document-portal.s
 import { HostelPortalService } from '../../hostel/services/hostel-portal.service';
 import { TransportPortalService } from '../../transport/services/transport-portal.service';
 import { OwnsStudent } from '../decorators/portal-scope.decorator';
-import { PortalContactDto, PortalLeaveDto } from '../dto';
+import {
+  PortalContactDto,
+  PortalLeaveDto,
+  PortalTicketRatingDto,
+  PortalTicketReplyDto,
+} from '../dto';
 import { OwnershipGuard } from '../guards/ownership.guard';
 import { PortalActionsService } from '../services/portal-actions.service';
 import { PortalMessagesService } from '../services/portal-messages.service';
@@ -504,13 +509,49 @@ export class PortalController {
     return this.messages.history(user);
   }
 
+  /**
+   * **Live since M28**: this opens a real ticket rather than dropping a
+   * message in the office inbox, so the family gets a reference number, a
+   * status and a thread. The request shape is unchanged for an existing
+   * caller — `type` and `category` are optional additions.
+   */
   @Post('contact-school')
-  @ApiOperation({ summary: 'Write to the office inbox (M28 replaces this)' })
+  @ApiOperation({ summary: 'Raise a ticket with the school' })
   contactSchool(
     @Body() dto: PortalContactDto,
     @CurrentUser() user: AccessTokenPayload,
   ) {
     return this.messages.contactSchool(user, dto);
+  }
+
+  @Get('tickets')
+  @ApiOperation({ summary: 'Tickets this account raised, with the thread' })
+  myTickets(@CurrentUser() user: AccessTokenPayload) {
+    return this.messages.myTickets(user);
+  }
+
+  /**
+   * Ownership IS the authorization, as everywhere else in the portal: a
+   * ticket somebody else raised gives the same 404 a missing one does.
+   */
+  @Post('tickets/:id/reply')
+  @ApiOperation({ summary: 'Reply on your own ticket' })
+  replyToTicket(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PortalTicketReplyDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.messages.replyToTicket(user, id, dto);
+  }
+
+  @Post('tickets/:id/rating')
+  @ApiOperation({ summary: 'Rate how the school handled it' })
+  rateTicket(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PortalTicketRatingDto,
+    @CurrentUser() user: AccessTokenPayload,
+  ) {
+    return this.messages.rateTicket(user, id, dto);
   }
 
   // ── teacher ─────────────────────────────────────────────────────────

@@ -369,15 +369,88 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     module: 'Certificates',
     description: 'An issued certificate was revoked, and why',
     channels: [C.IN_APP, C.SMS],
+    variables: ['student_name', 'type', 'certificate_no', 'reason', 'school'],
+    defaultBody:
+      '{{school}}: the {{type}} certificate {{certificate_no}} issued for {{student_name}} has been revoked. Reason: {{reason}}. Please contact the office.',
+  },
+  // ── Module 28 — complaints, visitors & alumni ────────────────────────
+  {
+    code: 'TICKET_RAISED',
+    module: 'Complaints',
+    description: 'A complaint, suggestion or feedback reached the office',
+    // IN_APP only. This lands on the desk of people who are already
+    // looking at the bell, and a school with an open public form would
+    // otherwise spend SMS credit on every piece of feedback it invited.
+    channels: [C.IN_APP],
     variables: [
-      'student_name',
+      'ticket_no',
       'type',
-      'certificate_no',
-      'reason',
+      'category',
+      'subject',
+      'priority',
       'school',
     ],
     defaultBody:
-      '{{school}}: the {{type}} certificate {{certificate_no}} issued for {{student_name}} has been revoked. Reason: {{reason}}. Please contact the office.',
+      'New {{type}} {{ticket_no}} ({{category}}, {{priority}}): {{subject}}',
+  },
+  {
+    code: 'TICKET_UPDATE',
+    module: 'Complaints',
+    description: 'A ticket the requester raised was answered or moved on',
+    // **Never sent for an anonymous ticket** — `isNotifiable` in
+    // `ticket.engine.ts` is checked before every send, and there is no
+    // destination stored on such a row to send to anyway.
+    channels: [C.IN_APP, C.SMS],
+    variables: ['ticket_no', 'subject', 'status', 'note', 'school'],
+    defaultBody:
+      '{{school}}: your ticket {{ticket_no}} ("{{subject}}") is now {{status}}. {{note}}',
+  },
+  {
+    code: 'TICKET_ESCALATED',
+    module: 'Complaints',
+    description:
+      'A ticket passed its SLA with nobody resolving it — the hourly sweep',
+    channels: [C.IN_APP],
+    variables: ['count', 'tickets', 'school'],
+    defaultBody:
+      '{{count}} ticket(s) are past their response time and still open — {{tickets}}. Assign or resolve them.',
+  },
+  {
+    code: 'APPOINTMENT_DECISION',
+    module: 'Visitors',
+    description: 'An appointment request was approved or refused',
+    // SMS first here, unlike the rest of the module: the recipient is
+    // somebody OUTSIDE the school with no portal and no bell, and the
+    // whole point is that they know before they travel.
+    channels: [C.SMS],
+    variables: [
+      'visitor_name',
+      'host',
+      'scheduled_at',
+      'status',
+      'note',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: your appointment with {{host}} on {{scheduled_at}} is {{status}}. {{note}}',
+  },
+  {
+    code: 'ALUMNI_APPROVED',
+    module: 'Alumni',
+    description: 'An alumni registration was approved',
+    channels: [C.IN_APP, C.SMS],
+    variables: ['name', 'batch_year', 'school'],
+    defaultBody:
+      '{{school}}: welcome back, {{name}} — your alumni profile (batch {{batch_year}}) has been approved.',
+  },
+  {
+    code: 'DONATION_RECEIVED',
+    module: 'Alumni',
+    description: 'A thank-you for a donation, carrying the receipt number',
+    channels: [C.SMS],
+    variables: ['donor_name', 'amount', 'receipt_no', 'purpose', 'school'],
+    defaultBody:
+      '{{school}}: thank you, {{donor_name}}. We have received your donation of {{amount}} BDT. Receipt {{receipt_no}}.',
   },
   {
     code: 'LOW_SMS_CREDIT',

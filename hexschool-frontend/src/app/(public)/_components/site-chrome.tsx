@@ -129,6 +129,7 @@ export function SiteFooter({ config }: { config: SiteConfig | null }) {
             { href: "/verify/student", label: "Student verification" },
             { href: "/verify/certificate", label: "Certificate check" },
             { href: "/downloads", label: "Downloads" },
+            { href: "/complaint", label: "Complaints & suggestions" },
           ]}
         />
         <FooterColumn
@@ -136,6 +137,7 @@ export function SiteFooter({ config }: { config: SiteConfig | null }) {
           links={[
             { href: "/committee", label: "Managing committee" },
             { href: "/teachers", label: "Teachers & staff" },
+            { href: "/alumni", label: "Alumni" },
             { href: "/career", label: "Career" },
             { href: "/faq", label: "FAQ" },
             { href: "/contact", label: "Contact" },

@@ -531,6 +531,72 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     params: [P.from, P.to],
     formats: ['xlsx'],
   },
+  // ── Complaints, visitors & alumni (M28) ─────────────────────────────
+  {
+    code: 'ticket.register',
+    name: 'Complaints register',
+    module: 'Complaints',
+    description:
+      'Every ticket raised over a window — who raised it, who took it, and how it ended.',
+    permission: 'ticket.export',
+    endpoint: '/tickets/reports/register',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'ticket.summary',
+    name: 'Complaints summary',
+    module: 'Complaints',
+    description:
+      'Volume by category and status, average resolution time, and SLA compliance.',
+    permission: 'ticket.report',
+    endpoint: '/tickets/reports/summary',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'visitor.register',
+    name: 'Visitor register',
+    module: 'Visitors',
+    description:
+      'Who came, who they saw, when they arrived and when they left — the daily gate book.',
+    permission: 'visitor.export',
+    endpoint: '/visitors/reports/register',
+    params: [P.from, P.to],
+    formats: ['xlsx', 'pdf'],
+  },
+  {
+    code: 'donation.register',
+    name: 'Donation register',
+    module: 'Alumni',
+    description:
+      'Every donation received over a window, with its receipt number and whether it still stands.',
+    permission: 'alumni.export',
+    endpoint: '/donations/reports/register',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'donation.summary',
+    name: 'Donation summary',
+    module: 'Alumni',
+    description:
+      'What was raised, by purpose, by method and month by month, and who gave most.',
+    permission: 'alumni.report',
+    endpoint: '/donations/reports/summary',
+    params: [P.from, P.to],
+    formats: ['xlsx'],
+  },
+  {
+    code: 'alumni.directory',
+    name: 'Alumni directory',
+    module: 'Alumni',
+    description: 'Approved alumni by batch, with profession and contact.',
+    permission: 'alumni.export',
+    endpoint: '/alumni/reports/directory',
+    params: [],
+    formats: ['xlsx'],
+  },
   // ── Communication (M17) ─────────────────────────────────────────────
   {
     code: 'communication.log',

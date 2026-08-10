@@ -683,6 +683,77 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['archive.manage', 'Create, rename and move archive folders'],
     ['archive.delete', 'Remove a filed document from the archive'],
   ]),
+
+  // ── Module 28: Complaint, Visitor & Alumni Management ───────────────
+  // The separation here is different in kind from every module before it,
+  // and `ticket.sensitive.view` is why. Elsewhere the split protects the
+  // school's money — who may waive, who may write off, who may hand a
+  // deposit back. Here it protects a **person**: roadmap §8 says a
+  // complaint about a named teacher must not be readable by general
+  // staff, and the code that opens it is deliberately not part of running
+  // the inbox. The office clerk triages the broken tap; the allegation
+  // about a colleague goes to whoever the school has decided handles
+  // those, and to nobody else.
+  //
+  // The rest follow the established line:
+  //   * `ticket.status` is held WITH a relationship — roadmap §6 gives
+  //     the move to the assignee or an inbox manager, and the engine
+  //     checks which of the two you are (a permission cannot express
+  //     "your own ticket").
+  //   * `ticket.delete` exists for the one thing the public form
+  //     guarantees: spam. It is not how a real complaint goes away.
+  ...define('tickets', [
+    ['ticket.view', 'Open the complaints inbox and read a ticket'],
+    [
+      'ticket.sensitive.view',
+      'Read complaints marked sensitive — those naming a member of staff',
+    ],
+    ['ticket.create', 'Raise a ticket on somebody else’s behalf'],
+    [
+      'ticket.assign',
+      'Assign a ticket, set its priority, and manage the inbox',
+    ],
+    ['ticket.respond', 'Comment on a ticket and move its status'],
+    ['ticket.delete', 'Remove a ticket — spam from the public form'],
+    ['ticket.report', 'Run the complaint volume, category and SLA reports'],
+    ['ticket.export', 'Download the ticket register'],
+  ]),
+  // The gate desk is a job, not an administrative privilege: checking a
+  // visitor in and out is one code, because a receptionist who can sign
+  // people in but not out leaves the building's occupancy list wrong all
+  // day. Approving an appointment is separate — it commits somebody
+  // else's diary.
+  ...define('visitors', [
+    [
+      'visitor.view',
+      'Open the visitor desk, the in-building list and the register',
+    ],
+    ['visitor.manage', 'Check a visitor in and out, and print a gate pass'],
+    ['visitor.delete', 'Remove a visitor entry recorded in error'],
+    ['appointment.view', 'See requested and scheduled appointments'],
+    ['appointment.manage', 'Record and edit appointment requests'],
+    ['appointment.decide', 'Approve or refuse an appointment request'],
+    ['visitor.report', 'Run the daily visitor register and the summary'],
+    ['visitor.export', 'Download the visitor register'],
+  ]),
+  // `alumni.donation.cancel` is the money code, and it is deliberately
+  // NOT part of running the alumni desk — the M16/M20/M21/M23/M24/M25/
+  // M26/M27 rule, continued. The person who takes a donation at the
+  // reunion desk must not also be the person who can make one disappear.
+  ...define('alumni', [
+    ['alumni.view', 'Open the alumni directory and the approval queue'],
+    ['alumni.manage', 'Add and edit alumni profiles'],
+    ['alumni.approve', 'Approve or reject an alumni registration'],
+    ['alumni.event.manage', 'Create alumni events and manage registrations'],
+    ['alumni.donation.view', 'See the donation register'],
+    ['alumni.donation.create', 'Record a donation and issue its receipt'],
+    [
+      'alumni.donation.cancel',
+      'Cancel a donation receipt, with a reason — the receipt stays in the register',
+    ],
+    ['alumni.report', 'Run the alumni and donation reports'],
+    ['alumni.export', 'Download the alumni directory and donation register'],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

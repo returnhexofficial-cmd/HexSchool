@@ -80,6 +80,13 @@ export const SYSTEM_SLOTS = {
    *  and mess FEES need no slot — they are fee heads like any other and
    *  post through the head → account map. */
   HOSTEL_DEPOSIT_LIABILITY: 'HOSTEL_DEPOSIT_LIABILITY',
+  // ── M28 community ───────────────────────────────────────────────────
+  /** Alumni and community giving. Its own slot rather than
+   *  `FEE_INCOME_DEFAULT`, because "what did the school raise this year"
+   *  is the one question the donation register exists to answer, and a
+   *  figure buried in tuition income is one somebody has to reconstruct
+   *  by hand every time the committee asks. */
+  DONATION_INCOME: 'DONATION_INCOME',
 } as const;
 
 export type SystemSlot = (typeof SYSTEM_SLOTS)[keyof typeof SYSTEM_SLOTS];

@@ -128,6 +128,11 @@ import { PaymentGatewayService } from './services/payment-gateway.service';
     InvoicesRepository,
     InvoiceService,
     PaymentGatewayService,
+    // M29 — the money report shapes the analytics module renders to
+    // spreadsheets. Additive, and the same reason M12/M20/M21/M23/M24/
+    // M25/M26 export theirs: a report has to be the module's own numbers,
+    // or the sheet and the screen drift apart.
+    FeeReportsService,
   ],
 })
 export class FeeModule {}

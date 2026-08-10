@@ -13,6 +13,7 @@ import { seedStandardGroups } from '../../modules/academic/seed/structure.seeder
 import { seedNotificationTemplates } from '../../modules/communication/seed/communication.seeder';
 import { seedChartOfAccounts } from '../../modules/accounting/seed/accounting.seeder';
 import { seedLeaveTypes } from '../../modules/hr/seed/hr.seeder';
+import { syncReportRegistry } from '../../modules/analytics/seed/reports.seeder';
 
 /**
  * Idempotent seed runner (`npm run seed`, also wired to `prisma migrate`
@@ -135,6 +136,22 @@ const seeders: Seeder[] = [
       process.stdout.write(
         created > 0 ? `${created} created; ` : 'already present; ',
       );
+    },
+  },
+  {
+    // Module 29: sync the TS report registry into `report_definitions`
+    // (the M03 permission-registry arrangement — new codes upserted,
+    // removed codes flagged orphaned, never deleted).
+    name: 'report-registry (M29)',
+    run: async (prisma) => {
+      const { synced, orphaned, unknownPermissions } =
+        await syncReportRegistry(prisma);
+      process.stdout.write(`${synced} reports, ${orphaned} newly orphaned; `);
+      if (unknownPermissions.length > 0) {
+        process.stdout.write(
+          `WARNING: unknown permissions ${unknownPermissions.join(', ')}; `,
+        );
+      }
     },
   },
 ];

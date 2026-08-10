@@ -144,6 +144,12 @@ import { VisitorsService } from './services/visitors.service';
   // module does not export compiles cleanly and then fails to boot — the
   // M18 `NotificationsRepository` and M21 `HrSettingsService` lesson,
   // twice learned, and both were found by the e2e run rather than by tsc.
-  exports: [TicketsService, CommunitySettingsService],
+  exports: [
+    TicketsService,
+    CommunitySettingsService,
+    // M29 — the complaint / visitor / donation report shapes. Additive,
+    // exactly as M27 added `HostelClearanceService` to M26.
+    CommunityReportsService,
+  ],
 })
 export class CommunityModule {}

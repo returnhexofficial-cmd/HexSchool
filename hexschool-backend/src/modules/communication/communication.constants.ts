@@ -461,6 +461,37 @@ export const NOTIFICATION_CODES: ReadonlyArray<NotificationCodeDefinition> = [
     defaultBody:
       'SMS credit is low: {{balance}} parts left (threshold {{threshold}}). Top up to keep alerts flowing.',
   },
+  // ── Module 29 — Reports & Analytics v2 ──────────────────────────────
+  {
+    code: 'REPORT_READY',
+    module: 'Analytics',
+    description:
+      'A scheduled report has been generated — carries the link or the attachment',
+    // EMAIL first, because roadmap §4 asks for "email with attachment /
+    // link" and a spreadsheet is not something an SMS can carry. The
+    // IN_APP copy is what a recipient who lives in the admin UI sees.
+    channels: [C.EMAIL, C.IN_APP],
+    variables: [
+      'schedule_name',
+      'report_name',
+      'rows',
+      'generated_at',
+      'download_url',
+      'school',
+    ],
+    defaultBody:
+      '{{school}}: "{{report_name}}" is ready ({{rows}} rows, generated {{generated_at}}). Download: {{download_url}}',
+  },
+  {
+    code: 'REPORT_SCHEDULE_FAILED',
+    module: 'Analytics',
+    description:
+      'A schedule was disabled after repeated failures (roadmap §6) — its owner is told',
+    channels: [C.IN_APP, C.EMAIL],
+    variables: ['schedule_name', 'report_name', 'reason', 'school'],
+    defaultBody:
+      '{{school}}: the scheduled report "{{schedule_name}}" has been switched off after repeated failures. Reason: {{reason}}',
+  },
 ];
 
 const byCode = new Map(NOTIFICATION_CODES.map((d) => [d.code, d]));

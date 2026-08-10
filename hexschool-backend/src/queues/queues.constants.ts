@@ -27,3 +27,20 @@ export interface ResultProcessingJob {
   runId: string;
   schoolId: string;
 }
+
+/**
+ * Report execution (Module 29). Roadmap §4: "async execution queue (large
+ * exports never block requests)".
+ *
+ * Same shape as the results queue and for the same reason: the job carries
+ * only the `report_runs` row id. The row holds the status, the parameters,
+ * the row count and the file, so the export centre keeps answering across
+ * a Redis restart and a run that fell out of the queue's retention window
+ * still has a record — a queue is a work list, not a system of record.
+ */
+export const REPORTS_QUEUE = 'reports';
+
+export interface ReportJob {
+  runId: string;
+  schoolId: string;
+}

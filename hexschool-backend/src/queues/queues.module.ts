@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
   NOTIFICATIONS_QUEUE,
+  REPORTS_QUEUE,
   RESULTS_QUEUE,
   SYSTEM_QUEUE,
 } from './queues.constants';
@@ -44,6 +45,9 @@ import { SystemProcessor } from './system.processor';
       // the processing service); this registration exists so Bull Board
       // shows the queue and the root wiring stays in one place.
       { name: RESULTS_QUEUE },
+      // M29 report execution. Same arrangement — the worker lives in
+      // AnalyticsModule, which is where the executors are.
+      { name: REPORTS_QUEUE },
     ),
   ],
   // The notifications worker moved to CommunicationModule (M17) — it needs

@@ -1671,6 +1671,72 @@ export const SETTINGS_REGISTRY: ReadonlyArray<SettingDefinition> = [
       true,
     ],
   ]),
+
+  // ── Module 29: Reports & Analytics v2 ───────────────────────────────
+  ...g(SettingsGroup.analytics, [
+    ['analytics.enabled', 'boolean', 'Reports engine and analytics', true],
+    [
+      'analytics.report_retention_days',
+      'number',
+      'Days a generated report file is kept',
+      30,
+    ],
+    [
+      'analytics.report_max_rows',
+      'number',
+      'Largest report a single run may produce',
+      50000,
+    ],
+    [
+      'analytics.schedule_max_failures',
+      'number',
+      'Consecutive failures before a schedule is switched off',
+      3,
+    ],
+    [
+      'analytics.schedule_attach_files',
+      'boolean',
+      'Attach the file to a scheduled report email (large ones are always a link)',
+      true,
+    ],
+    [
+      'analytics.schedule_attach_max_bytes',
+      'number',
+      'Largest file that may be attached rather than linked',
+      5000000,
+    ],
+    [
+      'analytics.mv_refresh_time',
+      'string',
+      'Nightly rebuild time for the analytics views (HH:mm, Asia/Dhaka)',
+      '02:15',
+    ],
+    [
+      'analytics.website_tracking_enabled',
+      'boolean',
+      'Count page views on the public website',
+      true,
+    ],
+    // A **secret**, because it is what makes a visitor fingerprint
+    // unguessable. With it in the open, anybody could compute the hash for
+    // a given IP and user agent and check whether that visitor is in the
+    // day's set — which is precisely the linkability the HyperLogLog was
+    // chosen to prevent. Rotating it resets uniqueness counting, which is
+    // the intended way to break any accumulated correlation.
+    [
+      'analytics.website_visitor_salt',
+      'string',
+      'Salt for the anonymous visitor fingerprint',
+      'smis-site-analytics',
+      true,
+    ],
+    [
+      'analytics.website_top_n',
+      'number',
+      'How many top pages and referrers a day keeps',
+      20,
+    ],
+  ]),
 ];
 
 const byKey = new Map(SETTINGS_REGISTRY.map((d) => [d.key, d]));

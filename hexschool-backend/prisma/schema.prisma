@@ -104,6 +104,7 @@ enum SettingsGroup {
   hostel
   documents
   community
+  analytics
 
   @@map("settings_group_enum")
 }
@@ -1517,6 +1518,53 @@ enum DonationMethod {
   @@map("donation_method_enum")
 }
 
+// ── Module 29: Reports & Analytics v2 ────────────────────────────────
+
+/// Roadmap §3. What a definition *is* — the shape the hub renders it as,
+/// not the file it exports to (that is `ReportFormat`). A CHART report
+/// returns series rather than rows, so the hub draws instead of tabling.
+enum ReportOutput {
+  TABLE
+  CHART
+  PDF
+  XLSX
+
+  @@map("report_output_enum")
+}
+
+/// The file a run produces. JSON is here because a scheduled run that
+/// feeds another system wants the rows, not a spreadsheet of them.
+enum ReportFormat {
+  XLSX
+  CSV
+  PDF
+  JSON
+
+  @@map("report_format_enum")
+}
+
+enum ReportRunStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+
+  @@map("report_run_status_enum")
+}
+
+/// PAUSED is the owner's choice and ACTIVE undoes it. DISABLED is the
+/// **system's** choice — roadmap §8's deleted-owner case and §6's
+/// retry-exhausted case — and it carries a `disabled_reason`, because a
+/// schedule that silently stopped firing is worse than one that never
+/// existed: the school believes it is still being emailed.
+enum ReportScheduleStatus {
+  ACTIVE
+  PAUSED
+  DISABLED
+
+  @@map("report_schedule_status_enum")
+}
+
 // ── Module 02: Authentication ─────────────────────────────────────────
 
 /// Central account record for every human in the system. Role-specific
@@ -1753,6 +1801,9 @@ model School {
   alumniEvents             AlumniEvent[]
   alumniEventRegistrations AlumniEventRegistration[]
   donations                Donation[]
+  reportSchedules          ReportSchedule[]
+  reportRuns               ReportRun[]
+  siteAnalyticsDaily       SiteAnalyticsDaily[]
 
   @@map("schools")
 }
@@ -7062,4 +7113,213 @@ model Donation {
   @@index([schoolId, receivedAt], map: "idx_donations_received")
   @@index([alumniId], map: "idx_donations_alumni")
   @@map("donations")
+}
+
+// ── Module 29: Reports & Analytics v2 ────────────────────────────────
+
+/// Roadmap §3's "registry table replacing the code-only registry from
+/// Module 18".
+///
+/// **It replaces the table's authority, not the file's.** The code in
+/// `analytics/reports/report.registry.ts` stays the source of truth and a
+/// seeder syncs it here — exactly the `permissions` arrangement, down to
+/// `is_orphaned` (a code removed from the file is flagged, never deleted,
+/// because `report_schedules` and `report_runs` reference it by code and a
+/// school's Monday-morning email may not vanish because a developer
+/// renamed something). That is why this table has **no `school_id`**: like
+/// `permissions` it is a system catalog, not a business table.
+///
+/// What the table buys over the file: schedules and runs get a real
+/// foreign key, and `params_schema` is queryable — the hub auto-generates
+/// a param form from it (roadmap §5) instead of the frontend keeping its
+/// own copy of what each report takes.
+model ReportDefinition {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique(map: "uq_report_definitions_code") @db.VarChar(100)
+  name        String  @db.VarChar(160)
+  module      String  @db.VarChar(60)
+  description String?
+
+  /// The `ReportParam[]` the hub renders a form from and the engine
+  /// validates against — roadmap §7's "params validated against schema".
+  paramsSchema Json @default("[]") @map("params_schema")
+
+  /// Roadmap §3 names this column `permissions`; it holds exactly one
+  /// code, because a report either has an audience or it does not, and a
+  /// list here would have to declare AND-vs-OR semantics the guard
+  /// already fixed (`@RequirePermissions` is AND, `@RequireAnyPermission`
+  /// is OR — a column cannot say which).
+  permission String @db.VarChar(100)
+
+  /// Roadmap §6's second permission: the one a *column* needs (medical,
+  /// salary). Null means the report has no sensitive columns at all.
+  sensitivePermission String? @map("sensitive_permission") @db.VarChar(100)
+
+  output  ReportOutput @default(TABLE)
+  /// The file formats a run may ask for, e.g. `["XLSX","CSV","PDF"]`.
+  formats Json         @default("[]")
+
+  /// The synchronous endpoint the M18 hub still deep-links to. Kept
+  /// because a small report is better *read* than downloaded.
+  endpoint String? @db.VarChar(200)
+
+  /// False when no executor is bound — the catalog then offers the
+  /// endpoint and hides the Run button, rather than queueing a job that
+  /// can only fail (the M18 `{available:false}` honesty rule).
+  isRunnable Boolean @default(false) @map("is_runnable")
+
+  /// Roadmap §8: a report served from a materialized view is at most a
+  /// day stale, and it has to *say so* on its own face. NULL is live.
+  freshness String? @db.VarChar(40)
+
+  isOrphaned Boolean @default(false) @map("is_orphaned")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  schedules ReportSchedule[]
+  runs      ReportRun[]
+
+  @@index([module], map: "idx_report_definitions_module")
+  @@map("report_definitions")
+}
+
+/// Roadmap §3/§4: "cron per schedule → run → email with attachment/link".
+///
+/// `next_run_at` is stored rather than derived on every sweep. The sweep
+/// is a cheap index scan over `(status, next_run_at)` instead of parsing
+/// every school's cron expression every minute, and — more importantly —
+/// it is what makes a **missed** window visible: a row whose `next_run_at`
+/// is an hour in the past is a schedule the worker did not get to, which
+/// is a fact worth being able to query.
+model ReportSchedule {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_report_schedules_school")
+
+  reportCode String           @map("report_code") @db.VarChar(100)
+  definition ReportDefinition @relation(fields: [reportCode], references: [code], onDelete: Restrict, map: "fk_report_schedules_definition")
+
+  name   String @db.VarChar(160)
+  params Json   @default("{}")
+
+  /// Five-field cron, **validated against a whitelist** (roadmap §7: no
+  /// sub-hourly) and interpreted in Asia/Dhaka (roadmap §6).
+  cron String @db.VarChar(60)
+
+  /// `{ "emails": [...], "userIds": [...] }` — roadmap §3.
+  recipients Json         @default("{}")
+  format     ReportFormat @default(XLSX)
+
+  status ReportScheduleStatus @default(ACTIVE)
+
+  /// Roadmap §8: when this user is deleted the schedule is DISABLED and an
+  /// admin is notified. Deliberately NOT a FK with a cascade — deleting
+  /// the user must not delete the school's reporting arrangement, only
+  /// stop it and say why.
+  ownerId String? @map("owner_id") @db.Uuid
+
+  nextRunAt      DateTime?        @map("next_run_at") @db.Timestamptz(6)
+  lastRunAt      DateTime?        @map("last_run_at") @db.Timestamptz(6)
+  lastStatus     ReportRunStatus? @map("last_status")
+  lastError      String?          @map("last_error")
+  /// Consecutive failures. Roadmap §6 retries ×2 then notifies the owner.
+  failureCount   Int              @default(0) @map("failure_count")
+  disabledReason String?          @map("disabled_reason")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy String?   @map("created_by") @db.Uuid
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  runs ReportRun[]
+
+  @@index([schoolId, status], map: "idx_report_schedules_school")
+  @@index([status, nextRunAt], map: "idx_report_schedules_due")
+  @@index([ownerId], map: "idx_report_schedules_owner")
+  @@map("report_schedules")
+}
+
+/// One execution — roadmap §3, and the row the export centre lists.
+///
+/// There is no soft delete: a run is a machine record with a 30-day life
+/// (roadmap §4's retention), and the retention job deletes the row and the
+/// S3 object together. `file_key`/`file_bucket` are stored beside
+/// `file_url` precisely so it can: a signed URL expires and cannot be used
+/// to find the object again, so a system that kept only the URL would
+/// leak every export file it ever made.
+model ReportRun {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_report_runs_school")
+
+  scheduleId String?         @map("schedule_id") @db.Uuid
+  schedule   ReportSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull, map: "fk_report_runs_schedule")
+
+  reportCode String           @map("report_code") @db.VarChar(100)
+  definition ReportDefinition @relation(fields: [reportCode], references: [code], onDelete: Restrict, map: "fk_report_runs_definition")
+
+  params Json         @default("{}")
+  format ReportFormat @default(XLSX)
+
+  requestedBy String?         @map("requested_by") @db.Uuid
+  status      ReportRunStatus @default(QUEUED)
+
+  fileUrl    String? @map("file_url") @db.VarChar(1000)
+  fileKey    String? @map("file_key") @db.VarChar(500)
+  fileBucket String? @map("file_bucket") @db.VarChar(120)
+  fileSize   Int?    @map("file_size")
+
+  rowCount   Int? @map("row_count")
+  durationMs Int? @map("duration_ms")
+
+  /// Roadmap §6: which columns the engine removed because the requester
+  /// lacked the data permission. Recorded on the run so a short sheet can
+  /// be explained without the reader guessing the file is corrupt.
+  strippedColumns Json @default("[]") @map("stripped_columns")
+
+  error      String?
+  startedAt  DateTime? @map("started_at") @db.Timestamptz(6)
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz(6)
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([schoolId, createdAt(sort: Desc)], map: "idx_report_runs_school")
+  @@index([schoolId, requestedBy, createdAt(sort: Desc)], map: "idx_report_runs_requester")
+  @@index([scheduleId], map: "idx_report_runs_schedule")
+  @@index([expiresAt], map: "idx_report_runs_retention")
+  @@map("report_runs")
+}
+
+/// Roadmap §3's website analytics, rolled up to one row per school per
+/// day by the fold job.
+///
+/// **There is no visitor table behind this, by design.** Uniques are
+/// counted in a Redis HyperLogLog keyed on a salted hash of IP + user
+/// agent, which is a structure you cannot read a visitor back out of; the
+/// fold writes the *count* here and the HLL expires. M28 already settled
+/// that an IP address is a contact detail, and a marketing-page counter is
+/// not a good enough reason to start keeping them.
+model SiteAnalyticsDaily {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  school   School @relation(fields: [schoolId], references: [id], map: "fk_site_analytics_daily_school")
+
+  date           DateTime @db.Date
+  pageViews      Int      @default(0) @map("page_views")
+  uniqueVisitors Int      @default(0) @map("unique_visitors")
+
+  /// `[{ path, views }]` and `[{ referrer, views }]`, top 20 each.
+  topPages     Json @default("[]") @map("top_pages")
+  topReferrers Json @default("[]") @map("top_referrers")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([schoolId, date], map: "uq_site_analytics_daily")
+  @@index([schoolId, date(sort: Desc)], map: "idx_site_analytics_daily_recent")
+  @@map("site_analytics_daily")
 }

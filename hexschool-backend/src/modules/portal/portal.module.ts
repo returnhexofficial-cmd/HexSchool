@@ -22,14 +22,12 @@ import { TransportModule } from '../transport/transport.module';
 import { WebsiteModule } from '../website/website.module';
 import { DashboardController } from './controllers/dashboard.controller';
 import { PortalController } from './controllers/portal.controller';
-import { ReportsController } from './controllers/reports.controller';
 import { OwnershipGuard } from './guards/ownership.guard';
 import { DashboardRepository } from './repositories/dashboard.repository';
 import { DashboardService } from './services/dashboard.service';
 import { PortalActionsService } from './services/portal-actions.service';
 import { PortalMessagesService } from './services/portal-messages.service';
 import { PortalResolverService } from './services/portal-resolver.service';
-import { ReportsService } from './services/reports.service';
 import { EmployeePortalService } from './services/employee-portal.service';
 import { StudentPortalService } from './services/student-portal.service';
 import { TeacherPortalService } from './services/teacher-portal.service';
@@ -102,7 +100,12 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     // PortalModule answers only which guardian or student is asking.
     CommunityModule,
   ],
-  controllers: [PortalController, DashboardController, ReportsController],
+  // M29 took over `@Controller('reports')`: its `report_definitions`
+  // table supersedes the code-only registry that used to live here, and
+  // two controllers on one path would collide. `GET /reports` still
+  // answers at the same URL with a superset of the same fields — see the
+  // M29 module doc's breaking-change note.
+  controllers: [PortalController, DashboardController],
   providers: [
     PortalResolverService,
     StudentPortalService,
@@ -111,7 +114,6 @@ import { TeacherPortalService } from './services/teacher-portal.service';
     PortalMessagesService,
     DashboardService,
     DashboardRepository,
-    ReportsService,
     PortalActionsService,
     OwnershipGuard,
     // Stateless re-provisions (only need PrismaService).

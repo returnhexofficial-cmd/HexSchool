@@ -43,6 +43,7 @@ import { AssignmentModule } from './modules/assignment/assignment.module';
 import { LibraryModule } from './modules/library/library.module';
 import { TransportModule } from './modules/transport/transport.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { CommunityModule } from './modules/community/community.module';
 import { DocumentModule } from './modules/document/document.module';
 import { HostelModule } from './modules/hostel/hostel.module';
@@ -209,6 +210,16 @@ import { QueuesModule } from './queues/queues.module';
     // Rbac (the sensitive-complaint check shapes the QUERY, so it lives in
     // the service) and Storage.
     CommunityModule,
+    // AnalyticsModule (M29) is the **second leaf aggregator** — the M18
+    // PortalModule shape, applied to reporting. It imports eleven feature
+    // modules purely for their exported report services, so a spreadsheet
+    // prints the module's own numbers rather than a second query that
+    // drifts (the M12 reports/export split, across module boundaries), and
+    // nothing imports it back, so the graph stays acyclic. It also takes
+    // over `@Controller('reports')` from PortalModule: M18's code-only
+    // registry is superseded by `report_definitions`, and two controllers
+    // on one path would collide.
+    AnalyticsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

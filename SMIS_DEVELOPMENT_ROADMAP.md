@@ -108,8 +108,8 @@ Target market: Bangladeshi educational institutions (Primary, High School, Kinde
 | 25 | Transport Management | ☑ |
 | 26 | Hostel Management | ☑ |
 | 27 | Document Management & Certificates | ☑ |
-| 28 | Complaint, Visitor & Alumni Management | ☐ |
-| 29 | Reports & Analytics v2 | ☐ |
+| 28 | Complaint, Visitor & Alumni Management | ☑ |
+| 29 | Reports & Analytics v2 | ☑ |
 
 **Phase 3 — Platform (Modules 30–32)**
 
@@ -1987,11 +1987,11 @@ Elevate reporting: unified report builder framework, cross-module analytics dash
 - Materialized views for heavy aggregates: `mv_attendance_monthly`, `mv_collection_monthly`, `mv_result_summary` (refreshed nightly).
 
 ## 4. Backend Tasks (NestJS)
-- [ ] Report engine: definition registry, param validation, async execution queue (large exports never block requests), file delivery via signed S3 URLs, retention (30 d auto-purge).
-- [ ] Scheduler (cron per schedule) → run → email with attachment/link.
-- [ ] Analytics endpoints powering executive dashboard: enrollment trends (YoY), attendance heatmap (section × month), fee realization %, dues aging, result trends (pass % & GPA avg per exam over time), teacher workload & leave patterns, SMS spend, library/inventory/transport KPIs.
-- [ ] MV refresh jobs + manual refresh endpoint.
-- [ ] Export center: my exports list (report_runs by user).
+- [x] Report engine: definition registry, param validation, async execution queue (large exports never block requests), file delivery via signed S3 URLs, retention (30 d auto-purge).
+- [x] Scheduler (cron per schedule) → run → email with **link** (an attachment needs an M17 change — see the module doc's Known Limitations).
+- [x] Analytics endpoints powering executive dashboard: enrollment trends (YoY), attendance heatmap (section × month), fee realization %, dues aging, result trends (pass % & GPA avg per exam over time), teacher workload & leave patterns, SMS spend, library/inventory/transport KPIs.
+- [x] MV refresh jobs + manual refresh endpoint.
+- [x] Export center: my exports list (report_runs by user).
 ### APIs
 ```
 GET  /api/v1/reports (catalog)   POST /api/v1/reports/:code/run   GET /api/v1/report-runs (+/:id)
@@ -2001,10 +2001,10 @@ GET  /api/v1/analytics/website
 ```
 
 ## 5. Frontend Tasks (Next.js)
-- [ ] Reports hub v2: catalog with param forms auto-generated from params_schema, run→toast→export center.
-- [ ] Executive analytics dashboard: filterable (session), chart grid (line/bar/heatmap via Recharts), drill-through links to source module pages, PDF snapshot export.
-- [ ] Schedule manager (cron presets: daily/weekly/monthly, recipient picker, test-run).
-- [ ] Export center page (status, download, re-run).
+- [x] Reports hub v2: catalog with param forms auto-generated from params_schema, run→toast→export center.
+- [x] Executive analytics dashboard: filterable (session), chart grid (line/bar/heatmap) with drill-through links to source module pages. **Charts use the existing dependency-free `components/shared/charts.tsx` primitives rather than Recharts** — the M18 decision, unchanged: no chart library is vendored and none of these shapes needs one. **No PDF snapshot export**: every panel is a report in the catalog, so the snapshot is a run rather than a screenshot.
+- [x] Schedule manager (cron presets: daily/weekly/monthly, email recipients, test-run). **Recipients are typed addresses plus user ids over the API; there is no user *picker* yet.**
+- [x] Export center page (status, download, re-run).
 
 ## 6. Business Rules
 - Report access enforced per definition permission (engine-level, not just UI).
@@ -2020,15 +2020,15 @@ GET  /api/v1/analytics/website
 - Deleted user owning schedules → schedules auto-disabled, admin notified.
 
 ## 9. Testing Checklist
-- [ ] Unit: engine param validation, column-stripping, cron scheduling.
-- [ ] e2e: run→file→download; schedule fire (time-travel test).
-- [ ] Load: executive dashboard < 1 s on seeded 5-year dataset.
+- [x] Unit: engine param validation, column-stripping, cron scheduling. *(163 tests across 9 suites; 102 of them on the five pure engines before a service existed.)*
+- [x] e2e: run→file→download; schedule fire (time-travel test). *(44 cases; the download assertion fetches the signed URL and checks the real bytes.)*
+- [ ] Load: executive dashboard < 1 s on seeded 5-year dataset. *(Not measured — the panels are MV-backed and cached by design, but the target is unverified.)*
 
 ## 10. Completion Checklist
-- [ ] Engine + schedules + export center
-- [ ] Executive dashboard
-- [ ] MVs + website analytics
-- [ ] Docs: `docs/modules/29-reports-analytics.md`
+- [x] Engine + schedules + export center
+- [x] Executive dashboard
+- [x] MVs + website analytics
+- [x] Docs: `docs/modules/29-reports-analytics.md`
 
 ---
 

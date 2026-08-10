@@ -12,6 +12,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  ChartNoAxesCombined,
   ClipboardCheck,
   ClipboardList,
   Contact,
@@ -253,10 +254,21 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     permission: "audit.view",
   },
   {
+    // **No permission code, deliberately** — and it used to name
+    // `report.view`, which has never existed in the permission registry,
+    // so this item was invisible to everybody but a super admin. The hub
+    // self-filters (`GET /reports` returns only what the caller may run)
+    // and the catalog says so plainly when that is nothing, which is the
+    // same arrangement the backend route has.
     label: "Reports",
     href: "/admin/reports",
     icon: FileBarChart,
-    permission: "report.view",
+  },
+  {
+    label: "Analytics",
+    href: "/admin/analytics",
+    icon: ChartNoAxesCombined,
+    permission: "analytics.view",
   },
   {
     label: "Settings",

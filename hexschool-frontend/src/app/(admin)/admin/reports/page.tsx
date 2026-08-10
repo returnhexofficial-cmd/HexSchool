@@ -1,98 +1,58 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { EmptyState } from "@/components/shared/empty-state";
-import { ErrorState } from "@/components/shared/error-state";
+import { useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
-import { LoadingBlock } from "@/components/shared/spinner";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { portalApi } from "@/lib/api/portal";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { ReportCatalogTab } from "./catalog-tab";
+import { ExportCentreTab } from "./export-centre-tab";
+import { SchedulesTab } from "./schedules-tab";
 
 /**
- * Reports hub (Module 18) — a searchable catalog of every report the user
- * may run, served by `GET /reports` (already filtered to their
- * permissions). Each card names where the report lives, its parameters and
- * export formats; the actual run/export uses the module's own page/endpoint.
+ * The reports workspace (Module 29), in the order somebody uses it: find
+ * the report, collect the file, and set the ones you want without asking.
+ *
+ * This replaces M18's read-only hub at the same route. The catalog is
+ * still `GET /reports` and still self-filters to what the caller may run —
+ * what M29 adds is that pressing Run now does something.
  */
-export default function ReportsHubPage() {
-  const [search, setSearch] = useState("");
-  const q = useQuery({ queryKey: ["reports"], queryFn: portalApi.reports });
+const TABS = [
+  ["catalog", "Catalog"],
+  ["exports", "Export centre"],
+  ["schedules", "Schedules"],
+] as const;
 
-  const grouped = useMemo(() => {
-    const rows = (q.data ?? []).filter(
-      (r) =>
-        r.name.toLowerCase().includes(search.toLowerCase()) ||
-        r.module.toLowerCase().includes(search.toLowerCase()),
-    );
-    const byModule = new Map<string, typeof rows>();
-    for (const r of rows) {
-      byModule.set(r.module, [...(byModule.get(r.module) ?? []), r]);
-    }
-    return [...byModule.entries()];
-  }, [q.data, search]);
+type TabKey = (typeof TABS)[number][0];
+
+export default function ReportsPage() {
+  const [tab, setTab] = useState<TabKey>("catalog");
 
   return (
     <main className="flex-1 space-y-6 p-8">
       <PageHeader
         title="Reports"
-        description="Every report you can run, in one place."
+        description="Every report you can run, the files you have generated, and the ones that arrive on their own."
       />
 
-      {q.isLoading ? (
-        <LoadingBlock />
-      ) : q.isError ? (
-        <ErrorState onRetry={() => void q.refetch()} />
-      ) : q.data && q.data.length === 0 ? (
-        <EmptyState
-          title="No reports available"
-          description="You don’t have permission to run any reports yet."
-        />
-      ) : (
-        <>
-          <Input
-            placeholder="Search reports…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-sm"
-          />
-          {grouped.map(([module, rows]) => (
-            <section key={module} className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                {module}
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {rows.map((r) => (
-                  <div key={r.code} className="rounded-md border p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium">{r.name}</h3>
-                      <div className="flex gap-1">
-                        {r.formats.map((f) => (
-                          <Badge key={f} variant="outline" className="uppercase">
-                            {f}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {r.description}
-                    </p>
-                    {r.params.length > 0 && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Params: {r.params.map((p) => p.label).join(", ")}
-                      </p>
-                    )}
-                    <code className="mt-2 block truncate text-xs text-muted-foreground">
-                      {r.endpoint}
-                    </code>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-        </>
-      )}
+      <div className="flex flex-wrap gap-1 border-b">
+        {TABS.map(([key, label]) => (
+          <Button
+            key={key}
+            variant="ghost"
+            className={cn(
+              "rounded-none border-b-2 border-transparent",
+              tab === key && "border-primary text-primary",
+            )}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {tab === "catalog" && <ReportCatalogTab />}
+      {tab === "exports" && <ExportCentreTab />}
+      {tab === "schedules" && <SchedulesTab />}
     </main>
   );
 }

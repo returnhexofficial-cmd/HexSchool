@@ -1,20 +1,34 @@
-/**
- * The consolidated reports catalog (roadmap M18 §4 "Reports index
- * registry: every existing report registered with code, permission,
- * params schema → GET /reports powers a unified Reports page").
- *
- * A code registry, like permissions/settings — the actual report
- * endpoints already live in their feature modules; this is the metadata a
- * single Reports hub renders (what it is, who may run it, where it lives,
- * what parameters it takes, which formats it exports). Append-only.
- */
+import type { ReportFormat, ReportOutput, ReportParam } from '../calc/types';
 
-export interface ReportParam {
-  key: string;
-  label: string;
-  type: 'session' | 'class' | 'section' | 'month' | 'date' | 'text' | 'exam';
-  required: boolean;
-}
+/**
+ * The report catalog — roadmap M29 §3's `report_definitions`, and the
+ * successor to M18's `portal/reports/report.registry.ts`.
+ *
+ * **The table replaces the file's storage, not its authority.** This file
+ * is still the source of truth and a seeder syncs it into
+ * `report_definitions` (the `permission.registry.ts` / `settings.registry.ts`
+ * arrangement, third use), because the alternative — rows a developer
+ * inserts by hand — has no code review, no diff and no way for `tsc` to
+ * notice that a report points at a permission nobody defines. Append-only,
+ * and `report.registry.spec.ts` enforces both of those.
+ *
+ * What M29 adds to each entry over M18's version:
+ *
+ *   - **`params`** is now a real schema the engine validates against and
+ *     the hub generates a form from (roadmap §5's "param forms
+ *     auto-generated from params_schema") — one description, two
+ *     consumers, so the form cannot offer what the engine refuses.
+ *   - **`output`** — how the hub renders it (roadmap §3).
+ *   - **`runnable`** — whether an async executor exists. A report without
+ *     one keeps its deep link and hides the Run button, rather than
+ *     queueing a job that can only fail (the M18 `{available:false}`
+ *     honesty rule).
+ *   - **`sensitivePermission`** — roadmap §6's column-level data
+ *     permission. The columns themselves carry it; this is the copy the
+ *     catalog can show before the report has been run.
+ *   - **`freshness`** — roadmap §8. A report served from a materialized
+ *     view is up to 24 h stale and has to say so on its own face.
+ */
 
 export interface ReportDefinition {
   code: string;
@@ -23,12 +37,20 @@ export interface ReportDefinition {
   description: string;
   /** Permission required to run it (matches the endpoint's guard). */
   permission: string;
-  /** GET endpoint that returns the report JSON. */
-  endpoint: string;
+  /** The synchronous endpoint that returns the report JSON, if any. */
+  endpoint?: string;
   params: ReportParam[];
-  /** Export formats the endpoint offers (xlsx/pdf suffix routes). */
-  formats: Array<'xlsx' | 'pdf' | 'csv'>;
+  output: ReportOutput;
+  /** File formats a run may ask for. */
+  formats: ReportFormat[];
+  /** True when `executors/` binds an async executor for this code. */
+  runnable: boolean;
+  sensitivePermission?: string;
+  /** Null/absent is live; otherwise the staleness the reader must know. */
+  freshness?: string;
 }
+
+// ── Reusable parameter descriptors ────────────────────────────────────
 
 const P = {
   session: {
@@ -42,6 +64,7 @@ const P = {
     label: 'Session',
     type: 'session',
     required: false,
+    help: 'Defaults to the current session',
   } as ReportParam,
   classOpt: {
     key: 'classId',
@@ -55,11 +78,24 @@ const P = {
     type: 'section',
     required: false,
   } as ReportParam,
+  section: {
+    key: 'sectionId',
+    label: 'Section',
+    type: 'section',
+    required: true,
+  } as ReportParam,
   month: {
     key: 'month',
     label: 'Month',
     type: 'month',
     required: true,
+  } as ReportParam,
+  monthOpt: {
+    key: 'month',
+    label: 'Month',
+    type: 'month',
+    required: false,
+    help: 'Defaults to this month',
   } as ReportParam,
   date: {
     key: 'date',
@@ -73,14 +109,75 @@ const P = {
     type: 'date',
     required: false,
   } as ReportParam,
-  to: { key: 'to', label: 'To', type: 'date', required: false } as ReportParam,
+  to: {
+    key: 'to',
+    label: 'To',
+    type: 'date',
+    required: false,
+  } as ReportParam,
   exam: {
     key: 'examId',
     label: 'Exam',
     type: 'exam',
     required: true,
   } as ReportParam,
-};
+  route: {
+    key: 'routeId',
+    label: 'Route',
+    type: 'route',
+    required: true,
+  } as ReportParam,
+  item: {
+    key: 'itemId',
+    label: 'Item',
+    type: 'item',
+    required: true,
+  } as ReportParam,
+  account: {
+    key: 'accountId',
+    label: 'Account',
+    type: 'account',
+    required: true,
+  } as ReportParam,
+  vehicleOpt: {
+    key: 'vehicleId',
+    label: 'Vehicle',
+    type: 'vehicle',
+    required: false,
+  } as ReportParam,
+  hostelOpt: {
+    key: 'hostelId',
+    label: 'Hostel',
+    type: 'hostel',
+    required: false,
+  } as ReportParam,
+  supplierOpt: {
+    key: 'supplierId',
+    label: 'Supplier',
+    type: 'supplier',
+    required: false,
+  } as ReportParam,
+  // M21's payroll reports are grained in MONTHS, not days — a payroll run
+  // belongs to a month and there is no half of one. Declaring that here is
+  // what makes the hub render a month picker and the engine reject a date.
+  fromMonth: {
+    key: 'from',
+    label: 'From month',
+    type: 'month',
+    required: false,
+    help: 'Defaults to this month',
+  } as ReportParam,
+  toMonth: {
+    key: 'to',
+    label: 'To month',
+    type: 'month',
+    required: false,
+    help: 'Defaults to this month',
+  } as ReportParam,
+} as const;
+
+const SHEET: ReportFormat[] = ['XLSX', 'CSV'];
+const SHEET_AND_PRINT: ReportFormat[] = ['XLSX', 'CSV', 'PDF'];
 
 export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
   // ── Attendance (M12) ────────────────────────────────────────────────
@@ -92,7 +189,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'attendance.report',
     endpoint: '/attendance/reports/daily',
     params: [P.date, P.sectionOpt],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'attendance.monthly',
@@ -101,8 +200,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'A section’s month-long attendance register.',
     permission: 'attendance.report',
     endpoint: '/attendance/reports/monthly',
-    params: [P.sectionOpt, P.month],
-    formats: ['xlsx', 'pdf'],
+    params: [P.section, P.month],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'attendance.late',
@@ -111,8 +212,34 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'Students flagged for repeated lateness.',
     permission: 'attendance.report',
     endpoint: '/attendance/reports/late',
-    params: [P.sessionOpt, P.month],
-    formats: ['xlsx'],
+    params: [P.month, P.sectionOpt],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+  },
+  {
+    code: 'attendance.summary',
+    name: 'Attendance summary',
+    module: 'Attendance',
+    description: 'Per-section attendance percentage over a window.',
+    permission: 'attendance.report',
+    endpoint: '/attendance/reports/summary',
+    params: [P.sessionOpt, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+  },
+  {
+    code: 'attendance.staff',
+    name: 'Staff attendance',
+    module: 'Attendance',
+    description: 'Employee attendance for a month, with the working days.',
+    permission: 'attendance.report',
+    endpoint: '/attendance/reports/staff',
+    params: [P.month],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Results (M15) ───────────────────────────────────────────────────
   {
@@ -122,8 +249,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'Whole-exam tabulation across candidates.',
     permission: 'result.export',
     endpoint: '/exams/:examId/results/tabulation',
-    params: [P.exam],
-    formats: ['xlsx', 'pdf'],
+    params: [P.exam, P.sectionOpt],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'result.report-cards',
@@ -133,7 +262,22 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'result.export',
     endpoint: '/exams/:examId/results/report-cards',
     params: [P.exam],
-    formats: ['pdf'],
+    output: 'PDF',
+    formats: ['PDF'],
+    runnable: false,
+  },
+  {
+    code: 'result.trend',
+    name: 'Result trend',
+    module: 'Results',
+    description: 'Pass rate and average GPA per published exam, oldest first.',
+    permission: 'result.view',
+    endpoint: '/analytics/results',
+    params: [P.sessionOpt],
+    output: 'CHART',
+    formats: SHEET,
+    runnable: true,
+    freshness: 'Refreshed nightly — up to 24 hours old',
   },
   // ── Fees (M16) ──────────────────────────────────────────────────────
   {
@@ -144,7 +288,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'fee.report',
     endpoint: '/fee-reports/dues',
     params: [P.sessionOpt, P.classOpt],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'fee.daily',
@@ -154,7 +300,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'fee.report',
     endpoint: '/fee-reports/daily',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'fee.head-wise',
@@ -164,7 +312,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'fee.report',
     endpoint: '/fee-reports/head-wise',
     params: [P.sessionOpt],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'fee.defaulters',
@@ -173,8 +323,22 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'Students with outstanding dues.',
     permission: 'fee.report',
     endpoint: '/fee-reports/defaulters',
+    params: [P.sessionOpt, P.classOpt],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+  },
+  {
+    code: 'fee.monthly',
+    name: 'Billed vs collected',
+    module: 'Fees',
+    description: 'Month-by-month billing against collection for a session.',
+    permission: 'fee.report',
+    endpoint: '/fee-reports/monthly',
     params: [P.sessionOpt],
-    formats: ['xlsx'],
+    output: 'CHART',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Accounting (M20) ────────────────────────────────────────────────
   {
@@ -185,7 +349,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/cash-book',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'accounting.bank-book',
@@ -195,7 +361,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/bank-book',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'accounting.ledger',
@@ -204,8 +372,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'One account’s movements with a running balance.',
     permission: 'accounting.report',
     endpoint: '/accounting/reports/ledger',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.account, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'accounting.trial-balance',
@@ -215,7 +385,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/trial-balance',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'accounting.income-statement',
@@ -225,7 +397,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/income-statement',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'accounting.balance-sheet',
@@ -235,7 +409,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/balance-sheet',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'accounting.receipts-payments',
@@ -245,7 +421,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/receipts-payments',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'accounting.budget-vs-actual',
@@ -255,9 +433,16 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'accounting.report',
     endpoint: '/accounting/reports/budget-vs-actual',
     params: [P.session, P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── HR & Payroll (M21) ──────────────────────────────────────────────
+  //
+  // Every payroll report names `payroll.view` as its sensitive
+  // permission: the register's money columns are exactly roadmap §6's
+  // "salary" example, and a school office assistant who may run the
+  // headcount should get the headcount without the pay.
   {
     code: 'payroll.register',
     name: 'Monthly payroll register',
@@ -266,8 +451,11 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Every employee’s pay for a month: basic, allowances, deductions and net.',
     permission: 'payroll.report',
     endpoint: '/payroll/reports/register',
-    params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    params: [P.fromMonth, P.toMonth],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
+    sensitivePermission: 'payroll.view',
   },
   {
     code: 'payroll.pf',
@@ -278,7 +466,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'payroll.report',
     endpoint: '/payroll/reports/pf',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+    sensitivePermission: 'payroll.view',
   },
   {
     code: 'payroll.tax',
@@ -287,8 +478,11 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'Income tax deducted at source per employee over a window.',
     permission: 'payroll.report',
     endpoint: '/payroll/reports/tax',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.fromMonth, P.toMonth],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+    sensitivePermission: 'payroll.view',
   },
   {
     code: 'payroll.grades',
@@ -299,17 +493,23 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'payroll.report',
     endpoint: '/payroll/reports/grades',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+    sensitivePermission: 'payroll.view',
   },
+  // ── Communication (M17) ─────────────────────────────────────────────
   {
-    code: 'payroll.ytd',
-    name: 'Year-to-date per employee',
-    module: 'HR & Payroll',
-    description: 'One employee’s month-by-month pay and deductions.',
-    permission: 'payroll.report',
-    endpoint: '/payroll/reports/ytd',
+    code: 'communication.log',
+    name: 'Delivery log',
+    module: 'Communication',
+    description: 'Every SMS/email/in-app message and its delivery state.',
+    permission: 'notification.view',
+    endpoint: '/notifications',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Library (M23) ───────────────────────────────────────────────────
   {
@@ -321,7 +521,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'library.report',
     endpoint: '/library/reports/overdue',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'library.issued',
@@ -331,7 +533,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'library.report',
     endpoint: '/library/reports/issued',
     params: [],
-    formats: [],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'library.popular',
@@ -341,7 +545,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'library.report',
     endpoint: '/library/reports/popular',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'library.stock',
@@ -352,7 +558,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'library.report',
     endpoint: '/library/reports/stock',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Transport (M25) ─────────────────────────────────────────────────
   {
@@ -363,8 +571,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Riders per stop with guardian phone numbers, in the order the bus drives.',
     permission: 'transport.report',
     endpoint: '/transport/reports/roster/:routeId',
-    params: [],
-    formats: ['xlsx', 'pdf'],
+    params: [P.route],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'transport.expenses',
@@ -374,8 +584,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Fuel, maintenance and repairs by vehicle and month, with cost per kilometre.',
     permission: 'transport.report',
     endpoint: '/transport/reports/expenses',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.vehicleOpt, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'transport.utilization',
@@ -385,7 +597,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'transport.report',
     endpoint: '/transport/reports/utilization',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'transport.collection',
@@ -395,8 +609,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Expected, invoiced and collected transport fees per route for a month.',
     permission: 'transport.report',
     endpoint: '/transport/reports/collection',
-    params: [],
-    formats: ['xlsx'],
+    params: [P.monthOpt],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Inventory (M24) ─────────────────────────────────────────────────
   {
@@ -408,7 +624,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'inventory.report',
     endpoint: '/inventory/reports/stock',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'inventory.ledger',
@@ -418,8 +636,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Every movement of one item — in, out and corrected — with the running balance beside it.',
     permission: 'inventory.report',
     endpoint: '/inventory/reports/ledger/:itemId',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.item, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'inventory.purchases',
@@ -428,8 +648,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'Received deliveries totalled per supplier and per month.',
     permission: 'inventory.report',
     endpoint: '/inventory/reports/purchases',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.supplierOpt, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'inventory.assets',
@@ -440,7 +662,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'inventory.report',
     endpoint: '/inventory/reports/assets',
     params: [],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'inventory.warranty',
@@ -451,7 +675,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'inventory.report',
     endpoint: '/inventory/reports/warranty',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'inventory.consumption',
@@ -462,7 +688,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'inventory.report',
     endpoint: '/inventory/reports/consumption',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Hostel (M26) ────────────────────────────────────────────────────
   {
@@ -473,8 +701,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Beds taken, free and out of service — by hostel, by floor and by room.',
     permission: 'hostel.report',
     endpoint: '/hostel/reports/occupancy',
-    params: [],
-    formats: ['xlsx'],
+    params: [P.hostelOpt],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'hostel.residents',
@@ -484,8 +714,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Who sleeps where, with the guardian to ring — the register a warden carries.',
     permission: 'hostel.report',
     endpoint: '/hostel/reports/residents',
-    params: [],
-    formats: ['xlsx', 'pdf'],
+    params: [P.hostelOpt, P.sessionOpt],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'hostel.dues',
@@ -494,8 +726,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     description: 'What each boarder still owes, read from the fee ledger.',
     permission: 'hostel.report',
     endpoint: '/hostel/reports/dues',
-    params: [],
-    formats: ['xlsx'],
+    params: [P.hostelOpt, P.sessionOpt],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'hostel.mealoffs',
@@ -505,8 +739,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
       'Days claimed, approved and credited per boarder over a window.',
     permission: 'hostel.report',
     endpoint: '/hostel/reports/meal-offs',
-    params: [P.from, P.to],
-    formats: ['xlsx'],
+    params: [P.hostelOpt, P.from, P.to],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Certificates (M27) ──────────────────────────────────────────────
   {
@@ -518,7 +754,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'certificate.export',
     endpoint: '/certificates/reports/register',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'certificate.summary',
@@ -529,7 +767,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'certificate.export',
     endpoint: '/certificates/reports/summary',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   // ── Complaints, visitors & alumni (M28) ─────────────────────────────
   {
@@ -541,7 +781,10 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'ticket.export',
     endpoint: '/tickets/reports/register',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
+    sensitivePermission: 'ticket.sensitive.view',
   },
   {
     code: 'ticket.summary',
@@ -552,7 +795,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'ticket.report',
     endpoint: '/tickets/reports/summary',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'visitor.register',
@@ -563,7 +808,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'visitor.export',
     endpoint: '/visitors/reports/register',
     params: [P.from, P.to],
-    formats: ['xlsx', 'pdf'],
+    output: 'TABLE',
+    formats: SHEET_AND_PRINT,
+    runnable: true,
   },
   {
     code: 'donation.register',
@@ -574,7 +821,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'alumni.export',
     endpoint: '/donations/reports/register',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'donation.summary',
@@ -585,7 +834,9 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'alumni.report',
     endpoint: '/donations/reports/summary',
     params: [P.from, P.to],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
   {
     code: 'alumni.directory',
@@ -595,21 +846,57 @@ export const REPORT_REGISTRY: ReadonlyArray<ReportDefinition> = [
     permission: 'alumni.export',
     endpoint: '/alumni/reports/directory',
     params: [],
-    formats: ['xlsx'],
+    output: 'TABLE',
+    formats: SHEET,
+    runnable: true,
   },
-  // ── Communication (M17) ─────────────────────────────────────────────
+  // ── Analytics (M29's own) ───────────────────────────────────────────
   {
-    code: 'communication.log',
-    name: 'Delivery log',
-    module: 'Communication',
-    description: 'Every SMS/email/in-app message and its delivery state.',
-    permission: 'notification.view',
-    endpoint: '/notifications',
-    params: [],
-    formats: [],
+    code: 'analytics.enrollment-trend',
+    name: 'Enrollment trend (year on year)',
+    module: 'Analytics',
+    description:
+      'Active enrollment per month against the same months a year earlier.',
+    permission: 'analytics.view',
+    endpoint: '/analytics/enrollment',
+    params: [P.sessionOpt],
+    output: 'CHART',
+    formats: SHEET,
+    runnable: true,
+  },
+  {
+    code: 'analytics.attendance-heatmap',
+    name: 'Attendance heatmap (section × month)',
+    module: 'Analytics',
+    description:
+      'Attendance percentage per section per month; a section with no register is blank, not zero.',
+    permission: 'analytics.view',
+    endpoint: '/analytics/attendance-heatmap',
+    params: [P.sessionOpt],
+    output: 'CHART',
+    formats: SHEET,
+    runnable: true,
+    freshness: 'Refreshed nightly — up to 24 hours old',
+  },
+  {
+    code: 'analytics.website',
+    name: 'Website traffic',
+    module: 'Analytics',
+    description:
+      'Page views, unique visitors and top pages per day for the public site.',
+    permission: 'analytics.website',
+    endpoint: '/analytics/website',
+    params: [P.from, P.to],
+    output: 'CHART',
+    formats: SHEET,
+    runnable: true,
   },
 ];
 
 export const REPORT_CODES: ReadonlySet<string> = new Set(
   REPORT_REGISTRY.map((r) => r.code),
 );
+
+export function reportDefinition(code: string): ReportDefinition | undefined {
+  return REPORT_REGISTRY.find((r) => r.code === code);
+}

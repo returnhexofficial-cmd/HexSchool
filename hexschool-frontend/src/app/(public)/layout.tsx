@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { publicSite } from "@/lib/api/public-site";
+import { PageViewBeacon } from "./_components/page-view-beacon";
 import { SiteFooter, SiteHeader } from "./_components/site-chrome";
 
 /**
@@ -99,6 +100,7 @@ export default async function PublicLayout({
           __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
         }}
       />
+      <PageViewBeacon />
       <SiteHeader config={config} />
       <div className="flex-1">{children}</div>
       <SiteFooter config={config} />

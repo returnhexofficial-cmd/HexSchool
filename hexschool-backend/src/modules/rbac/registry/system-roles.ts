@@ -316,6 +316,14 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'alumni.donation.cancel',
       'alumni.report',
       'alumni.export',
+      // M29 — the head is the executive dashboard's whole audience, and
+      // the one person who should see the money panel without also being
+      // able to touch the ledger.
+      'analytics.view',
+      'analytics.finance',
+      'analytics.website',
+      'report.schedule.view',
+      'report.schedule.manage',
     ],
   },
   {
@@ -416,6 +424,13 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       'alumni.approve',
       'alumni.event.manage',
       'alumni.report',
+      // M29 — the same dashboards as the head, **without** the finance
+      // panel: a deputy overseeing academics has no business reading the
+      // named dues list, and `analytics.finance` is a separate code so
+      // that stays a decision rather than an accident.
+      'analytics.view',
+      'analytics.website',
+      'report.schedule.view',
     ],
   },
   {
@@ -557,6 +572,13 @@ export const SYSTEM_ROLES: ReadonlyArray<SystemRoleDefinition> = [
       // the same rule as `fee.override.approve` and `voucher.cancel`
       // above. Nor `salary.structure.manage` / `salary.assign`: what a
       // teacher is paid is set by the head, not by whoever pays it.
+      // M29 — the finance panel is the accountant's own numbers back
+      // again (realization, aging, collection trend), and scheduling the
+      // monthly collection report to the committee is their job.
+      'analytics.view',
+      'analytics.finance',
+      'report.schedule.view',
+      'report.schedule.manage',
     ],
   },
   {

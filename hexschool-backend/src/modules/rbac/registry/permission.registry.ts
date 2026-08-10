@@ -754,6 +754,43 @@ export const PERMISSION_REGISTRY: ReadonlyArray<PermissionDefinition> = [
     ['alumni.report', 'Run the alumni and donation reports'],
     ['alumni.export', 'Download the alumni directory and donation register'],
   ]),
+
+  // ── Module 29: Reports & Analytics v2 ───────────────────────────────
+  //
+  // These codes govern the **framework**, never the data. A report's own
+  // permission is what decides whether it may be run at all
+  // (`fee.report`, `payroll.report`, …) and the engine checks it on every
+  // path including the scheduled one; `analytics.*` is only the right to
+  // open the dashboards and drive the machinery. Without that split,
+  // `analytics.view` would silently become a master key to every report
+  // in the system.
+  //
+  // `analytics.finance` is separate from `analytics.view` for the same
+  // reason `alumni.donation.cancel` is separate from `alumni.manage`: the
+  // money panel names outstanding dues by aging bucket, which is not
+  // something everybody who may see enrollment trends should have.
+  ...define('analytics', [
+    ['analytics.view', 'Open the executive dashboard and its panels'],
+    [
+      'analytics.finance',
+      'See the finance panel — realization, dues aging and the collection trend',
+    ],
+    ['analytics.website', 'See public-site traffic'],
+    [
+      'analytics.refresh',
+      'Rebuild the materialized views on demand — a real load on the database',
+    ],
+  ]),
+  ...define('reports', [
+    [
+      'report.schedule.view',
+      'See the scheduled reports and when they last ran',
+    ],
+    [
+      'report.schedule.manage',
+      'Create, edit, pause and test-run scheduled reports',
+    ],
+  ]),
 ];
 
 /** Fast membership checks for validators and the seeder. */

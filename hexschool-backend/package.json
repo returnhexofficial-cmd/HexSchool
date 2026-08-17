@@ -25,6 +25,9 @@
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
     "seed": "ts-node src/database/seeds/seed.ts",
+    "seed:qa": "ts-node src/database/seeds/qa/qa-seed.ts",
+    "qa:guard": "ts-node src/database/seeds/qa/check-local.ts",
+    "qa:reset": "npm run qa:guard && prisma migrate reset --force && npm run seed && npm run seed:qa",
     "postinstall": "prisma generate",
     "prepare": "husky"
   },

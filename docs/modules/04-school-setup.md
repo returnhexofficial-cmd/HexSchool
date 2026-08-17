@@ -96,10 +96,11 @@ PUT/DELETE      /api/v1/grading-systems/:id  grading.update / grading.delete
 | Migration on dev DB (Neon) | ✅ | Bootstrap school INSERT ordered before FK adds; existing users/roles kept scope |
 | Seed idempotency | ✅ | Second run: NCTB "already present", 17 registry codes stable |
 | Frontend lint / typecheck / tests / build | ✅ | 46 tests (38 + 8 new: grade-range mirror, school schema); 19 routes compiled |
+| **In-browser QA (Playwright MCP, 2026-08-13)** | ✅ | 7/7 scenarios. **Closes this doc's owed logo click-through**: a 600×600 PNG uploaded via `/admin/settings/profile` is stored in MinIO, served by signed URL, **resized to exactly 512×512**, and renders in the admin sidebar header. Also: Bangla profile fields round-trip a reload; `sms.api_key` returns as the `__SECRET__` sentinel and a no-op re-save leaves the ciphertext byte-identical; NCTB scale matches spec; an overlapping grade range is refused ("A (…–85) overlaps A+ (80–…)") with Save disabled. See [`docs/qa/04-school-setup.md`](../qa/04-school-setup.md). |
 
 ## Remaining TODOs
 - [ ] Push both repos to GitHub and confirm CI green (M01–03 carry-over).
-- [ ] In-browser click-through: upload a logo via `/admin/settings/profile` and confirm it renders in the admin sidebar header (API + resize + signed-URL layers verified individually; e2e covers the HTTP flows).
+- [x] In-browser click-through: upload a logo via `/admin/settings/profile` and confirm it renders in the admin sidebar header — **done 2026-08-13** (600×600 → resized to 512×512, stored in MinIO, signed URL 200, renders in the sidebar).
 
 ## Links to Related Modules
 - Depends on: Modules 01 (StorageModule), 02 (auth/user scope), 03 (permission registry + guard + audit hooks).

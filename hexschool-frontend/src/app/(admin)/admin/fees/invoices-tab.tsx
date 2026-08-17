@@ -137,8 +137,14 @@ export function InvoicesTab({ sessionId }: { sessionId: string | null }) {
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Month</Label>
+          {/* htmlFor/id, not just visual pairing — a bare <Label> leaves the
+              input with no accessible name (QA finding F16). The billing-month
+              field further down this file already does it correctly. */}
+          <Label htmlFor="invoice-filter-month" className="text-xs">
+            Month
+          </Label>
           <Input
+            id="invoice-filter-month"
             type="month"
             className="w-40"
             value={month}

@@ -167,7 +167,14 @@ export function ColumnChart({
     <div className="flex items-end gap-2" style={{ height: 140 }}>
       {data.map((d) => (
         <div key={d.label} className="flex flex-1 flex-col items-center gap-1">
+          {/*
+            `role="img"` is required, not decorative: `aria-label` is prohibited
+            on a generic div, so without a role the label is invalid markup and
+            screen readers ignore it — the bar's value is simply not announced
+            (QA finding F14). `Sparkline` above already does this correctly.
+          */}
           <div
+            role="img"
             className="w-full rounded-t bg-primary/80"
             style={{ height: `${Math.max(2, (d.value / max) * 110)}px` }}
             title={format ? format(d.value) : String(d.value)}

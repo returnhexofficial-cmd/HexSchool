@@ -88,10 +88,11 @@ POST /api/v1/academic-structure/clone             structure.clone ({from,to,prev
 | Seed idempotency | ✅ | 39 registry codes stable; standard groups skip on re-run |
 | Frontend lint / typecheck / tests / build | ✅ | 60 tests (55 + 5 new: structure schemas incl. shift-time refine, subject-code, section-name, level bounds); 27 routes compiled |
 | Infra incident during verification | ✅ recovered | Docker Desktop had stopped mid-session → Redis/Mailpit down → health 503 + Mailpit test failures; restarted Docker + containers, full suite green. e2e now serial to reduce shared-infra sensitivity |
+| **In-browser QA (Playwright MCP, 2026-08-13)** | ✅ | 5/5 scenarios. **Closes this doc's owed click-through**: the clone wizard previewed **"1 section to create · 6 already present"**, and after cloning re-previewed **"0 to create · 7 already present"** — proving the documented "cloning twice is safe". Also: class detail tabs are session-scoped, a 7-character section name is refused client-side, and a true duplicate section toasts **"Section \"A\" already exists for this class/session/shift"** with no row created. Note `uq_sections_identity` includes `COALESCE(shift_id, …)`, so same-named sections in different shifts are legitimate — verify the shift before filing a uniqueness bug. See [`docs/qa/06-academic-structure.md`](../qa/06-academic-structure.md). |
 
 ## Remaining TODOs
 - [ ] Push both repos to GitHub and confirm CI green (M01–05 carry-over).
-- [ ] In-browser click-through: create class → sections + subject mapping via the detail tabs → clone wizard preview/clone (API + component layers verified individually; e2e covers the HTTP flows).
+- [x] In-browser click-through: class detail tabs → section create/refusals → clone wizard preview/clone — **done 2026-08-13** (preview counts exact; re-clone is a no-op, proving idempotency).
 - [ ] Minor: one e2e suite leaves an open handle at teardown (`--forceExit` currently used); chase with `--detectOpenHandles` in a quiet moment.
 
 ## Links to Related Modules

@@ -30,7 +30,13 @@ import {
 } from "@/lib/api/academic";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
-import { buildMonthGrid, inRange, monthInfo } from "@/lib/utils/month-grid";
+import {
+  buildMonthGrid,
+  currentMonth,
+  inRange,
+  monthInfo,
+  monthWithinSession,
+} from "@/lib/utils/month-grid";
 import { cn } from "@/lib/utils";
 import {
   calendarEventSchema,
@@ -49,18 +55,36 @@ const EVENT_COLORS: Record<string, string> = {
 };
 const HOLIDAY_COLOR = "bg-amber-500/20 text-amber-800 dark:text-amber-300";
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
+const thisMonth = () => currentMonth();
 
 export default function CalendarPage() {
-  const [month, setMonth] = useState(thisMonth());
+  const { selected: session } = useAcademicSession();
+
+  // Anchor the visible month to the selected session (F11). The session
+  // arrives asynchronously and changes when the user uses the switcher, so
+  // re-anchor whenever it does rather than only on mount — but keep the
+  // user's own month navigation in between.
+  //
+  // This is React's "adjust state when a prop changes" pattern (compare against
+  // the last anchor and set during render), not an effect: an effect would
+  // render the wrong month first and then cascade a second render to correct it.
+  const anchorMonth = monthWithinSession(session);
+  const [month, setMonth] = useState(anchorMonth);
+  const [lastAnchor, setLastAnchor] = useState(anchorMonth);
+  if (anchorMonth !== lastAnchor) {
+    setLastAnchor(anchorMonth);
+    setMonth(anchorMonth);
+  }
+
   const [view, setView] = useState<"grid" | "list">("grid");
   const [holidayOpen, setHolidayOpen] = useState(false);
   const [eventOpen, setEventOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { selected: session } = useAcademicSession();
 
   const query = useQuery({
-    queryKey: ["calendar", month],
+    // The session is part of the key so switching sessions refetches rather
+    // than serving the previous session's cached month.
+    queryKey: ["calendar", session?.id, month],
     queryFn: () => academicApi.calendarMonth(month),
   });
   const info = monthInfo(month);

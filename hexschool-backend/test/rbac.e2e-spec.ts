@@ -152,6 +152,52 @@ describe('RBAC + Audit (e2e)', () => {
     expect(body.data.some((r) => r.slug === 'admin')).toBe(true);
   });
 
+  /**
+   * QA finding F4 — the roles list counted every grant, including codes that
+   * had been removed from the TS registry and flagged `is_orphaned`. Those are
+   * denied by the guard and excluded from effective permissions, so the list
+   * read 294 while /auth/me reported 292. Only a real database proves the join
+   * filter, which is why this is an e2e test and not a unit test.
+   */
+  it('GET /roles permissionCount excludes orphaned codes and matches /auth/me', async () => {
+    const roleSlug = 'admin';
+
+    const before = await request(app.getHttpServer())
+      .get('/api/v1/roles')
+      .set(auth(adminToken))
+      .expect(200);
+    const countBefore = (
+      before.body as { data: Array<{ slug: string; permissionCount: number }> }
+    ).data.find((r) => r.slug === roleSlug)!.permissionCount;
+
+    // Orphan one code the admin role actually holds.
+    const grant = await prisma.rolePermission.findFirstOrThrow({
+      where: { role: { slug: roleSlug, schoolId: DEFAULT_SCHOOL_ID } },
+      select: { permissionId: true },
+    });
+    await prisma.permission.update({
+      where: { id: grant.permissionId },
+      data: { isOrphaned: true },
+    });
+
+    try {
+      const after = await request(app.getHttpServer())
+        .get('/api/v1/roles')
+        .set(auth(adminToken))
+        .expect(200);
+      const countAfter = (
+        after.body as { data: Array<{ slug: string; permissionCount: number }> }
+      ).data.find((r) => r.slug === roleSlug)!.permissionCount;
+
+      expect(countAfter).toBe(countBefore - 1);
+    } finally {
+      await prisma.permission.update({
+        where: { id: grant.permissionId },
+        data: { isOrphaned: false },
+      });
+    }
+  });
+
   it('Super Admin bypasses despite holding no roles', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/roles')

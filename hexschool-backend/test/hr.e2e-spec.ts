@@ -38,6 +38,8 @@ describe('HR & Payroll (e2e)', () => {
   const ADMIN = 'e2e-hr-admin@test.local';
   const ACCOUNTANT = 'e2e-hr-accountant@test.local';
   const TEACHER = 'e2e-hr-teacher@test.local';
+  /** Timestamped per run, so cleanup has to match on the prefix (F7). */
+  const STAFF_EMAIL_PREFIX = 'e2e-hr-staff-';
   const NAME = 'E2EHR';
 
   let adminToken: string;
@@ -135,7 +137,16 @@ describe('HR & Payroll (e2e)', () => {
       where: { schoolId: DEFAULT_SCHOOL_ID, name: { startsWith: NAME } },
     });
     const users = await prisma.user.findMany({
-      where: { email: { in: [ADMIN, ACCOUNTANT, TEACHER] } },
+      where: {
+        OR: [
+          { email: { in: [ADMIN, ACCOUNTANT, TEACHER] } },
+          // The staff fixture's email is timestamped (`e2e-hr-staff-<epoch>`),
+          // so it never matched the fixed list above and every run leaked one
+          // user — 13 had accumulated by the time browser QA found them
+          // (QA finding F7). Delete by the stable prefix instead.
+          { email: { startsWith: STAFF_EMAIL_PREFIX } },
+        ],
+      },
       select: { id: true },
     });
     const ids = users.map((u) => u.id);
@@ -259,7 +270,7 @@ describe('HR & Payroll (e2e)', () => {
     const staffUser = await prisma.user.create({
       data: {
         schoolId: DEFAULT_SCHOOL_ID,
-        email: `e2e-hr-staff-${Date.now()}@test.local`,
+        email: `${STAFF_EMAIL_PREFIX}${Date.now()}@test.local`,
         passwordHash,
         userType: UserType.STAFF,
       },

@@ -3,6 +3,10 @@ import { render } from "@testing-library/react";
 
 const dispatch = vi.fn();
 let pathname = "/";
+let authState: { user: unknown; status: string } = {
+  user: null,
+  status: "unauthenticated",
+};
 
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
@@ -11,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/store/hooks", () => ({
   useAppDispatch: () => dispatch,
-  useAuth: () => ({ user: null, status: "unauthenticated" }),
+  useAuth: () => authState,
 }));
 
 vi.mock("@/lib/store/auth-slice", () => ({
@@ -28,6 +32,7 @@ import { AuthProvider } from "./auth-provider";
 describe("AuthProvider session bootstrap", () => {
   beforeEach(() => {
     dispatch.mockClear();
+    authState = { user: null, status: "unauthenticated" };
   });
 
   it.each(["/", "/news", "/admission/apply", "/some-cms-page", "/login"])(
@@ -61,4 +66,59 @@ describe("AuthProvider session bootstrap", () => {
     rerender(<AuthProvider>ok</AuthProvider>);
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
+});
+
+/**
+ * QA findings F5 and F6 — the provider used to render children immediately,
+ * so every page mounted and fired its queries before an access token existed.
+ * A cold load produced a burst of 401s that were then refreshed and retried,
+ * and `<Can>`-gated controls appeared a beat after the tables they belong to.
+ */
+describe("AuthProvider holds authenticated areas until auth settles", () => {
+  beforeEach(() => {
+    dispatch.mockClear();
+    authState = { user: null, status: "unauthenticated" };
+  });
+
+  it.each(["/admin", "/admin/students", "/portal", "/account/sessions"])(
+    "does not render %s children while the session is still bootstrapping",
+    (route) => {
+      pathname = route;
+      authState = { user: null, status: "loading" };
+      const { queryByText, getByRole } = render(
+        <AuthProvider>secret-content</AuthProvider>,
+      );
+      expect(queryByText("secret-content")).toBeNull();
+      expect(getByRole("status")).toBeTruthy();
+    },
+  );
+
+  it("renders children once the session resolves", () => {
+    pathname = "/admin";
+    authState = { user: { mustChangePassword: false }, status: "authenticated" };
+    const { queryByText } = render(<AuthProvider>secret-content</AuthProvider>);
+    expect(queryByText("secret-content")).not.toBeNull();
+  });
+
+  it("renders children when the session resolves to unauthenticated", () => {
+    // The route guard, not this provider, decides where an anonymous user
+    // goes — blocking here would deadlock the redirect.
+    pathname = "/admin";
+    authState = { user: null, status: "unauthenticated" };
+    const { queryByText } = render(<AuthProvider>secret-content</AuthProvider>);
+    expect(queryByText("secret-content")).not.toBeNull();
+  });
+
+  it.each(["/", "/news", "/some-cms-page", "/login"])(
+    "never holds the public route %s, whose status stays 'loading' forever",
+    (route) => {
+      // The public site skips the bootstrap entirely, so its status never
+      // leaves "loading". Gating on status alone would blank the whole
+      // marketing site — the trap this test exists to catch.
+      pathname = route;
+      authState = { user: null, status: "loading" };
+      const { queryByText } = render(<AuthProvider>public-content</AuthProvider>);
+      expect(queryByText("public-content")).not.toBeNull();
+    },
+  );
 });

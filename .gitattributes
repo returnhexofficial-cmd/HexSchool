@@ -1,0 +1,48 @@
+# Line-ending policy.
+#
+# Everything in this repo is stored as LF (it already was — every tracked file
+# has an LF index entry). The problem this file solves is the *working tree*:
+# with `core.autocrlf=true` on Windows, checkout rewrites files to CRLF, and
+# then Prettier — whose `endOfLine` default is "lf" — reports every line of the
+# file as wrong. One QA session lost time to 1300 phantom errors in a single
+# spec for exactly this reason.
+#
+# `eol=lf` overrides `core.autocrlf`, so contributors keep LF on disk whatever
+# their global git config says.
+
+* text=auto eol=lf
+
+# ── Files that genuinely need CRLF ───────────────────────────────────────────
+# Windows refuses to run a batch file reliably with LF line endings.
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+*.ps1    text eol=crlf
+
+# ── Files that must keep LF regardless ───────────────────────────────────────
+*.sh     text eol=lf
+
+# ── Binary: never touch, never diff as text ──────────────────────────────────
+# `text=auto` guesses from content and is usually right, but being explicit
+# means a stray byte pattern can never corrupt an asset on checkout.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.webp   binary
+*.svg    text eol=lf
+*.pdf    binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.eot    binary
+*.zip    binary
+*.gz     binary
+*.xlsx   binary
+*.mp4    binary
+*.webm   binary
+
+# ── Diff hints ───────────────────────────────────────────────────────────────
+# Lockfiles are generated; collapsing them keeps review noise down.
+package-lock.json  -diff linguist-generated

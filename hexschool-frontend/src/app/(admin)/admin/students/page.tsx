@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/students";
 import { structureApi } from "@/lib/api/structure";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { formatDate } from "@/lib/utils/date";
 import { STUDENT_STATUSES } from "@/lib/validations/student";
 
 const ALL = "__all__";
@@ -111,7 +112,13 @@ export default function StudentsListPage() {
       cell: ({ row }) => row.original.admissionClass?.name ?? "—",
     },
     { accessorKey: "gender", header: "Gender" },
-    { accessorKey: "dob", header: "Date of Birth", enableSorting: true },
+    {
+      accessorKey: "dob",
+      header: "Date of Birth",
+      enableSorting: true,
+      // Sorts on the raw ISO value, displays Asia/Dhaka DD/MM/YYYY (F9).
+      cell: ({ row }) => formatDate(row.original.dob),
+    },
     {
       id: "guardian",
       header: "Primary Guardian",

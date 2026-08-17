@@ -44,6 +44,40 @@ interface RetriableConfig extends InternalAxiosRequestConfig {
  */
 let refreshPromise: Promise<string | null> | null = null;
 
+/**
+ * Endpoints whose 401 is the *business answer*, not an expired access token.
+ *
+ * The backend raises `UnauthorizedException` for both "your access token is
+ * gone" and "that password is wrong", so the status code and the error
+ * envelope look identical. Refreshing cannot turn a wrong password into a
+ * right one, so retrying these only ever costs a second identical request.
+ *
+ * QA finding F3: submitting change-password with the wrong current password
+ * produced `POST /auth/change-password 401` → `POST /auth/refresh 200` →
+ * `POST /auth/change-password 401` — the same wrong password sent twice,
+ * doubling audit rows and burning the 5/min credential throttle at twice the
+ * rate.
+ *
+ * The cleaner fix is for the backend to return 400/422 for a credential
+ * mismatch and reserve 401 for "not authenticated" — but that changes a
+ * published API contract, so it is recorded as follow-up rather than done
+ * here.
+ */
+const BUSINESS_401_ENDPOINTS = [
+  "/auth/login",
+  "/auth/change-password",
+  "/auth/reset-password",
+  "/auth/verify-otp",
+];
+
+function isBusiness401(url: string | undefined): boolean {
+  if (!url) return false;
+  // Compare on the path only: baseURL may or may not be applied yet, and a
+  // query string must not defeat the match.
+  const path = url.split("?")[0];
+  return BUSINESS_401_ENDPOINTS.some((endpoint) => path.endsWith(endpoint));
+}
+
 async function refreshAccessToken(client: AxiosInstance): Promise<string | null> {
   try {
     const res = await client.post<ApiEnvelope<{ accessToken: string }>>(
@@ -81,7 +115,13 @@ export function createApiClient(): AxiosInstance {
     async (error: AxiosError) => {
       const original = error.config as RetriableConfig | undefined;
 
-      if (error.response?.status === 401 && original && !original._retry) {
+      if (
+        error.response?.status === 401 &&
+        original &&
+        !original._retry &&
+        // F3 — a credential refusal is the answer, not a stale token.
+        !isBusiness401(original.url)
+      ) {
         original._retry = true;
         refreshPromise ??= refreshAccessToken(client).finally(() => {
           refreshPromise = null;

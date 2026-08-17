@@ -1,0 +1,26 @@
+# Workspace-root ignores. Each repo (hexschool-backend, hexschool-frontend)
+# keeps its own .gitignore for build output and dependencies.
+
+# Claude Code notify-extension hook artifacts. The hook in the global
+# ~/.claude/settings.json runs `touch C:\Users\...\claude-notify-signals\stop`;
+# Git Bash strips the backslashes, so it drops a file named after the whole
+# path into the current working directory. Ignore them wherever they land.
+C:Users*
+*claude-notify-signals*
+
+# Playwright browser-QA artifacts (see QA_RUNBOOK.md at the repo root).
+#
+# Transient run output — traces, videos, failure screenshots, saved auth state.
+# The MCP server is pointed at docs/qa/screenshots via .mcp.json, but it also
+# drops per-run snapshot/console logs beside wherever it is driven from.
+**/e2e/.auth/
+**/e2e/.artifacts/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+**/.playwright/
+**/.playwright-mcp/
+# A bare-filename screenshot lands in the repo root; evidence images belong in
+# docs/qa/screenshots/ instead, which is deliberately NOT ignored.
+/*.png
+/*.jpg

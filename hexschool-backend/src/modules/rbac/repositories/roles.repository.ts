@@ -36,7 +36,12 @@ export class RolesRepository extends BaseRepository<
     const [permissionCounts, userCounts] = await Promise.all([
       this.prisma.rolePermission.groupBy({
         by: ['roleId'],
-        where: { roleId: { in: ids } },
+        // Orphaned codes (removed from the TS registry but kept in the table
+        // because roles may still reference them) are denied by the guard and
+        // excluded from effective permissions — so counting them here made the
+        // list disagree with /auth/me: 294 shown against 292 effective.
+        // QA finding F4.
+        where: { roleId: { in: ids }, permission: { isOrphaned: false } },
         _count: { roleId: true },
       }),
       this.prisma.userRole.groupBy({

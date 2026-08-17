@@ -97,7 +97,24 @@ import { QueuesModule } from './queues/queues.module';
         ],
         // e2e suites hammer /auth/* from one IP; rate limits are not what
         // those tests assert, so skip throttling under NODE_ENV=test.
-        skipIf: () => config.get<string>('app.env') === 'test',
+        //
+        // Browser QA has the same problem without being able to claim
+        // NODE_ENV=test: the Playwright harness signs in once per seeded role
+        // to build its storage states, and 7 logins in a burst trips the
+        // 5/min credential limit — 4 roles authenticated and the rest were
+        // refused. AUTH_THROTTLE_ENABLED=false lifts the limit for a local QA
+        // run.
+        //
+        // Guarded so it can never take effect in production, whatever ends up
+        // in the environment.
+        skipIf: () => {
+          const env = config.get<string>('app.env');
+          if (env === 'test') return true;
+          return (
+            env !== 'production' &&
+            process.env.AUTH_THROTTLE_ENABLED === 'false'
+          );
+        },
       }),
     }),
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Spinner } from "@/components/shared/spinner";
 import { bootstrapSession } from "@/lib/store/auth-slice";
 import { useAppDispatch, useAuth } from "@/lib/store/hooks";
 
@@ -24,6 +25,13 @@ const AUTHENTICATED_PREFIXES = [
   "/change-password",
 ];
 
+/** Whether a path belongs to an area that renders for a signed-in user. */
+function needsSessionFor(pathname: string): boolean {
+  return AUTHENTICATED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 /**
  * Bootstraps the session once per tab (refresh cookie → access token →
  * /auth/me) and enforces the forced-password-change interstitial:
@@ -41,15 +49,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const booted = useRef(false);
 
+  const needsSession = needsSessionFor(pathname);
+
   useEffect(() => {
     if (booted.current) return;
-    const needsSession = AUTHENTICATED_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    );
     if (!needsSession) return;
     booted.current = true;
     void dispatch(bootstrapSession());
-  }, [dispatch, pathname]);
+  }, [dispatch, needsSession]);
 
   useEffect(() => {
     if (
@@ -60,6 +67,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace("/change-password?forced=1");
     }
   }, [status, user?.mustChangePassword, pathname, router]);
+
+  /**
+   * Hold the authenticated areas until the bootstrap settles.
+   *
+   * Rendering children immediately let every page mount and fire its queries
+   * with no access token yet — so a cold load produced a burst of 401s that
+   * the interceptor then refreshed and retried (QA finding F6), and the
+   * `<Can>`-gated controls popped in a beat after the tables because
+   * permissions had not arrived (F5).
+   *
+   * **Only the authenticated areas.** The public site deliberately skips the
+   * bootstrap, so its status stays `"loading"` forever — gating on status
+   * alone would render the entire marketing site blank.
+   */
+  if (needsSession && status === "loading") {
+    return (
+      <div
+        className="flex min-h-svh items-center justify-center"
+        role="status"
+        aria-label="Loading"
+      >
+        <Spinner />
+      </div>
+    );
+  }
 
   return children;
 }

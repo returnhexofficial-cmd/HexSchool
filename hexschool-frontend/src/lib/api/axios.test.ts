@@ -78,4 +78,82 @@ describe("api client refresh interceptor", () => {
       response: { status: 401 },
     });
   });
+
+  /**
+   * QA finding F3 — a 401 from a credential endpoint is the business answer,
+   * not an expired token. Retrying it sent the same wrong password twice,
+   * doubling audit rows and burning the 5/min credential throttle.
+   */
+  describe("business 401s are not refreshed (F3)", () => {
+    it.each([
+      "/auth/change-password",
+      "/auth/login",
+      "/auth/reset-password",
+      "/auth/verify-otp",
+    ])(
+      "does not refresh or re-send %s on 401",
+      async (endpoint) => {
+        setAccessToken("valid-token");
+        let attempts = 0;
+        let refreshCalls = 0;
+
+        mock.onPost(endpoint).reply(() => {
+          attempts += 1;
+          return [
+            401,
+            {
+              success: false,
+              error: { code: "UNAUTHORIZED", message: "Current password is incorrect" },
+            },
+          ];
+        });
+        mock.onPost("/auth/refresh").reply(() => {
+          refreshCalls += 1;
+          return [200, { success: true, data: { accessToken: "fresh" } }];
+        });
+
+        await expect(client.post(endpoint, {})).rejects.toMatchObject({
+          response: { status: 401 },
+        });
+
+        expect(attempts, "the request must be sent exactly once").toBe(1);
+        expect(refreshCalls, "no refresh should be attempted").toBe(0);
+      },
+    );
+
+    it("still refreshes a 401 from an ordinary data endpoint", async () => {
+      // The guard must be narrow: the bootstrap handshake depends on this
+      // path, so it has to keep working.
+      setAccessToken("expired");
+      let refreshCalls = 0;
+
+      mock.onGet("/students").replyOnce(401);
+      mock.onPost("/auth/refresh").reply(() => {
+        refreshCalls += 1;
+        return [200, { success: true, data: { accessToken: "fresh" } }];
+      });
+      mock.onGet("/students").reply(200, { success: true, data: [] });
+
+      const res = await client.get("/students");
+      expect(refreshCalls).toBe(1);
+      expect(res.status).toBe(200);
+    });
+
+    it("still refreshes a 401 from an endpoint whose name merely contains 'login'", async () => {
+      // endsWith matching, not substring — /login-activities is a data route.
+      setAccessToken("expired");
+      let refreshCalls = 0;
+
+      mock.onGet("/auth/login-activities").replyOnce(401);
+      mock.onPost("/auth/refresh").reply(() => {
+        refreshCalls += 1;
+        return [200, { success: true, data: { accessToken: "fresh" } }];
+      });
+      mock.onGet("/auth/login-activities").reply(200, { success: true, data: [] });
+
+      const res = await client.get("/auth/login-activities");
+      expect(refreshCalls).toBe(1);
+      expect(res.status).toBe(200);
+    });
+  });
 });

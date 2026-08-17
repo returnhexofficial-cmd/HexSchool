@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Can } from "@/components/shared/can";
 import { NotificationBell } from "@/components/shared/notification-bell";
+import { RouteGuard } from "@/components/shared/route-guard";
 import { SessionSwitcher } from "@/components/shared/session-switcher";
 import { UserMenu } from "@/components/shared/user-menu";
 import { schoolApi } from "@/lib/api/school";
@@ -85,7 +86,12 @@ export default function AdminLayout({
           <NotificationBell />
           <UserMenu />
         </header>
-        <div className="flex-1">{children}</div>
+        {/* Route-level permission gate (QA finding F8) — the sidebar was
+            gated but the routes were not, so a direct URL rendered a broken
+            page instead of a refusal. */}
+        <div className="flex-1">
+          <RouteGuard>{children}</RouteGuard>
+        </div>
       </div>
     </div>
   );

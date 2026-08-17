@@ -56,6 +56,35 @@ export function inRange(iso: string, start: string, end: string): boolean {
   return iso >= startIso && iso <= endIso;
 }
 
+/** The current month as `YYYY-MM`, in UTC. */
+export function currentMonth(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 7);
+}
+
+/**
+ * The month the calendar should open on for a given session.
+ *
+ * Today's month when today falls inside the session, otherwise the session's
+ * first month. The calendar used to open on today's month unconditionally, so
+ * selecting a past or future session showed "Nothing scheduled this month" for
+ * a month that session could not possibly cover — and the only way to reach
+ * real data was to page back a month at a time (QA finding F11).
+ *
+ * Sessions never overlap (M05 business rule), so a month belongs to at most one
+ * session and anchoring this way cannot show another session's entries.
+ */
+export function monthWithinSession(
+  session: { startDate: string; endDate: string } | null | undefined,
+  now: Date = new Date(),
+): string {
+  const today = currentMonth(now);
+  if (!session) return today;
+  const start = session.startDate.slice(0, 7);
+  const end = session.endDate.slice(0, 7);
+  if (today >= start && today <= end) return today;
+  return start;
+}
+
 /** "2026-02" → { label: "February 2026", prev: "2026-01", next: "2026-03" } */
 export function monthInfo(month: string): {
   label: string;

@@ -90,10 +90,11 @@ GET                 /api/v1/calendar.ics                   calendar.view (text/c
 | Migration on dev DB (Neon) | ✅ | Partial uniques + CHECKs applied |
 | Seed idempotency | ✅ | 30 registry codes stable, 0 orphaned |
 | Frontend lint / typecheck / tests / build | ✅ | 55 tests (46 + 9 new: month-grid weeks/padding, inRange, monthInfo year boundaries, session/holiday/event schemas incl. impossible-date rejection); 17 routes compiled |
+| **In-browser QA (Playwright MCP, 2026-08-13)** | ⚠️→✅ | 8/8 after one fix. **Closes this doc's owed click-through**: activate flow (confirm copy + single-current invariant), holiday/event creation with a Bangla title, month grid, and the **switcher persisting a non-current session across a full reload** (`hs_academic_session:<userId>`, written on explicit selection). Flipping the switcher re-scopes a page with no reload. **Found and fixed QA finding F11** — the calendar opened on today's month whatever session was selected, so a past session showed an empty month 14 pages from its data; now anchored via `monthWithinSession()` with 8 regression cases. See [`docs/qa/05-academic-session.md`](../qa/05-academic-session.md). |
 
 ## Remaining TODOs
 - [ ] Push both repos to GitHub and confirm CI green (M01–04 carry-over).
-- [ ] In-browser click-through: create session → activate → add holiday/event → month grid renders → switcher persists across reload (API + component layers verified individually; e2e covers the HTTP flows).
+- [x] In-browser click-through: activate → add event → month grid renders → switcher persists across reload — **done 2026-08-13**; surfaced and fixed QA finding **F11** (calendar month was not anchored to the selected session).
 
 ## Links to Related Modules
 - Depends on: Module 04 (`general.weekly_holidays` setting via SettingsService), Module 03 (permissions + audit hooks).

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { analyticsApi } from "@/lib/api/analytics";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { AttendanceHeatmap } from "./heatmap";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * The executive dashboard (roadmap M29 §5).
@@ -301,7 +302,7 @@ export default function AnalyticsPage() {
       )}
 
       <p className="text-xs text-muted-foreground">
-        Computed {new Date(d.computedAt).toLocaleString()}.
+        Computed {formatDateTime(d.computedAt)}.
       </p>
     </main>
   );

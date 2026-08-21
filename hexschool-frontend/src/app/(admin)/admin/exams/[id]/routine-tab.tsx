@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import { clashesFromError, examApi } from "@/lib/api/exam";
 import { cn } from "@/lib/utils";
 import {
@@ -238,7 +239,7 @@ function ShiftDayDialog({
       });
     },
     onSuccess: (result) => {
-      toast.success(`${result.moved} sitting(s) moved to ${toDate}.`);
+      toast.success(`${result.moved} sitting(s) moved to ${formatDate(toDate)}.`);
       void qc.invalidateQueries({ queryKey: ["exam-routine", examId] });
       void qc.invalidateQueries({ queryKey: ["exam-subjects", examId] });
       void qc.invalidateQueries({ queryKey: ["exam", examId] });
@@ -256,11 +257,11 @@ function ShiftDayDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Postpone {fromDate}</DialogTitle>
+          <DialogTitle>Postpone {formatDate(fromDate)}</DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">
-          Every sitting scheduled for {fromDate} moves to the new date in one
+          Every sitting scheduled for {formatDate(fromDate)} moves to the new date in
           audited operation.
         </p>
 

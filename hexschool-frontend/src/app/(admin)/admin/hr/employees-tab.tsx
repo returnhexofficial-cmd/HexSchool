@@ -45,6 +45,7 @@ import {
 } from "@/lib/api/hr";
 import { PAYMENT_MODES } from "@/lib/validations/hr";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { formatDate } from "@/lib/utils/date";
 
 const ALL = "__all__";
 
@@ -133,7 +134,7 @@ export function EmployeesTab() {
                 <TableCell className="text-muted-foreground">
                   {employee.designation.replaceAll("_", " ")}
                 </TableCell>
-                <TableCell>{employee.joiningDate.slice(0, 10)}</TableCell>
+                <TableCell>{formatDate(employee.joiningDate)}</TableCell>
                 <TableCell>
                   <Badge
                     variant={

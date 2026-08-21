@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { staffApi, type StaffDocument } from "@/lib/api/staff";
+import { formatDate } from "@/lib/utils/date";
 import {
   staffDocumentSchema,
   type StaffDocumentValues,
@@ -136,7 +137,7 @@ export function DocumentsTab({ staffId }: { staffId: string }) {
                   </td>
                   <td className="px-3 py-2">{formatBytes(doc.sizeBytes)}</td>
                   <td className="px-3 py-2">
-                    {new Date(doc.createdAt).toLocaleDateString()}
+                    {formatDate(doc.createdAt)}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1">

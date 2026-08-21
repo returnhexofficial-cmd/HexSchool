@@ -141,6 +141,11 @@ None — the module is built entirely on the existing `PageHeader` / `FormDialog
 
 | Scenario | Result | Notes |
 |---|---|---|
+| Bell schedule: create, pre-filled start, overlap refused by name | ✅ | browser (M13-03–06) |
+| Builder grid: legible period rows, cell popover, ★ assigned teacher | ✅ | browser (M13-09–16), after **F30**/**F32** |
+| Conflict: publishing a competitor reddens the other on read | ✅ | browser (M13-18) |
+| Red-cell tooltip names teacher, section and slot | ✅ | browser (M13-19), after **F34** — it crashed the page |
+| Publish: free-period acknowledgement, then publish | ✅ | browser (M13-20–24), after **F33** — it always failed |
 | Build a bell schedule, overlap + out-of-shift rejected | ✅ | e2e; 409 / 400 with the offending sibling named |
 | Draft → save grid → publish → v1 PUBLISHED | ✅ | e2e |
 | Second draft for the same section refused | ✅ | e2e, 409 (partial unique index) |
@@ -167,7 +172,8 @@ None — the module is built entirely on the existing `PageHeader` / `FormDialog
 
 ## Remaining TODOs
 
-- [ ] In-browser click-through: builder grid interactions (cell popover, copy/clear day, red-cell tooltips), publish dialog, master heat table, and the teacher Routine tab. Everything below the API is covered by tests; the DOM interactions are not.
+- [x] In-browser click-through: cell popover, red-cell tooltips and the publish dialog — done, see [`docs/qa/13-timetable.md`](../qa/13-timetable.md). Found **six** defects, including a tooltip that crashed the page (**F34**) and a publish that always failed (**F33**).
+- [ ] Still owed from that item: copy/clear day, the master heat table, and the teacher Routine tab (the last belongs with the M18 portal pass).
 - [ ] Verify the routine PDF against a real Bangla subject/teacher name — pdfkit's default font has the same Bangla limitation flagged in M09's ID cards.
 - [ ] The `school.e2e-spec` audit-diff race is still flaky when the full e2e suite runs serially (passes in isolation). Pre-existing, unrelated to M13, still on the housekeeping list.
 - [ ] Decide with M14 whether exam sittings reuse `period_slots` or get their own timing table.

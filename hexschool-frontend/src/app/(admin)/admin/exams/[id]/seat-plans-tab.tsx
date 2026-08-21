@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import { examApi, type SeatPlanStrategy } from "@/lib/api/exam";
 import {
   generateSeatPlanSchema,
@@ -201,7 +202,7 @@ export function SeatPlansTab({ examId }: { examId: string }) {
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={`Delete the seat plan for ${activeDate}?`}
+        title={`Delete the seat plan for ${formatDate(activeDate)}?`}
         description="Any admit cards already printed will no longer match a seat."
         confirmLabel="Delete"
         destructive
@@ -259,7 +260,7 @@ function GenerateDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Generate seat plan for {date}</DialogTitle>
+          <DialogTitle>Generate seat plan for {formatDate(date)}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-1">

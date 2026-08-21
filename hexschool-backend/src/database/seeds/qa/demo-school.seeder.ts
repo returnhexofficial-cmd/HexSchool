@@ -86,7 +86,7 @@ const bdPhone = (i: number): string => `018${pad(i, 8)}`;
  * F7) — they pollute the user list and every staff-count statistic.
  */
 async function purge(ctx: Ctx): Promise<void> {
-  const { prisma } = ctx;
+  const { prisma, schoolId } = ctx;
 
   const sessions = await prisma.academicSession.findMany({
     where: { name: { startsWith: 'QA ' } },
@@ -102,29 +102,72 @@ async function purge(ctx: Ctx): Promise<void> {
     });
   }
 
+  /*
+   * Purge **every** student in the QA school, not just the seed's own
+   * `QA-<year>-<n>` uids.
+   *
+   * A QA round can *admit* an applicant through the M10 wizard, and that
+   * student gets the school's real id pattern (`HEX-202600001`) — so a prefix
+   * match misses it and one orphan survives every reseed, accumulating run
+   * after run and breaking any test that asserts the seeded head-count. The
+   * admission application cascades away with the session, which makes the
+   * leftover invisible: no application, no enrolment, just a stray row.
+   *
+   * Matching on the admission class does not rescue it either, because
+   * deleting the QA classes nulls `admission_class_id` first — the reference
+   * that would identify it is gone by the time we look.
+   *
+   * The same shape as findings F7 and F12: cleanup keyed on a marker the
+   * production code never applies. So scope by **ownership** instead — this
+   * seeder owns the demo school outright, and `guard.ts` already makes it
+   * impossible to run anywhere but a local database.
+   *
+   * F26: the first version of this fix only converted `students`, and left the
+   * row below it matching `guardians` on a `'QA '` name prefix. A guardian
+   * created by the *application* — by admitting an applicant, or by importing
+   * a spreadsheet — is named by whoever filled the form, so it survived every
+   * reseed. That one is worse than a stray student, because guardian **phone**
+   * is the dedup key: a leftover row makes the next run's sibling-dedup check
+   * pass without proving anything.
+   *
+   * So the whole block is scoped by `schoolId` now, not just the part that had
+   * already bitten. Every table here carries one (the global rule), and the
+   * application can create rows in all of them during a QA round.
+   */
   await prisma.studentGuardian.deleteMany({
-    where: { student: { studentUid: { startsWith: 'QA-' } } },
+    where: { student: { schoolId } },
   });
-  await prisma.student.deleteMany({
-    where: { studentUid: { startsWith: 'QA-' } },
-  });
-  await prisma.guardian.deleteMany({ where: { name: { startsWith: 'QA ' } } });
-  await prisma.teacher.deleteMany({
-    where: { employeeId: { startsWith: 'QA-' } },
-  });
-  await prisma.staffProfile.deleteMany({
-    where: { employeeId: { startsWith: 'QA-' } },
-  });
+  await prisma.student.deleteMany({ where: { schoolId } });
+  await prisma.guardian.deleteMany({ where: { schoolId } });
+  /**
+   * F12, finally. `staff_attendances` is polymorphic — `person_type` +
+   * `person_id` with **no foreign key**, the M08 decision that keeps the two
+   * employee lifecycles independent. Nothing cascades, so deleting teachers and
+   * staff leaves their attendance behind: the QA database had accumulated **92
+   * orphaned rows** dating back to 2026-07-02, pointing at people who no longer
+   * existed, and they surfaced as phantom LEAVE on the staff sheet.
+   *
+   * It has to be deleted explicitly, and *before* the employees, while the rows
+   * are still attributable.
+   */
+  await prisma.staffAttendance.deleteMany({ where: { schoolId } });
+  // Generated *by* QA rounds rather than seeded: notifications raised while
+  // driving flows, and analytics collected from visiting the public site.
+  await prisma.notification.deleteMany({ where: { schoolId } });
+  await prisma.siteAnalyticsDaily.deleteMany({ where: { schoolId } });
+  await prisma.teacher.deleteMany({ where: { schoolId } });
+  await prisma.staffProfile.deleteMany({ where: { schoolId } });
 
-  await prisma.section.deleteMany({ where: { roomNo: { startsWith: 'QA' } } });
-  await prisma.schoolClass.deleteMany({
-    where: { name: { startsWith: 'QA ' } },
-  });
-  await prisma.subject.deleteMany({ where: { code: { startsWith: 'QA-' } } });
-  await prisma.department.deleteMany({
-    where: { code: { startsWith: 'QA-' } },
-  });
-  await prisma.shift.deleteMany({ where: { name: { startsWith: 'QA ' } } });
+  await prisma.section.deleteMany({ where: { schoolId } });
+  await prisma.schoolClass.deleteMany({ where: { schoolId } });
+  await prisma.subject.deleteMany({ where: { schoolId } });
+  await prisma.department.deleteMany({ where: { schoolId } });
+  // Bell schedules hang off the shift with a plain FK, so they must go first
+  // or the shift delete fails. Timetables and their entries cascade from the
+  // academic session above; period slots do not, because a shift outlives a
+  // session.
+  await prisma.periodSlot.deleteMany({ where: { schoolId } });
+  await prisma.shift.deleteMany({ where: { schoolId } });
 
   const purgedUsers = await prisma.user.deleteMany({
     where: {
@@ -172,6 +215,8 @@ type Structure = {
   previousSessionId: string;
   classIds: string[];
   sectionIds: string[];
+  /** Same shape as `sectionIds`, for the COMPLETED session. */
+  previousSectionIds: string[];
   subjectIds: string[];
   departmentId: string;
   shiftId: string;
@@ -226,6 +271,40 @@ async function seedStructure(ctx: Ctx): Promise<Structure> {
     },
   });
 
+  /**
+   * The bell schedule the shift runs on.
+   *
+   * M13 refuses to build a routine without one — correctly, and with a good
+   * empty state saying so. But every reseed then leaves a QA round having to
+   * hand-build five periods before it can reach the routine builder at all,
+   * and M12's period-mode marking is unreachable for the same reason
+   * (QA finding F32).
+   *
+   * Four teaching periods around a tiffin break, inside the 07:30–12:30
+   * window, contiguous so the "starts where the last one ended" default has
+   * something sensible to offer.
+   */
+  const bellSchedule: Array<[name: string, start: string, end: string, type: string]> = [
+    ['Period 1', '07:30', '08:15', 'CLASS'],
+    ['Period 2', '08:15', '09:00', 'CLASS'],
+    ['Tiffin', '09:00', '09:20', 'BREAK'],
+    ['Period 3', '09:20', '10:05', 'CLASS'],
+    ['Period 4', '10:05', '10:50', 'CLASS'],
+  ];
+  for (const [order, [name, start, end, type]] of bellSchedule.entries()) {
+    await prisma.periodSlot.create({
+      data: {
+        schoolId,
+        shiftId: shift.id,
+        name,
+        startTime: new Date(`1970-01-01T${start}:00Z`),
+        endTime: new Date(`1970-01-01T${end}:00Z`),
+        type: type as 'CLASS' | 'BREAK' | 'ASSEMBLY',
+        displayOrder: order + 1,
+      },
+    });
+  }
+
   const subjects = await Promise.all(
     [
       ['QA-BAN', 'Bangla', 'বাংলা'],
@@ -241,6 +320,7 @@ async function seedStructure(ctx: Ctx): Promise<Structure> {
 
   const classIds: string[] = [];
   const sectionIds: string[] = [];
+  const previousSectionIds: string[] = [];
 
   for (const level of [6, 7, 8]) {
     const cls = await prisma.schoolClass.create({
@@ -270,14 +350,68 @@ async function seedStructure(ctx: Ctx): Promise<Structure> {
           },
         });
         if (sessionId === current.id) sectionIds.push(section.id);
+        else previousSectionIds.push(section.id);
+      }
+
+      // Map the curriculum onto the class for this session. Without this the
+      // class has subjects in the master list but none *taught*, and the M08
+      // assignment matrix correctly refuses with "no subjects mapped for this
+      // session" — which also blocks the timetable (M13), exams (M14) and
+      // marks (M15). The mapping is the spine those modules hang off.
+      for (const [order, subject] of subjects.entries()) {
+        await prisma.classSubject.create({
+          data: {
+            schoolId,
+            classId: cls.id,
+            subjectId: subject.id,
+            sessionId,
+            // Science is the optional 4th subject: NCTB grading adds only the
+            // points above the bonus base for an optional subject and never
+            // lets it join the divisor, so QA needs one to exercise that path.
+            isOptional: subject.code === 'QA-SCI',
+            fullMarksDefault: 100,
+            displayOrder: order,
+          },
+        });
       }
     }
   }
 
+  // An OPEN admission cycle on the current session. Without one the public
+  // admission wizard (M10) reaches step 2 and stops: there is nothing to apply
+  // *to*, so the whole admission → enrollment chain is unreachable. The window
+  // straddles today so the cycle is genuinely open whenever QA runs.
+  const now = new Date();
+  const cycle = await prisma.admissionCycle.create({
+    data: {
+      schoolId,
+      sessionId: current.id,
+      name: `QA Admission ${thisYear}`,
+      startAt: new Date(now.getTime() - 30 * 24 * 3600 * 1000),
+      endAt: new Date(now.getTime() + 30 * 24 * 3600 * 1000),
+      testRequired: false,
+      status: 'OPEN',
+      instructions: 'QA fixture cycle — apply with any BD mobile number.',
+    },
+  });
+
+  // A cycle carries its own class list with seats and an application fee, and
+  // the public wizard's class picker reads *that*, not the school's class
+  // master. Without these rows the applicant reaches step 2 with an empty
+  // dropdown and cannot proceed.
+  for (const classId of classIds) {
+    await prisma.admissionCycleClass.create({
+      data: { cycleId: cycle.id, classId, seats: 30, applicationFee: 500 },
+    });
+  }
+
+  const mappings = classIds.length * 2 * subjects.length;
   ctx.log(
     `2 sessions (${current.name} current, ${previous.name} completed), ` +
       `${classIds.length} classes, ${sectionIds.length} current-session sections, ` +
-      `${subjects.length} subjects`,
+      `${subjects.length} subjects, ${bellSchedule.length} period slots, ` +
+      `${mappings} class-subject mappings ` +
+      `(1 optional), 1 OPEN admission cycle over ${classIds.length} classes`,
   );
 
   return {
@@ -285,6 +419,7 @@ async function seedStructure(ctx: Ctx): Promise<Structure> {
     previousSessionId: previous.id,
     classIds,
     sectionIds,
+    previousSectionIds,
     subjectIds: subjects.map((s) => s.id),
     departmentId: department.id,
     shiftId: shift.id,
@@ -365,8 +500,55 @@ async function seedStaff(
     t += 1;
   }
 
+  /**
+   * The M08 assignment matrix — who teaches which subject in which section.
+   *
+   * Without it the M13 routine builder's teacher picker is **empty** and no
+   * cell can be completed: it lists teachers holding a duty this session, so
+   * that a substitute can be chosen and the assigned one ★-marked. Zero
+   * assignments, zero options (QA finding F32).
+   *
+   * It also feeds the M08 workload report and the conflict checker's notion of
+   * whether a placement is an override, so seeding it makes three modules
+   * testable rather than one.
+   *
+   * The two teachers split the curriculum: the first takes Mathematics and
+   * Science across every section, the second Bangla and English. That gives
+   * the conflict checker something real to catch — one teacher genuinely
+   * cannot be in two sections at once.
+   */
+  const teachers = await prisma.teacher.findMany({
+    where: { schoolId },
+    orderBy: { employeeId: 'asc' },
+    select: { id: true },
+  });
+  const subjects = await prisma.subject.findMany({
+    where: { schoolId },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+
+  let assignments = 0;
+  for (const section of structure.sectionIds) {
+    for (const [index, subject] of subjects.entries()) {
+      const teacher = teachers[index % teachers.length];
+      if (!teacher) continue;
+      await prisma.teacherSectionSubject.create({
+        data: {
+          schoolId,
+          sessionId: structure.currentSessionId,
+          teacherId: teacher.id,
+          sectionId: section,
+          subjectId: subject.id,
+        },
+      });
+      assignments += 1;
+    }
+  }
+
   ctx.log(
-    `${staffDesignations.length} staff profiles, ${teacherKeys.length} teachers`,
+    `${staffDesignations.length} staff profiles, ${teacherKeys.length} teachers, ` +
+      `${assignments} subject assignments`,
   );
 }
 
@@ -440,8 +622,47 @@ async function seedStudents(
         shiftId: section.shiftId,
         rollNo: roll,
         enrollmentDate: date(thisYear, 1, 5),
-        type: 'NEW',
+        type: i % 6 === 0 ? 'NEW' : 'PROMOTED',
         status: 'ACTIVE',
+      },
+    });
+
+    /**
+     * …and a matching enrolment in the **COMPLETED** session.
+     *
+     * Without this the previous year has sections but nobody in them, and two
+     * rules that only this data can reach go untested:
+     *
+     *  - *COMPLETED sessions are read-only* — the M05 rule that M12 enforces
+     *    for the first time. With no enrolment there is nothing to try to mark,
+     *    so the guard cannot be exercised at all (QA finding F27).
+     *  - *session scoping* — the switcher is only meaningful when the two
+     *    sessions hold **different** rosters. The structure seeder already
+     *    creates both years' sections saying that is "what makes the
+     *    session-scoping sweep meaningful"; it was one table short.
+     *
+     * A student who was PROMOTED into this year sat in the same section of the
+     * year before, which is also the shape journey J6 (year rollover) needs.
+     */
+    const previousSection = await prisma.section.findUniqueOrThrow({
+      where: { id: structure.previousSectionIds[i % structure.previousSectionIds.length] },
+      select: { id: true, classId: true, shiftId: true },
+    });
+    await prisma.enrollment.create({
+      data: {
+        schoolId,
+        studentId: student.id,
+        sessionId: structure.previousSessionId,
+        classId: previousSection.classId,
+        sectionId: previousSection.id,
+        shiftId: previousSection.shiftId,
+        rollNo: roll,
+        enrollmentDate: date(thisYear - 1, 1, 5),
+        type: 'NEW',
+        // What `PromotionService.closeEnrollment` actually writes to the
+        // source row — not COMPLETED. Seeding the status the product would
+        // have produced is the difference between a fixture and a guess.
+        status: 'PROMOTED',
       },
     });
 
@@ -482,12 +703,92 @@ async function seedStudents(
   }
 
   ctx.log(
-    `${created} students enrolled in the current session ` +
+    `${created} students, enrolled in **both** sessions ` +
       `(1 linked to the student login, 2 children on the parent login, 1 with no guardian)`,
   );
 }
 
 /* ──────────────────────────── entrypoint ──────────────────────────────── */
+
+/**
+ * Tables the purge is *expected* to leave alone: reference data owned by the
+ * bootstrap seeders, not by QA. Everything else that still holds a row for the
+ * demo school after a purge is a leak.
+ */
+const REFERENCE_MODELS = new Set([
+  'School',
+  'Permission',
+  'Role',
+  'RolePermission',
+  'SettingDefinition',
+  'Setting',
+  'GradingSystem',
+  'GradeScale',
+  'Account',
+  'AuditLog',
+  'Sequence',
+  'NotificationTemplate',
+  // Bootstrap-owned per-school reference data, created by `npm run seed`:
+  'SchoolSetting',
+  'Group',
+  'LeaveType',
+  // Sequence counters are deliberately never reset — a student UID is
+  // permanent and must never be reissued (M09).
+  'DocumentSequence',
+  // Counted separately below, because one bootstrap super admin is expected
+  // to survive while any *other* leftover user is finding F7 all over again.
+  'User',
+]);
+
+/**
+ * After purging, report anything still owned by the demo school.
+ *
+ * Five findings in this campaign have been the same bug — a fixture deleted by
+ * a marker the production code never applies (**F7** users, **F12**
+ * `staff_attendances`, **F23** students, **F26** guardians, and the rest of
+ * that purge block). Each was found by accident, several passes apart, and
+ * F12 sat open long enough to accumulate 92 orphaned rows pointing at people
+ * who no longer existed.
+ *
+ * Finding them one at a time does not scale. This walks every model that
+ * carries a `schoolId` and counts what survived, so the *seed* reports a leak
+ * the moment it appears rather than leaving it for a QA round to trip over.
+ * It warns rather than throws: a leak makes the fixture untrustworthy, but
+ * refusing to seed would leave the tester with no environment at all.
+ */
+async function reportResidue(ctx: Ctx): Promise<void> {
+  const { prisma, schoolId } = ctx;
+  const models = Prisma.dmmf.datamodel.models.filter(
+    (model) =>
+      !REFERENCE_MODELS.has(model.name) &&
+      model.fields.some((field) => field.name === 'schoolId'),
+  );
+
+  const leaks: string[] = [];
+
+  // Everyone except the bootstrap super admin, who is meant to outlive a purge.
+  const strayUsers = await prisma.user.count({
+    where: { schoolId, email: { not: 'admin@hexschool.local' } },
+  });
+  if (strayUsers > 0) leaks.push(`users=${strayUsers}`);
+
+  for (const model of models) {
+    const delegate = (prisma as unknown as Record<string, {
+      count(args: { where: { schoolId: string } }): Promise<number>;
+    }>)[model.name.charAt(0).toLowerCase() + model.name.slice(1)];
+    if (!delegate?.count) continue;
+    const count = await delegate.count({ where: { schoolId } });
+    if (count > 0) leaks.push(`${model.dbName ?? model.name}=${count}`);
+  }
+
+  if (leaks.length > 0) {
+    ctx.log(
+      `⚠ purge left ${leaks.length} table(s) holding rows for this school: ` +
+        `${leaks.join(', ')}. Nothing here should survive a purge — each is a ` +
+        `fixture keyed on something the app can overwrite. See finding F12.`,
+    );
+  }
+}
 
 export async function seedQaDemoSchool(prisma: PrismaClient): Promise<void> {
   const log = (msg: string): void => console.log(`    · ${msg}`);
@@ -497,6 +798,7 @@ export async function seedQaDemoSchool(prisma: PrismaClient): Promise<void> {
   const ctx: Ctx = { prisma, schoolId: DEFAULT_SCHOOL_ID, passwordHash, log };
 
   await purge(ctx);
+  await reportResidue(ctx);
   const users = await seedAccounts(ctx);
   const structure = await seedStructure(ctx);
   await seedStaff(ctx, users, structure);

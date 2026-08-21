@@ -118,10 +118,11 @@ New permission codes (9): `staff.view|create|update|delete|status|document.manag
 | Self status change blocked | ✅ | e2e |
 | Permission guards (403 without codes) | ✅ | e2e |
 | Photo/document upload against MinIO in-browser | ⏳ | validation layers e2e-tested; browser click-through pending (same status as M04 logo) |
+| **In-browser QA (Playwright MCP, 2026-08-18)** | ✅ | 6/6 scenarios. **Closes this doc's owed upload click-through**: staff photo → MinIO `staff/<school>/<staff>/<uuid>.png` resized to 512×512, and a PDF → `…/documents/<uuid>.pdf` returned byte-exact (555 B) over a signed URL, Bangla title intact. Also proved the headline cascade end to end: with a live session created first, RESIGNED took `staff ACTIVE→RESIGNED`, `user ACTIVE→INACTIVE`, `live refresh tokens 1→0`, and a fresh login then returned **401**. See [`docs/qa/07-staff-users.md`](../qa/07-staff-users.md). |
 
 ## Remaining TODOs
 
-- [ ] In-browser click-through of photo/document upload against MinIO (validation + storage layers individually verified).
+- [x] In-browser click-through of photo/document upload against MinIO — **done 2026-08-18**: photo resized to 512×512, PDF byte-exact via signed URL; see [`docs/qa/07-staff-users.md`](../qa/07-staff-users.md).
 - [ ] Consider folding `PermissionsCacheService` into `RedisCacheService` (carried from M03→04).
 
 ## Links to Related Modules

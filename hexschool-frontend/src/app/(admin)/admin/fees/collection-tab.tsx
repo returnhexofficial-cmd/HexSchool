@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   formatBDT,
   invoiceApi,
@@ -145,7 +146,7 @@ export function CollectionTab({ sessionId }: { sessionId: string | null }) {
                         {inv.enrollment.student.studentUid}
                       </span>
                     </TableCell>
-                    <TableCell>{inv.dueDate.slice(0, 10)}</TableCell>
+                    <TableCell>{formatDate(inv.dueDate)}</TableCell>
                     <TableCell className="text-right">
                       {formatBDT(outstanding(inv))}
                     </TableCell>

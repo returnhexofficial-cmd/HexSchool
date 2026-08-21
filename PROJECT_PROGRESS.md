@@ -10,7 +10,7 @@
 | **Current module** | **30 — System Administration, Backup & Deployment Hardening** *(Phase 3 begins)* |
 | Remaining | 30–32 |
 | Blockers | None |
-| Tests | **2422 backend unit** (156 suites) · **1033 e2e** (29 suites, 2 known failures — QA finding F10) · **666 frontend Vitest** · **26 browser** (Playwright, incl. permission + a11y sweeps) |
+| Tests | **2445 backend unit** (158 suites) · **1033 e2e** (29 suites, 2 known failures — QA finding F10) · **681 frontend Vitest** · **41 browser** (Playwright, incl. permission, a11y and localised-date sweeps) |
 | Browser QA | Phase 0 complete — resettable QA seed, a login per role, committed suite. 7 of 9 findings fixed; F2 and F10 open. See `docs/qa/`. |
 | Phase | Phase 1 (MVP) **complete** · Phase 2 (Operations) **complete** · Phase 3 (Platform) next |
 

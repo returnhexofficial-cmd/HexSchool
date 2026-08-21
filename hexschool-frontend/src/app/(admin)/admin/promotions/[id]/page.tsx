@@ -34,6 +34,7 @@ import {
   type PromotionPreview,
 } from "@/lib/api/enrollment";
 import { structureApi } from "@/lib/api/structure";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   PROMOTION_DECISION_LABELS,
   PROMOTION_DECISIONS,
@@ -75,7 +76,7 @@ export default function PromotionDetailPage() {
   const targetSections = useQuery({
     queryKey: ["sections", { sessionId: toSessionId }],
     queryFn: () =>
-      structureApi.sections.list({ sessionId: toSessionId, limit: 200 }),
+      structureApi.sections.list({ sessionId: toSessionId, limit: MAX_PAGE_LIMIT }),
     enabled: !!toSessionId,
   });
 

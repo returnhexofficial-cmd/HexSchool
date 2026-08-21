@@ -7,6 +7,7 @@ import type {
   ResidentsQueryDto,
 } from '../dto';
 import { HostelReportsService } from './hostel-reports.service';
+import { dhakaDisplayDate } from '../../../common/utils/clock.util';
 
 export interface ExportFile {
   buffer: Buffer;
@@ -190,7 +191,7 @@ export class HostelExportService {
     doc
       .fontSize(9)
       .text(
-        `${rows.length} resident(s)   |   Printed: ${new Date().toISOString().slice(0, 10)}`,
+        `${rows.length} resident(s)   |   Printed: ${dhakaDisplayDate(new Date())}`,
       );
     doc.moveDown(0.8);
 

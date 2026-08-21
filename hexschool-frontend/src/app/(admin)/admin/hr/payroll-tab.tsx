@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   bonusApi,
   formatAmount,
@@ -121,7 +122,7 @@ export function PayrollTab() {
                     {formatAmount(run.netTotal)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {run.disbursedAt ? run.disbursedAt.slice(0, 10) : "—"}
+                    {formatDate(run.disbursedAt)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" asChild>

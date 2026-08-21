@@ -35,6 +35,7 @@ import { GuardiansTab } from "./guardians-tab";
 import { MedicalTab } from "./medical-tab";
 import { DocumentsTab } from "./documents-tab";
 import { TimelineTab } from "./timeline-tab";
+import { formatDate } from "@/lib/utils/date";
 import { HistoryTab } from "./history-tab";
 import { StudentFeesTab } from "./fees-tab";
 import { StudentTransportTab } from "./transport-tab";
@@ -150,7 +151,7 @@ export default function StudentDetailPage({
             </Badge>
           </span>
         }
-        description={`${s.studentUid} · ${s.admissionClass?.name ?? "—"} · admitted ${s.admissionDate}`}
+        description={`${s.studentUid} · ${s.admissionClass?.name ?? "—"} · admitted ${formatDate(s.admissionDate)}`}
       >
         <Can permission="student.idcard.generate">
           <Button

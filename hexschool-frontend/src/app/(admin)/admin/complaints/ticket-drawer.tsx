@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate, formatDateTime } from "@/lib/utils/date";
 import {
   RAISER_LABELS,
   TICKET_CATEGORY_LABELS,
@@ -160,7 +161,7 @@ export function TicketDrawer({
                     <>
                       {data.requesterName ?? RAISER_LABELS[data.raisedByType]}
                       {data.contact?.phone ? ` · ${data.contact.phone}` : ""} ·{" "}
-                      {new Date(data.createdAt).toLocaleString()}
+                      {formatDateTime(data.createdAt)}
                     </>
                   )}
                 </p>
@@ -170,7 +171,7 @@ export function TicketDrawer({
                 <p className="text-xs text-muted-foreground">
                   This ticket can be reopened until{" "}
                   <strong>
-                    {new Date(data.reopenClosesAt).toLocaleDateString()}
+                    {formatDate(data.reopenClosesAt)}
                   </strong>
                   . After that the school&apos;s decision stands and a new ticket is
                   the route.
@@ -218,7 +219,7 @@ export function TicketDrawer({
                                 Internal
                               </Badge>
                             )}
-                            {new Date(entry.createdAt).toLocaleString()}
+                            {formatDateTime(entry.createdAt)}
                           </span>
                         </div>
                         <p className="mt-1 whitespace-pre-wrap">{entry.body}</p>

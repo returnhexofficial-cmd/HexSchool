@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDateTime } from "@/lib/utils/date";
 import {
   APPOINTMENT_STATUS_LABELS,
   VISITOR_PURPOSES,
@@ -154,7 +155,7 @@ export function AppointmentsTab() {
                     {appointment.hostName ?? "—"}
                   </td>
                   <td className="p-3">
-                    {new Date(appointment.scheduledAt).toLocaleString()}
+                    {formatDateTime(appointment.scheduledAt)}
                   </td>
                   <td className="p-3">
                     {VISITOR_PURPOSE_LABELS[appointment.purpose]}

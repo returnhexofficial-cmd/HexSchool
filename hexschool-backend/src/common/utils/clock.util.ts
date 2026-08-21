@@ -19,6 +19,20 @@ export function dhakaToday(now: Date = new Date()): string {
     .slice(0, 10);
 }
 
+/**
+ * A date as a Bangladeshi reader expects to see it: **DD/MM/YYYY**, on the
+ * Dhaka calendar.
+ *
+ * For anything a human reads off a generated document. `toISOString()
+ * .slice(0, 10)` is the machine form and belongs in API payloads and file
+ * names — printing it on an ID card or a receipt shows `2014-01-01` to a
+ * reader who reads `01/01/2014` (QA finding F24, the backend half).
+ */
+export function dhakaDisplayDate(value: Date): string {
+  const [year, month, day] = dhakaToday(value).split('-');
+  return `${day}/${month}/${year}`;
+}
+
 /** Minutes elapsed since midnight in Dhaka (0–1439). */
 export function dhakaMinutesOfDay(now: Date = new Date()): number {
   const shifted = new Date(now.getTime() + DHAKA_OFFSET_MINUTES * 60_000);

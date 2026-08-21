@@ -91,3 +91,68 @@ export function summarize(
 export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
+
+/**
+ * Three denominators, named — because the same word meant two things.
+ *
+ * QA finding F28: `percentage` appeared twice in one student report with two
+ * different denominators (42.86% overall, 60% for the only section), because
+ * the range-spanning figures were computed by a private helper in the
+ * reporting service that divided by **marked days**, while `summarize` above
+ * divides by **working days** as the roadmap formula requires. Both were
+ * labelled `percentage`, in the same payload.
+ *
+ * The fix is to make the choice explicit and put it here, where the project's
+ * arithmetic belongs and where a golden test can pin it.
+ */
+
+/**
+ * One **day**, one cohort: of the students actually marked, what share were
+ * present? The denominator is marked students, and that is correct — a single
+ * day has no "working days" to divide by, and an unmarked student is missing
+ * data rather than an absence.
+ */
+export function sameDayPercentage(counts: AttendanceCounts): number {
+  const marked =
+    counts[AttendanceStatus.PRESENT] +
+    counts[AttendanceStatus.ABSENT] +
+    counts[AttendanceStatus.LATE] +
+    counts[AttendanceStatus.LEAVE] +
+    counts[AttendanceStatus.HALF_DAY];
+  if (marked === 0) return 0;
+  return round2((presentEquivalent(counts) / marked) * 100);
+}
+
+/**
+ * One **student** over a range: the roadmap formula. Working days must already
+ * be clipped to the window being measured — for a per-section block that is
+ * the window the student spent in *that* section, not the whole range.
+ */
+export function rangePercentage(
+  counts: AttendanceCounts,
+  workingDays: number,
+): number {
+  const effective = Math.max(0, workingDays - counts[AttendanceStatus.HOLIDAY]);
+  if (effective === 0) return 0;
+  return round2((presentEquivalent(counts) / effective) * 100);
+}
+
+/**
+ * A **cohort** over a range — a section or a school. The denominator is
+ * working days × heads, because every student owes an attendance on every
+ * working day. Dividing a whole section's present-days by working days alone
+ * would exceed 100% as soon as the section held more than one student.
+ */
+export function cohortPercentage(
+  counts: AttendanceCounts,
+  workingDays: number,
+  headcount: number,
+): number {
+  const effectiveDays = Math.max(
+    0,
+    workingDays - Math.ceil(counts[AttendanceStatus.HOLIDAY] / Math.max(1, headcount)),
+  );
+  const denominator = effectiveDays * headcount;
+  if (denominator === 0) return 0;
+  return round2((presentEquivalent(counts) / denominator) * 100);
+}

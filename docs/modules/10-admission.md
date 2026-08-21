@@ -95,9 +95,10 @@ GET  /api/v1/public/admissions/track | admit-card   (?appNo=&phone=)
 | Full funnel via e2e (apply → pay → test → marks → merit → cancel-promote → admit → report) | ✅ | 21 e2e assertions green against dev infra |
 | Admit-card PDF bytes served publicly | ✅ | `%PDF-` verified in e2e |
 | In-browser public wizard click-through (OTP SMS, photo upload) | ⏳ | pending — OTP is log-only until M17; layers individually e2e-tested |
+| **In-browser QA (Playwright MCP, 2026-08-18)** | ✅ | 14/14 scenarios. **Closes this doc's owed public-wizard click-through** — deferred as "once SMS delivery is real (M17)", but the real blocker was only that a sent message could not be *read*; a dev-only SMS outbox (**F19**) solved it without a live gateway. Drove phone-OTP → apply (Bangla throughout) → submit **`ADM-26-000001`** → public tracking → record payment → under review → close cycle → merit list → **admit**. Row actions proved payment-gated and the status machine offers only legal transitions. Found and fixed **F21** (a saved draft outliving its cycle dead-ended the wizard with no error) plus two fixture gaps. See [`docs/qa/10-admission.md`](../qa/10-admission.md) and [`J1`](../qa/journeys/J1-admission-to-enrollment.md). |
 
 ## Remaining TODOs
-- [ ] In-browser click-through of the public wizard once SMS delivery is real (M17).
+- [x] In-browser click-through of the public wizard — **done 2026-08-18**. It did not need real SMS delivery, only a way to *read* a sent message: the dev-only SMS outbox (`SMS_DEV_OUTBOX=true`, `GET /dev/sms`, finding **F19**).
 - [ ] Wire online payment callbacks + reconciliation (M16) — `AdmissionApplicationsService.recordPayment` is the slot.
 
 ## Links to Related Modules

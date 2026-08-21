@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   formatBdt,
   hostelApi,
@@ -248,7 +249,7 @@ function ResidentsReport({ hostelId }: { hostelId: string }) {
                 {row.className}
                 {row.sectionName ? ` ${row.sectionName}` : ""}
               </td>
-              <td className="p-3">{row.startDate}</td>
+              <td className="p-3">{formatDate(row.startDate)}</td>
               <td className="p-3">{row.messPlan ?? "—"}</td>
               <td className="p-3">
                 {row.guardianName ?? "—"}

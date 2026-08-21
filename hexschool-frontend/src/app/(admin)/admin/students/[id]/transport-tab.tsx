@@ -29,6 +29,7 @@ import {
   routeApi,
 } from "@/lib/api/transport";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
+import { formatDate } from "@/lib/utils/date";
 
 /**
  * Roadmap M25 §5's "assignment flow from student profile (route→stop
@@ -86,7 +87,7 @@ export function StudentTransportTab({ studentId }: { studentId: string }) {
             <StatCard
               title="Status"
               value={ASSIGNMENT_STATUS_LABELS[rider.status]}
-              hint={`From ${rider.startDate.slice(0, 10)}`}
+              hint={`From ${formatDate(rider.startDate)}`}
             />
           </div>
 

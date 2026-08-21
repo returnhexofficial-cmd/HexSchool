@@ -28,6 +28,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   formatBdt,
   formatQty,
@@ -179,7 +181,7 @@ function LedgerReport() {
 
   const items = useQuery({
     queryKey: ["inventory-items", "ledger-picker"],
-    queryFn: () => inventoryApi.listItems({ limit: 200 }),
+    queryFn: () => inventoryApi.listItems({ limit: MAX_PAGE_LIMIT }),
   });
   const ledger = useQuery({
     queryKey: ["inventory-report-ledger", itemId],
@@ -257,7 +259,7 @@ function LedgerReport() {
                 {ledger.data.rows.map((row) => (
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">
-                      {new Date(row.createdAt).toLocaleDateString()}
+                      {formatDate(row.createdAt)}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{TXN_LABELS[row.txn]}</Badge>
@@ -487,7 +489,7 @@ function StockTakeDialog({ onClose }: { onClose: () => void }) {
 
   const items = useQuery({
     queryKey: ["inventory-items", "count-sheet"],
-    queryFn: () => inventoryApi.listItems({ type: "CONSUMABLE", limit: 200 }),
+    queryFn: () => inventoryApi.listItems({ type: "CONSUMABLE", limit: MAX_PAGE_LIMIT }),
   });
 
   const submit = useMutation({

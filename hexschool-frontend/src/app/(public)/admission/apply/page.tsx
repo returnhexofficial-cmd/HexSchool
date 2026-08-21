@@ -212,9 +212,24 @@ export default function AdmissionApplyPage() {
     onError: (err) => toast.error(apiErrorMessage(err)),
   });
 
+  const draftCycleId = applicantForm.watch("cycleId");
   const selectedCycle: PublicCycle | undefined = cycles.data?.find(
-    (c) => c.id === applicantForm.watch("cycleId"),
+    (c) => c.id === draftCycleId,
   );
+  /**
+   * A saved draft outlives the cycle it points at — the school closes or
+   * replaces a cycle while an applicant has a half-finished form, or the draft
+   * simply sits past the admission window. The id is restored verbatim, so the
+   * cycle select renders blank and the class list comes back empty with
+   * nothing on screen explaining why; the applicant cannot proceed and cannot
+   * tell that anything is wrong (QA finding F21).
+   *
+   * Derived rather than cleared in an effect: leaving the stale value in place
+   * keeps this notice on screen until the applicant picks a real cycle, and
+   * choosing one overwrites the bad id naturally.
+   */
+  const draftCycleGone =
+    Boolean(draftCycleId) && !cycles.isPending && !selectedCycle;
   const selectedClass = selectedCycle?.classes.find(
     (c) => c.classId === applicantForm.watch("classId"),
   );
@@ -394,6 +409,13 @@ export default function AdmissionApplyPage() {
                   {fieldError(
                     applicantForm.formState.errors.cycleId?.message,
                   )}
+                  {draftCycleGone ? (
+                    <p className="text-sm text-muted-foreground">
+                      The admission cycle saved with your draft is no longer
+                      open. Pick a current one to continue — the rest of your
+                      answers have been kept.
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VISITOR_PURPOSE_LABELS, visitorApi } from "@/lib/api/community";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * Roadmap §4's daily register.
@@ -129,12 +130,12 @@ export function VisitorRegisterTab() {
                     {row.gatePassNo ?? "—"}
                   </td>
                   <td className="p-3">
-                    {new Date(row.checkIn).toLocaleString()}
+                    {formatDateTime(row.checkIn)}
                   </td>
                   <td className="p-3">
                     {row.checkOut ? (
                       <span className="flex items-center gap-2">
-                        {new Date(row.checkOut).toLocaleString()}
+                        {formatDateTime(row.checkOut)}
                         {row.autoCheckedOut && (
                           <Badge variant="outline">Day-end sweep</Badge>
                         )}

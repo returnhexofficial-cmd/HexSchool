@@ -29,6 +29,7 @@ import {
   type StudentDocumentType,
 } from "@/lib/api/students";
 import { STUDENT_DOCUMENT_TYPES } from "@/lib/validations/student";
+import { formatDate } from "@/lib/utils/date";
 
 const docSchema = z.object({
   title: z.string().trim().min(1, "Required").max(200),
@@ -149,7 +150,7 @@ export function DocumentsTab({ studentId }: { studentId: string }) {
                   </td>
                   <td className="px-3 py-2">{formatBytes(doc.sizeBytes)}</td>
                   <td className="px-3 py-2">
-                    {new Date(doc.createdAt).toLocaleDateString()}
+                    {formatDate(doc.createdAt)}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end gap-1">

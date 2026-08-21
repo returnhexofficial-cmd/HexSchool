@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   accountApi,
   budgetApi,
@@ -409,8 +410,8 @@ function FiscalPeriodSection() {
               {periods.data.map((period) => (
                 <TableRow key={period.id}>
                   <TableCell className="font-medium">{period.name}</TableCell>
-                  <TableCell>{period.startDate.slice(0, 10)}</TableCell>
-                  <TableCell>{period.endDate.slice(0, 10)}</TableCell>
+                  <TableCell>{formatDate(period.startDate)}</TableCell>
+                  <TableCell>{formatDate(period.endDate)}</TableCell>
                   <TableCell>
                     <Badge
                       variant={

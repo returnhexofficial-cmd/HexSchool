@@ -123,10 +123,11 @@ New permission codes (13): `teacher.view|create|update|delete|status`, `teacher.
 | Permission guards (403 for unprivileged users) | ✅ | e2e |
 | Qualification year > current → 400 | ✅ | e2e |
 | Assignment matrix / leave inbox in-browser click-through | ⏳ | pending (validation + API layers e2e-tested) |
+| **In-browser QA (Playwright MCP, 2026-08-18)** | ✅ | 8/8 run, 1 deferred. **Closes the assignment-matrix click-through**: expertise override warned, saved with an **Overridden** badge, and propagated live to both the Workload panel and the teacher's own Assignments tab. Teacher document upload verified against MinIO. Leave inbox deferred to the M21 pass, which owns leave balances. Surfaced a **seed gap** — no `class_subjects` mappings existed, so the matrix correctly refused; the QA seed now maps 4 subjects × 3 classes × 2 sessions (Science optional), which also unblocks M13/M14/M15. See [`docs/qa/08-teachers.md`](../qa/08-teachers.md). |
 
 ## Remaining TODOs
 
-- [ ] In-browser click-through: assignment matrix, leave inbox, teacher photo/document uploads.
+- [x] In-browser click-through: **assignment matrix** (expertise override → save → workload + teacher tab) and **teacher document upload** — done 2026-08-18. Leave inbox deferred to the M21 pass, which owns leave balances/applications. See [`docs/qa/08-teachers.md`](../qa/08-teachers.md).
 - [ ] M13 must replace the `TIMETABLE_CONFLICT_CHECKER` no-op provider.
 
 ## Links to Related Modules

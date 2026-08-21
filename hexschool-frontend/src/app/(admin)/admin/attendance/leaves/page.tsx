@@ -44,6 +44,7 @@ import { studentsApi } from "@/lib/api/students";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { LEAVE_STATUSES, dhakaToday } from "@/lib/validations/attendance";
+import { formatDate } from "@/lib/utils/date";
 
 const STATUS_VARIANT: Record<LeaveStatus, "default" | "secondary" | "outline"> =
   {
@@ -161,8 +162,8 @@ export default function StudentLeavesPage() {
                     {leave.student.firstName} {leave.student.lastName}
                   </TableCell>
                   <TableCell>{leave.student.studentUid}</TableCell>
-                  <TableCell>{leave.fromDate.slice(0, 10)}</TableCell>
-                  <TableCell>{leave.toDate.slice(0, 10)}</TableCell>
+                  <TableCell>{formatDate(leave.fromDate)}</TableCell>
+                  <TableCell>{formatDate(leave.toDate)}</TableCell>
                   <TableCell className="max-w-64 truncate">
                     {leave.reason}
                   </TableCell>
@@ -396,7 +397,7 @@ function DecideDialog({
           </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {leave.fromDate.slice(0, 10)} → {leave.toDate.slice(0, 10)}.{" "}
+          {formatDate(leave.fromDate)} → {formatDate(leave.toDate)}.{" "}
           {action === "approve"
             ? "Any absence already recorded in this range is corrected to Leave."
             : "Recorded attendance is left untouched."}

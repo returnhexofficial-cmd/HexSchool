@@ -20,12 +20,29 @@ deleted — the diagnosis is usually worth more than the fix.
 | **F9** | Raw ISO timestamp in the DOB column | ✅ fixed — shared `formatDate`; 12 Vitest cases |
 | **F10** | Two HR e2e tests fail on the local DB | 🔎 **open** — pre-existing, belongs to the M21 pass |
 | **F11** | Calendar ignored the selected session | ✅ fixed — anchored via `monthWithinSession()`; 8 regression cases |
-| **F12** | HR e2e leaks `staff_attendances` rows | 🔎 **open** — same class as F7; deferred to the M21 pass with F10 |
+| **F12** | HR e2e leaks `staff_attendances` rows | ✅ fixed — 92 orphans found live in QA; purge + a residue check |
 | **F13** | Every `<Select>` is unnamed for screen readers | 📋 **decision needed** — 420 usages / 83 files, only 4 named; component-level fix |
 | **F14** | Chart bars used `aria-label` on a bare `div` | ✅ fixed — `role="img"`, matching the Sparkline in the same file |
 | **F15** | OpenAPI under-declares ~318 responses | 🔎 **open** — contract debt; **zero 500s** across 474 fuzzed GETs |
 | **F16** | Unlabelled month filter on `/admin/fees` | ✅ fixed — `htmlFor`/`id`, matching the correct field in the same file |
 | **F17** | 86 pre-existing backend lint errors | 🔎 **open** — verify block omits `lint:check`; 69 are `--fix`-able |
+| **F18** | 27 dates used the machine locale, not Asia/Dhaka | ✅ fixed — rewritten to `formatDate`/`formatDateTime` across 20 files + a source guard |
+| **F19** | SMS-gated flows untestable (no readable message body) | ✅ fixed — dev-only SMS outbox at `GET /dev/sms`, double-gated, 9 tests |
+| **F20** | QA seed had no admission cycle | ✅ fixed — seed creates one OPEN cycle straddling today |
+| **F21** | Stale draft dead-ends the admission wizard | ✅ fixed — derived notice explains and recovers |
+| **F22** | QA seed had no cycle→class rows, so the class picker was empty | ✅ fixed — seed maps all 3 classes with seats + BDT 500 fee |
+| **F23** | Seed leaked a student per UI-driven admission | ✅ fixed — purge scoped by school ownership, not name prefix |
+| **F24** | Raw ISO dates printed into prose — and onto an ID card | ✅ fixed — 14 sites across both repos; both source guards widened |
+| **F25** | Day boundaries built in UTC, so a cycle closed 6 h late | ✅ fixed — `startOfDayIso`/`endOfDayIso` on the Dhaka calendar |
+| **F26** | The F23 fix cleaned students but left guardians name-matched | ✅ fixed — whole purge scoped by `schoolId` |
+| **F27** | Previous session had sections but no enrolments | ✅ fixed — seed enrols the cohort in both years |
+| **F28** | `percentage` meant two different denominators in one report | ✅ fixed — three named functions in the calc engine, 9 golden cases |
+| **F29** | Backend "today" was the UTC day, not the Dhaka day | ✅ fixed — 8 sites use `dhakaToday()`; source guard added |
+| **F30** | `@db.Time` reached the client raw, so the routine grid printed 1970 timestamps | ✅ fixed — one shared slot view for both endpoints |
+| **F31** | 14 pickers asked for `limit: 200` from an API capped at 100 | ✅ fixed — shared `MAX_PAGE_LIMIT` + a guard that checks both repos agree |
+| **F32** | Seed had no teacher assignments or bell schedule, so the builder was unusable | ✅ fixed — seeded, plus an empty state naming the missing prerequisite |
+| **F33** | Publishing a routine always failed on its own default date | ✅ fixed — `isoDateInput` for the date input |
+| **F34** | The conflict tooltip crashed the whole page | ✅ fixed — `Tooltip` is self-providing |
 
 ### Harness built
 
@@ -550,3 +567,560 @@ modules of that adds up.
 ~20 files unrelated to the QA work and bury the campaign's diff. Suggested sequence —
 owner commits the QA work, then a standalone `npm run lint` commit, then add
 `lint:check` to the verify block so it cannot drift again.
+
+### F18 — 27 date renderings used the viewer's machine locale — **fixed**
+
+Found on the staff Documents tab, which showed an uploaded file dated **`8/18/2026`** —
+US M/D/YYYY, on a product whose Global Conventions require Asia/Dhaka **DD/MM/YYYY**.
+
+`new Date(x).toLocaleDateString()` with no locale argument formats against whatever the
+*viewer's machine* is set to. Two staff members looking at the same row see different
+dates, and near midnight they disagree about the day.
+
+Not a one-off — a sweep of the source found **27 call sites across 20 files**:
+
+| Form | Count |
+|---|---|
+| `new Date(x).toLocaleDateString()` | 9 |
+| `new Date(x).toLocaleString()` | 17 |
+| `new Date(x).toLocaleTimeString([], …)` | 1 *(left alone — already passes options)* |
+
+Spread across alumni, analytics, communication, complaints, inventory, reports, staff,
+students, teachers, users, visitors, the portal and the notification bell.
+
+**This is F9's class, product-wide.** F9 fixed one column in the students list and
+created `formatDate`/`formatDateTime` for the purpose; nothing then pointed the other
+call sites at them.
+
+**Fix.** Mechanical rewrite to the existing, already-tested helpers —
+`formatDate` (9) and `formatDateTime` (17) — across 20 files, imports added, `--fix`
+run for formatting. Unlike **F13**, this needed no design decision: the utility existed,
+the replacement is unambiguous, and it deletes a whole bug class.
+
+**Regression guard at the cheapest layer:** `src/lib/utils/no-unlocalised-dates.test.ts`
+greps the source for the banned shape and fails with file:line for each offender. It
+also asserts that its own regex still matches a known-bad sample, so a broken pattern
+cannot make it vacuously green — this bug is invisible on a machine whose locale is
+already en-GB, which is exactly how it survived to a second discovery.
+
+Verified in the browser: the same row now reads **`18/08/2026`**.
+
+### F19 — SMS-gated flows were untestable: no way to read a sent message — **fixed (tooling)**
+
+The M10 public admission wizard opens with a phone-OTP step, and its click-through had
+been deferred with the note *"once SMS delivery is real (M17)"*. Driving it showed the
+real blocker is narrower and fixable today.
+
+`LogSmsAdapter` logs metadata only:
+
+```
+[SMS:log-only] to=01799887766 len=91 unicode=false
+```
+
+**The body is deliberately absent** — its own comment says so, because the bodies are
+OTPs and temporary passwords. Correct for a log, and it means QA cannot get past screen
+one of the wizard: the code is hashed in `otp_codes`, so it is not recoverable from the
+database either, and there is a 3-attempt limit so guessing is out.
+
+Email has Mailpit. SMS had nothing.
+
+**Fix — a dev-only SMS outbox, the SMS counterpart to Mailpit:**
+
+| Piece | Behaviour |
+|---|---|
+| `SmsOutboxService` | Bounded in-memory ring (50), newest first, filterable by recipient |
+| `LogSmsAdapter` | Records the body into it — a no-op when disabled |
+| `GET /api/v1/dev/sms` | Reads it back; `?to=` filters |
+
+Gated by **two independent conditions**, mirroring `AUTH_THROTTLE_ENABLED`:
+`SMS_DEV_OUTBOX=true` **and** `NODE_ENV !== 'production'`. So the flag leaking into a
+production environment file still leaves the outbox inert. When disabled the endpoint
+answers **404, not 403** — an endpoint that should not exist must not advertise that it
+does — and it is `@ApiExcludeController()` so it never reaches Swagger.
+
+9 unit tests pin the guard, including "never on in production even with the flag",
+"ignores anything but the exact string `true`", and that the bound drops the *oldest*
+message rather than the newest.
+
+**Verified end to end:** requested a code from the public wizard, read
+`Your HexSchool verification code is 199409…` from `/dev/sms`, submitted it, and the
+wizard advanced with **"Phone verified."** — the step that had blocked this
+click-through since M10 shipped.
+
+*This unblocks more than M10: every M17 notification path is SMS-shaped.*
+
+### F20 — The QA seed had no admission cycle, so the wizard dead-ends at step 2
+
+With the phone gate cleared, the wizard's Applicant step asks for an **Admission
+cycle** and the picker was empty — `GET /public/admissions/cycles` returned `[]`. There
+is nothing to apply *to*, so the whole admission → enrollment chain (the highest-risk
+seam in `MODULE_DEPENDENCIES.md`) is unreachable.
+
+Same class as the missing `class_subjects` in pass B: the fixture was thin, not the app.
+
+**Fix:** the QA seed now creates one **OPEN** cycle on the current session, with a
+window straddling today (−30/+30 days) so it is genuinely open whenever QA runs. It
+cascades from the academic session, so the existing purge already cleans it.
+
+### F21 — A saved draft outliving its admission cycle dead-ends the wizard — **fixed**
+
+The public admission wizard persists a draft to `localStorage` (`hs_admission_draft`) so
+an applicant can resume after an interruption. On restore, `cycleId` is handed to the
+form verbatim:
+
+```ts
+defaultValues: draft.applicant ?? { cycleId: "", … }
+```
+
+If that cycle no longer exists — the school closed or replaced it, or the draft simply
+sat past the admission window — nothing reconciles the stale id:
+
+| | |
+|---|---|
+| Cycle select | renders **blank** (no matching `SelectItem` for the value) |
+| Class list | **empty** (`selectedCycle` is `undefined`, so `.classes` never resolves) |
+| Error shown | **none** |
+
+The applicant sees a blank cycle, an empty class dropdown, and no explanation. There is
+no way forward and no way to tell that anything is wrong — clearing site data is the
+only escape.
+
+Reproduced exactly: draft held `cycleId c0bfcd46…` while the only live cycle was
+`bb7a6cd7…`.
+
+**Fix.** Derive the condition and say so, rather than silently failing:
+
+```ts
+const draftCycleGone = Boolean(draftCycleId) && !cycles.isPending && !selectedCycle;
+```
+
+with a notice under the field: *"The admission cycle saved with your draft is no longer
+open. Pick a current one to continue — the rest of your answers have been kept."*
+
+Deliberately **derived, not cleared in an effect**: leaving the stale value in place
+keeps the notice on screen until the applicant picks a real cycle, and choosing one
+overwrites the bad id naturally. Clearing it would make the notice vanish instantly and
+leave them staring at an empty form with no idea why. It also avoids the
+`react-hooks/set-state-in-effect` trap that the F11 fix hit.
+
+**Verified in the browser** with the stale draft in place: notice appeared, picking the
+live cycle populated the class list (`QA Class 6 — fee BDT 500.00`) and cleared the
+notice.
+
+### F22 — QA seed created a cycle with no classes, so the wizard's class picker was empty
+
+An `AdmissionCycle` carries its **own** class list (`admission_cycle_classes`: seats +
+application fee), and the public wizard reads *that*, not the school's class master.
+The seed created the cycle but no rows, so `GET /public/admissions/cycles` returned a
+cycle whose `classes` was `[]` and step 2 could not be completed.
+
+Third fixture gap of the same shape in two passes (after `class_subjects` in M08 and the
+cycle itself in M10) — the seed keeps being one join-table short of the flow under test.
+
+**Fix:** the seed now maps all three classes onto the cycle with 30 seats and a BDT 500
+application fee, which also gives the fee/payment path something real to exercise.
+
+### F23 — The QA seed leaked a student for every admission driven through the UI — **fixed**
+
+Caught by the committed browser suite, not by inspection: `smoke.spec.ts` asserts the
+seed lands **exactly 12 students**, and after journey **J1** it found 13 — and stayed at
+13 through repeated reseeds.
+
+The purge matched `studentUid startsWith 'QA-'`, which is what the *seeder* names its
+students. But a QA round can **admit an applicant through the M10 wizard**, and that
+student is created by the application with the school's real id pattern
+(`HEX-202600001`). So:
+
+- the admission application cascaded away with the academic session,
+- the student it created did not,
+- leaving an invisible orphan — no application, no enrolment, just a stray row that
+  accumulates one per admission run and breaks the head-count assertion.
+
+Matching on the admission class does not rescue it either: deleting the QA classes
+**nulls `admission_class_id`** first, so the only reference that could identify the row
+is gone by the time the purge looks. Verified — the orphan's `admission_class_id` was
+`null`.
+
+**This is the third instance of one pattern** (after **F7** users and **F12**
+`staff_attendances`): *cleanup keyed on a marker the production code never applies.*
+
+**Fix:** scope the student purge by **ownership** rather than naming — every student in
+the QA school goes, because this seeder owns that school outright and `guard.ts` already
+makes it impossible to run against anything but a local database. Verified: 12 students
+and 0 orphans across repeated reseeds, and the browser suite back to 26 passed.
+
+**The general rule, now three times over:** delete fixtures by a key you control — the
+school, the session, a foreign key — never by text the application writes.
+
+### F24 — Raw ISO dates printed into prose, including onto a student's ID card — **fixed**
+
+Found on the M09 student detail page, whose header read:
+
+```
+QA-2026-0001 · QA Class 6 · admitted 2026-01-05T00:00:00.000Z
+```
+
+**This is F9 for the third time**, and the reason it came back is that the F18 source
+guard only knew one shape of the mistake. It greps for
+`new Date(x).toLocaleDateString()` — a call that never happens here. These sites call
+*no* formatter at all: they interpolate the API value straight into a sentence, or
+`.slice(0, 10)` it into the ISO form.
+
+Fourteen sites, in three groups:
+
+| Where | Shape | Count |
+|---|---|---|
+| Frontend prose | `` `admitted ${s.admissionDate}` `` | 2 |
+| Frontend ISO truncation | `` `${c.startAt.slice(0, 10)}` `` | 6 |
+| **Backend generated documents** | `date.toISOString().slice(0, 10)` | 6 |
+
+The backend group is the serious one, because those are **printed artifacts**: a student
+ID card (`Date of Birth 2014-01-01`), an admit card's test date, a donation receipt, a
+visitor pass's validity, and a certificate register's "Printed" footer. A school hands
+these to parents.
+
+**Fix.** Frontend sites go through the existing `formatDate`. The backend gained
+`dhakaDisplayDate()` in `common/utils/clock.util.ts` — beside the Dhaka helpers that
+already existed for M12/M13 — because there was no *display* formatter on that side at
+all, only machine-form truncation.
+
+**Both guards widened**, which matters more than the fixes:
+
+- `no-unlocalised-dates.test.ts` gained a second rule that flags a date-shaped value
+  interpolated into **prose**. It distinguishes a sentence from a react-query key or an
+  ISO construction by whether the literal's *static* text contains a space — after
+  stripping **every** interpolation, not just the date-shaped ones, since an unrelated
+  `${pad(d.getMonth() + 1)}` contains a space and would otherwise disguise a key as a
+  sentence. Exempts `format*`/`*Relative` calls and `getFullYear()` (a year is not a
+  date). Four self-tests pin those distinctions so the rule cannot pass vacuously.
+- `clock.util.spec.ts` gained three cases for `dhakaDisplayDate`, one of them at 19:30
+  UTC — already the next day in Dhaka, and precisely when a receipt printed in
+  Bangladesh would otherwise carry yesterday's date.
+
+**A caveat worth keeping.** 68 backend call sites use `toISOString().slice(0, 10)` and
+most are legitimate — date keys, file names, API payloads. Only the ones a human reads
+off a generated document were changed. The remaining PDF/XLSX generators
+(fees, accounting, library, hostel) are listed for their own passes rather than
+swept blind, since telling a display string from a lookup key needs the module's context.
+
+### F25 — A day picked in Dhaka was stored as a UTC day, so an admission cycle closed six hours late — **fixed**
+
+Noticed while fixing F24: the admission cycle dialog turned the two `<input type="date">`
+values into instants by string concatenation.
+
+```ts
+startAt: `${values.startAt}T00:00:00.000Z`,
+endAt:   `${values.endAt}T23:59:59.999Z`,
+```
+
+Bangladesh is UTC+6, and the backend compares that instant directly
+(`now > cycle.endAt.getTime()`). So a cycle advertised as closing on the 31st **kept
+accepting applications until 05:59 on the 1st**, Dhaka time — and one advertised as
+opening on the 1st did not actually open until 06:00 that morning. The bug was invisible
+because the display side truncated the same value back to `2026-08-31`; formatting it
+correctly for F24 is what exposed it, since `endAt` then rendered as **01/09/2026**.
+
+`/admin/audit-logs` had the same fault from the other direction: `dateFrom` used
+`new Date("2026-08-01")` (UTC midnight → 06:00 Dhaka, missing the first six hours of the
+day) and `dateTo` used ``new Date(`${d}T23:59:59`)``, which parses in **the viewer's own**
+timezone — the same machine-dependence as F18, in a filter rather than a label.
+
+**Fix:** `startOfDayIso` / `endOfDayIso` in `lib/utils/date.ts`, fixed to `+06:00` — the
+same reasoning `clock.util.ts` already documents on the backend, that BD has had no DST
+since 2009, so a day boundary is a constant shift and needs no timezone library. Four
+Vitest cases, including the one that states the bug outright:
+`formatDate("2026-08-31T23:59:59.999Z")` is `01/09/2026`, while both new helpers
+round-trip to `31/08/2026`.
+
+**The lesson is about the pairing.** Storing a boundary in one calendar and displaying it
+in another hides each error behind the other: two wrongs rendered right. The F24 fix
+could only be finished by fixing F25 as well.
+
+### F26 — The F23 fix only cleaned half, and the half it missed was the worse one — **fixed**
+
+Found by counting rows after driving the M09 XLSX import: **guardians went 11 → 12
+across a reseed**, and two rows had no student attached at all —
+`মোঃ ফরিদ রহমান` (created by journey **J1**, last pass) and
+`মোঃ সেলিম চৌধুরী` (created by the import, minutes earlier).
+
+F23 converted the `students` purge to ownership-scoping and stopped there. The very next
+line still read:
+
+```ts
+await prisma.guardian.deleteMany({ where: { name: { startsWith: 'QA ' } } });
+```
+
+A guardian created by the *application* is named by whoever filled the form — an
+applicant, or a cell in a spreadsheet — so no prefix match will ever find it.
+
+**This one is worse than a stray student**, because guardian **phone is the dedup key**
+for siblings. A leftover row means the next run's sibling-dedup check reuses the stale
+guardian and passes *without exercising the dedup at all* — a green test proving nothing.
+A leaked student breaks a count and announces itself; a leaked guardian quietly disables
+an assertion.
+
+**Fix:** the whole purge block is scoped by `schoolId` — guardians, teachers, staff
+profiles, sections, classes, subjects, departments, shifts. Every one of those tables
+carries a `school_id` (the global rule), the application can create rows in all of them
+during a QA round, and this seeder owns the demo school outright.
+
+Verified: 12 students, 10 guardians, **0 unlinked guardians**, stable across reseeds.
+
+**Fourth instance of the pattern**, and the first one found *inside a fix for the
+pattern*. The rule after F23 was written as a rule and then applied to a single line.
+Applying it to the whole block is what it should have meant the first time — when a
+cleanup bug is found, convert every sibling deletion in the same block, not just the row
+that bit.
+
+### F27 — The COMPLETED session was empty, so its read-only rule could not be tested — **fixed**
+
+M12's completion doc calls this out as notable: *"COMPLETED/ARCHIVED sessions are
+read-only — the M05 rule, enforced for the first time here."* It is the rule that stops
+someone quietly editing last year's register.
+
+It could not be reached. The seed creates sections in **both** sessions — with a comment
+saying that is "what makes the session-scoping sweep meaningful" — but enrolled students
+only in the current one. With no enrolment in the old session there is no roster, nothing
+to mark, and therefore nothing for the guard to refuse.
+
+Two things went untested as a result:
+
+- **COMPLETED sessions are read-only** (M12, M14, M15 all lean on it).
+- **Session scoping** — the switcher only proves anything when the two sessions hold
+  *different* rosters. An empty previous year cannot show a leak.
+
+**Fix:** every student also gets a prior-year enrolment. Two details matter more than the
+row itself:
+
+- its status is **`PROMOTED`**, which is what `PromotionService.closeEnrollment` actually
+  writes to a source enrolment — not the `COMPLETED` that reads plausibly but no code
+  path produces. Seeding the status the product would have produced is the difference
+  between a fixture and a guess, and it is what makes journey **J6** (year rollover)
+  meaningful;
+- the current-year rows are now typed `PROMOTED` too, bar two `NEW` admissions, so the
+  fixture reads like a school in its second year rather than its first.
+
+Verified afterwards: `POST /attendance/students` into the old session returns **400
+"Session QA 2025 is COMPLETED — attendance is read-only"**, and the GET reports
+`editable: false` with the identical `lockReason` — the write guard and the read hint
+agree, which is the part worth checking.
+
+**One observation, not filed as a defect.** The historical sheet's roster comes back
+*empty*, because the canonical roster is deliberately ACTIVE-only
+(`findSectionRoster`, documented as such). So a past year's page shows "read-only" over
+an empty table rather than the day's record. Historical attendance is meant to be read
+through the reports, which query the attendance rows directly — that is a defensible
+split, but the empty table is a rough edge worth a UX decision rather than a fix.
+
+### F12 (closed) — 92 orphaned `staff_attendances` rows, found live in the QA database
+
+Open since the first pass, deferred twice as "an e2e cleanup problem". It was not: the
+QA database itself was carrying **92 orphaned rows** dating back to 2026-07-02, and they
+surfaced in this pass as **phantom LEAVE on the staff attendance sheet** — 8 teachers and
+84 staff who no longer exist.
+
+The cause is the M08 design decision, working exactly as documented: `staff_attendances`
+is polymorphic (`person_type` + `person_id`, **no foreign key**) so the teacher and staff
+lifecycles stay independent. Nothing cascades. Deleting the employees leaves their
+attendance behind, attributable to nobody.
+
+**Fix:** the purge deletes `staff_attendances` for the school explicitly, and *before*
+the employees, while the rows can still be attributed. Verified: 0 rows after a reseed.
+
+This also mattered beyond the sheet — **M21 payroll reads `staff_attendances`**, so the
+pass I deferred this to would have been computing pay against phantom leave.
+
+### F28 — One report, two numbers both called "percentage" — **fixed**
+
+`GET /attendance/reports/student/:id` returned **42.86%** in its summary and **60%** for
+the only section the student sat in, over the same range. Both fields were named
+`percentage`.
+
+The summary used the engine, which implements the roadmap formula — *(present + late +
+½ half-day) ÷ working days*. The per-section figure came from `dayPercentage`, a private
+helper in the reporting service that divided by **marked days** instead. 3 ÷ 7 against
+3 ÷ 5.
+
+The helper had five callers, and this is the part worth being careful about — **three of
+them were right**:
+
+| Caller | Question | Correct denominator |
+|---|---|---|
+| Daily sheet, per section | one day | students marked ✓ |
+| Daily sheet, totals | one day | students marked ✓ |
+| Summary trend point | one day | students marked ✓ |
+| **Student report, per section** | a range | working days ✗ |
+| **Summary, per section** | a range | working days × heads ✗ |
+
+For a single day there *are* no working days to divide by, and an unmarked student is
+missing data rather than an absence. The bug was not the formula but that one name
+served two questions, in a helper sitting outside the golden-tested engine — which is
+where this project's ground rules say arithmetic belongs, precisely so it cannot drift.
+
+**Fix.** Three named functions in `calc/percentage.util.ts`, each documenting its
+denominator: `sameDayPercentage`, `rangePercentage`, `cohortPercentage`. Nine golden
+cases pin them, including the exact shape that exposed this (`42.86`) and an assertion
+that `rangePercentage` and `summarize` agree.
+
+Two further defects fell out of doing it properly:
+
+- **The per-section figure needed real windows.** A student who transfers mid-year sits
+  in two sections, and the working days must be split at the transfer date — which is
+  why the marked-days shortcut existed. The report already loads every enrolment with
+  its `enrollmentDate`, so the windows are derivable: each enrolment owns the days from
+  its start until the next one begins. Verified: for a student in a single section the
+  two figures are now identical (42.86% both), which is the invariant that was broken.
+- **The school-wide figure read 100%.** Spotted only after fixing the sections: `overall`
+  divided a whole school's present-days by working days with no headcount, so six
+  present-days over eight working days read as full attendance. It is a cohort like any
+  other — `6 ÷ (7 × 12)` = **7.14%**, which is the honest number for a school where one
+  section of six was ever marked.
+
+**The lesson is about naming, not arithmetic.** Every one of these numbers was a
+plausible ratio. What made them wrong was that a reader — a head teacher deciding exam
+eligibility — cannot tell which denominator they are looking at when both are called
+`percentage` and sit in the same payload.
+
+### F29 — "Today" was the UTC day, so for six hours every night it was yesterday — **fixed**
+
+Surfaced by a routine created on **19 August** in Dhaka coming out **effective from the
+18th**.
+
+```ts
+const today = new Date().toISOString().slice(0, 10);   // today in UTC
+```
+
+Bangladesh is UTC+6, so between 18:00 and midnight UTC — **midnight to 6 AM local**,
+every day — that expression returns the previous day. Eight call sites had it, and the
+consequences were not cosmetic:
+
+| Site | What it dated a day early |
+|---|---|
+| `certificate-templates.service` | a certificate's printed `issueDate` |
+| `admission-applications.service` | the `admissionDate` written when an applicant becomes a student |
+| `timetable.service` | a new routine's `effective_from` |
+| `attendance.executors` | the default date on an attendance dashboard — opening on the wrong register |
+| `enrollments`, `exams`, `hostel-export` | comparison dates and a printed footer |
+
+`dhakaToday()` has existed in `clock.util.ts` since M12 and is exactly this, done
+correctly. The mistake is that the raw idiom *reads* right.
+
+**Fix:** all eight go through `dhakaToday()`, plus `no-utc-today.spec.ts` — a source
+guard banning `new Date()` (no argument) truncated to a date, while leaving the
+legitimate `someInstant.toISOString().slice(0, 10)` alone.
+
+### F30 — A `@db.Time` column reached the client raw, and the routine grid printed 1970 — **fixed**
+
+Every row of the routine builder — the module's central screen — was labelled:
+
+```
+Period 1
+1970-01-01T07:30:00.000Z–1970-01-01T08:15:00.000Z
+```
+
+Prisma returns `@db.Time` as a **Date on 1970-01-01**. `GET /period-slots` mapped it to
+`"07:30"` through a `toView` helper; `GET /timetables/:id` embedded the raw Prisma model
+instead. **The same column, two shapes, from two endpoints** — the frontend bug was only
+downstream of that.
+
+**Fixed at the source, not the symptom.** `toView` was private, which is why the second
+endpoint could not reuse it. It is now an exported `toPeriodSlotView`, documented as the
+only way a slot may reach a client, and the timetable detail maps through it. Patching
+the frontend instead would have left the next consumer to rediscover it.
+
+### F31 — Fourteen pickers asked for more rows than the API allows, and silently rendered empty — **fixed**
+
+Found because the routine builder's cell editor logged a 400 on open:
+`GET /sections?sessionId=…&limit=200` → **"limit must not be greater than 100"**.
+
+Every list endpoint validates `limit` with `@Max(MAX_PAGE_LIMIT)`, capped at 100.
+Over-asking is **not clamped** — it is a 400, and a rejected query renders as an empty
+dropdown. Fourteen call sites asked for 200 or 300:
+
+- the routine builder's **"combined with"** picker — the control that tells the conflict
+  checker two sections legitimately share a teacher, so combined classes were
+  unreachable;
+- the **promotion wizard's target sections**, on both its pages;
+- the assignment, inventory, library and alumni pickers.
+
+The failure mode is what makes it dangerous: nothing throws, nothing appears in the UI,
+and an empty dropdown is indistinguishable from a school that has not set anything up.
+
+**Fix:** a frontend `MAX_PAGE_LIMIT` mirroring the backend constant, all 14 sites capped,
+and a Vitest guard — which also **reads the backend file and asserts the two constants
+still agree**, since they are a contract rather than a coincidence.
+
+**Left as debt:** 100 is a ceiling, not a page size. A school with more than 100 sections
+or alumni still needs a searchable or paginated picker; this turns a broken control into
+a truncated one, which is better but not finished.
+
+### F32 — The QA seed could not reach the routine builder at all — **fixed**
+
+Two prerequisites were missing, and each dead-ended the module:
+
+- **No bell schedule.** M13 refuses to build a routine without period slots — correctly,
+  and with a good empty state saying so. But every reseed then left a QA round
+  hand-building five periods first, and M12's period-mode marking unreachable for the
+  same reason.
+- **No teacher assignments.** The cell editor's teacher list is built from this session's
+  M08 assignments, so a substitute can be picked and the assigned teacher ★-marked. With
+  zero assignments the dropdown was **empty and no cell could be completed**.
+
+**Fix:** the seed creates a five-period bell schedule (four lessons around a tiffin
+break) and 24 subject assignments, split so that one teacher genuinely cannot be in two
+places — which is what gives the conflict checker something real to catch.
+
+**Plus a product fix.** An empty teacher list is a dead end a real school hits on its
+first day, and the builder said nothing at all. It now names the missing prerequisite,
+the same way the period-slots page already does one screen away.
+
+### F33 — Publishing a routine always failed, on its own default date — **fixed**
+
+Publish returned **400** and the UI showed a bare *"Validation failed"*.
+
+`PublishDialog` seeds its date field from `timetable.effectiveFrom`, which the API
+returns as a full instant (`2026-08-19T00:00:00.000Z`). An `<input type="date">` cannot
+display that, so it rendered **empty** — but React state still held the ISO string, and
+`onConfirm(date)` sent it to a DTO validating `^\d{4}-\d{2}-\d{2}$`.
+
+So the default path — open the dialog, accept the pre-filled date, publish — failed every
+time, and the field looked blank, so nobody could see what was wrong. It worked only if
+the user happened to pick a date manually.
+
+**Fix:** `isoDateInput(timetable.effectiveFrom)` — the helper introduced for **F24**,
+which exists precisely to turn an instant into what a date input needs. Verified end to
+end: the field pre-fills `19/08/2026` and publishing succeeds.
+
+**A second, smaller thing, not separately filed:** the toast showed the envelope's
+`message` ("Validation failed") and dropped its `details` array, which named exactly which
+property was wrong. Worth surfacing — recorded against the envelope-contract sweep.
+
+### F34 — The conflict tooltip crashed the entire page — **fixed**
+
+The routine builder's red cells carry a tooltip listing every reason. Rendering one threw
+
+```
+Error: `Tooltip` must be used within `TooltipProvider`
+```
+
+which reached the route's error boundary, so the whole builder became **"Something went
+wrong"**.
+
+The severity is in *when* it fires. The tooltip renders **only when a cell actually
+conflicts**, so the page worked perfectly until a genuine double-booking existed — and
+then died at exactly the moment it had something important to say. It is the module's
+headline feature.
+
+It survived to now because producing a real conflict needs two sections, a shared
+teacher, a bell schedule, and a *published* competitor (drafts deliberately do not
+compete). That is the setup **F32** had made impossible.
+
+**Fix:** the vendored `Tooltip` now provides its own context, which is what upstream
+shadcn does — so the next consumer cannot reintroduce it. It was the only consumer in the
+codebase, added for M13 and never rendered.
+
+**Verified:** the cell shows `border-destructive`, and the tooltip reads *"Teacher clash:
+Rahim Uddin is busy in QA Class 6 — A (Period 1 07:30)"* — naming the teacher, the
+competing section and the slot. It also confirms the documented claim that conflicts are
+**recomputed on read**: section B was never re-saved; publishing section A turned its cell
+red on the next load.

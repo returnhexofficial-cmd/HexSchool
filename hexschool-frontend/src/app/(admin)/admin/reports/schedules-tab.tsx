@@ -20,6 +20,7 @@ import {
 import { analyticsApi, type ReportSchedule } from "@/lib/api/analytics";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { ScheduleDialog } from "./schedule-dialog";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * The schedule manager (roadmap §5).
@@ -123,11 +124,11 @@ export function SchedulesTab() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {s.nextRunAt
-                      ? new Date(s.nextRunAt).toLocaleString()
+                      ? formatDateTime(s.nextRunAt)
                       : "—"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString() : "—"}
+                    {s.lastRunAt ? formatDateTime(s.lastRunAt) : "—"}
                     {s.lastStatus === "FAILED" && s.lastError && (
                       <div className="text-xs text-destructive">
                         {s.lastError}

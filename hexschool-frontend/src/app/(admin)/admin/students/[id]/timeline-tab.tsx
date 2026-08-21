@@ -5,6 +5,7 @@ import { ErrorState } from "@/components/shared/error-state";
 import { LoadingBlock } from "@/components/shared/spinner";
 import { Badge } from "@/components/ui/badge";
 import { studentsApi } from "@/lib/api/students";
+import { formatDateTime } from "@/lib/utils/date";
 
 /** Status-change trail (append-only). Audit-log cross-links land with the
  *  portal/reporting work in later modules. */
@@ -33,7 +34,7 @@ export function TimelineTab({ studentId }: { studentId: string }) {
       {history.map((entry) => (
         <div key={entry.id} className="flex gap-4 rounded-md border p-3">
           <div className="text-sm text-muted-foreground">
-            {new Date(entry.createdAt).toLocaleString()}
+            {formatDateTime(entry.createdAt)}
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-sm">

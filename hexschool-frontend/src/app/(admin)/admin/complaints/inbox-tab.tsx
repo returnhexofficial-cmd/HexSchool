@@ -32,6 +32,7 @@ import {
 } from "@/lib/api/community";
 import { TicketDrawer } from "./ticket-drawer";
 import { NewTicketDialog } from "./new-ticket-dialog";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 
 /** The board's columns. REOPENED sits first — it is the loudest signal. */
 const BOARD: TicketStatus[] = [
@@ -69,7 +70,7 @@ export function InboxTab() {
     queryKey: ["tickets", { search, category, priority }],
     queryFn: () =>
       ticketApi.list({
-        limit: 200,
+        limit: MAX_PAGE_LIMIT,
         search: search || undefined,
         category: category || undefined,
         priority: priority || undefined,

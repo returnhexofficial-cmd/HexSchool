@@ -27,6 +27,7 @@ import type {
 import { CertificateTemplatesRepository } from '../repositories/certificate-templates.repository';
 import { DocumentSettingsService } from './document-settings.service';
 import { SnapshotBuilderService } from './snapshot-builder.service';
+import { dhakaToday } from '../../../common/utils/clock.util';
 
 export interface TemplatePreview {
   html: string;
@@ -205,7 +206,7 @@ export class CertificateTemplatesService {
               certificateNo: 'PREVIEW',
               verifyCode: 'PREVIEW000',
               verifyUrl: '',
-              issueDate: new Date().toISOString().slice(0, 10),
+              issueDate: dhakaToday(),
             },
           })
         ).snapshot
@@ -258,7 +259,7 @@ export class CertificateTemplatesService {
         certificateNo: 'TC-26-0000',
         verifyCode: 'SPECIMEN00',
         verifyUrl: '',
-        issueDate: new Date().toISOString().slice(0, 10),
+        issueDate: dhakaToday(),
       },
     });
   }

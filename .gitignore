@@ -11,8 +11,12 @@ C:Users*
 # Playwright browser-QA artifacts (see QA_RUNBOOK.md at the repo root).
 #
 # Transient run output — traces, videos, failure screenshots, saved auth state.
-# The MCP server is pointed at docs/qa/screenshots via .mcp.json, but it also
-# drops per-run snapshot/console logs beside wherever it is driven from.
+#
+# The MCP server's --output-dir is .playwright-mcp (see .mcp.json) because it
+# writes a page snapshot (.yml) and a console log per navigation, not just the
+# screenshots you asked for — dozens of files per session. Curated evidence is
+# copied deliberately into docs/qa/screenshots/, and upload inputs live in
+# docs/qa/fixtures/; both of those ARE committed.
 **/e2e/.auth/
 **/e2e/.artifacts/
 **/test-results/

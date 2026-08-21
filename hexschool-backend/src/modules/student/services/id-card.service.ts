@@ -9,6 +9,7 @@ import {
   StudentsRepository,
   StudentWithRelations,
 } from '../repositories/students.repository';
+import { dhakaDisplayDate } from '../../../common/utils/clock.util';
 
 /** CR80 card: 85.6 × 53.98 mm → PDF points (1 mm = 2.83465 pt). */
 const CARD_W = 242.65;
@@ -240,7 +241,7 @@ export class IdCardService {
   }
 
   private formatDate(date: Date): string {
-    return date.toISOString().slice(0, 10);
+    return dhakaDisplayDate(date);
   }
 
   private async fetchImage(

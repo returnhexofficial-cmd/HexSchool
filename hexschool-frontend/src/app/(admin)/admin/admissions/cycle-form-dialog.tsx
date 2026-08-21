@@ -22,6 +22,7 @@ import { academicApi } from "@/lib/api/academic";
 import type { AdmissionCycle, CycleInput } from "@/lib/api/admissions";
 import { structureApi } from "@/lib/api/structure";
 import { cycleSchema, type CycleValues } from "@/lib/validations/admission";
+import { endOfDayIso, isoDateInput, startOfDayIso } from "@/lib/utils/date";
 
 interface CycleFormDialogProps {
   open: boolean;
@@ -63,8 +64,8 @@ export function CycleFormDialog({
         ? {
             sessionId: cycle.sessionId,
             name: cycle.name,
-            startAt: cycle.startAt.slice(0, 10),
-            endAt: cycle.endAt.slice(0, 10),
+            startAt: isoDateInput(cycle.startAt),
+            endAt: isoDateInput(cycle.endAt),
             testRequired: cycle.testRequired,
             instructions: cycle.instructions ?? "",
             classes: cycle.classes.map((c) => ({
@@ -93,8 +94,8 @@ export function CycleFormDialog({
       sessionId: values.sessionId,
       name: values.name,
       // Window covers the whole start/end days (dates → timestamps).
-      startAt: `${values.startAt}T00:00:00.000Z`,
-      endAt: `${values.endAt}T23:59:59.999Z`,
+      startAt: startOfDayIso(values.startAt),
+      endAt: endOfDayIso(values.endAt),
       testRequired: values.testRequired,
       instructions: values.instructions || undefined,
       classes: values.classes.map((c) => ({

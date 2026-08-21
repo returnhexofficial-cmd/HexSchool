@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { SmsAdapter, SmsSendInput, SmsSendResult } from './sms.adapter';
+import { SmsOutboxService } from '../services/sms-outbox.service';
 
 /**
  * Log-only SMS fallback — the M02 interim behaviour, kept as the explicit
@@ -17,6 +18,8 @@ export class LogSmsAdapter implements SmsAdapter {
   readonly name = 'LOG';
   private readonly logger = new Logger(LogSmsAdapter.name);
 
+  constructor(private readonly outbox: SmsOutboxService) {}
+
   isConfigured(): boolean {
     return true;
   }
@@ -25,6 +28,9 @@ export class LogSmsAdapter implements SmsAdapter {
     this.logger.log(
       `[SMS:log-only] to=${input.to} len=${input.text.length} unicode=${input.unicode}`,
     );
+    // Body goes to the dev outbox, never to the log — see SmsOutboxService.
+    // A no-op unless SMS_DEV_OUTBOX=true outside production.
+    this.outbox.record(input.to, input.text);
     return Promise.resolve({
       accepted: true,
       providerMsgId: `LOG-${randomUUID()}`,

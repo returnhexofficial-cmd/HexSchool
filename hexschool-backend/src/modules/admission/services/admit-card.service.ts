@@ -13,6 +13,7 @@ import {
   ApplicationWithRelations,
 } from '../repositories/admission-applications.repository';
 import { AdmissionTestsRepository } from '../repositories/admission-tests.repository';
+import { dhakaDisplayDate } from '../../../common/utils/clock.util';
 
 /** A5 landscape (595 × 420 pt) — prints two per A4 sheet. */
 const PAGE_W = 595;
@@ -156,7 +157,7 @@ export class AdmitCardService {
       ['Applicant Name', `${app.firstName} ${app.lastName}`],
       ['Applying for', app.class.name],
       ['Admission Cycle', app.cycle.name],
-      ['Test Date', test.testDate.toISOString().slice(0, 10)],
+      ['Test Date', dhakaDisplayDate(test.testDate)],
       ['Venue', test.venue ?? 'To be announced'],
       ['Total Marks', String(test.totalMarks)],
       ['Contact Phone', app.phone],

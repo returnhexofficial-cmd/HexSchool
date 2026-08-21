@@ -36,6 +36,7 @@ import { EXAM_STATUS_LABELS, EXAM_STATUS_VARIANT } from "@/lib/validations/exam"
 import { AdmitCardsTab } from "./admit-cards-tab";
 import { AnalyticsTab } from "./analytics-tab";
 import { MarksTab } from "./marks-tab";
+import { formatDate } from "@/lib/utils/date";
 import { ResultsTab } from "./results-tab";
 import { RoutineTab } from "./routine-tab";
 import { SeatPlansTab } from "./seat-plans-tab";
@@ -89,7 +90,7 @@ export default function ExamDetailPage({
     <main className="flex-1 space-y-6 p-8">
       <PageHeader
         title={exam.name}
-        description={`${exam.examType.name} · ${exam.session.name} · ${exam.startDate} → ${exam.endDate} · graded on ${exam.gradingSystem.name}`}
+        description={`${exam.examType.name} · ${exam.session.name} · ${formatDate(exam.startDate)} → ${formatDate(exam.endDate)} · graded on ${exam.gradingSystem.name}`}
       >
         <Button variant="outline" asChild>
           <Link href="/admin/exams">Back</Link>
@@ -127,7 +128,7 @@ export default function ExamDetailPage({
         ) : null}
         {exam.resultPublishAt ? (
           <span className="text-sm text-muted-foreground">
-            Published {exam.resultPublishAt.slice(0, 10)}
+            Published {formatDate(exam.resultPublishAt)}
           </span>
         ) : null}
       </div>

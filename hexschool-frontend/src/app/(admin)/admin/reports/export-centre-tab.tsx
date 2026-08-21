@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { analyticsApi, type ReportRun } from "@/lib/api/analytics";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * The export centre (roadmap §4's "my exports list").
@@ -116,7 +117,7 @@ export function ExportCentreTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(run.createdAt).toLocaleString()}
+                    {formatDateTime(run.createdAt)}
                   </TableCell>
                   <TableCell>
                     <StatusBadge run={run} />

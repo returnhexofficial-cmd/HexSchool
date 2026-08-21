@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   bookApi,
   copyApi,
@@ -78,7 +79,7 @@ export default function BookDetailPage({
 
   const copies = useQuery({
     queryKey: ["library-copies", id],
-    queryFn: () => copyApi.list({ bookId: id, limit: 200 }),
+    queryFn: () => copyApi.list({ bookId: id, limit: MAX_PAGE_LIMIT }),
   });
 
   const remove = useMutation({

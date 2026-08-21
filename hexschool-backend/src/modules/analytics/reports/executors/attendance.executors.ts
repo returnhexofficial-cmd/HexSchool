@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AttendanceReportsService } from '../../../attendance/services/attendance-reports.service';
 import { AttendanceSettingsService } from '../../../attendance/services/attendance-settings.service';
 import type { ReportRow, ReportTable } from '../../calc/types';
+import { dhakaToday } from '../../../../common/utils/clock.util';
 import {
   defaultWindow,
   str,
@@ -43,7 +44,7 @@ export class AttendanceReportExecutors implements ReportExecutorProvider {
 
   private async daily(ctx: ReportContext): Promise<ReportTable> {
     const date =
-      str(ctx.params, 'date') ?? new Date().toISOString().slice(0, 10);
+      str(ctx.params, 'date') ?? dhakaToday();
     const report = await this.reports.daily(
       { date, sectionId: str(ctx.params, 'sectionId') },
       ctx.schoolId,

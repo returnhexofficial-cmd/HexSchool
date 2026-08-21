@@ -55,6 +55,7 @@ import {
 } from "@/lib/api/assignment";
 import { structureApi } from "@/lib/api/structure";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   ASSIGNMENT_STATUS_VARIANT,
   assignmentSchema,
@@ -316,7 +317,7 @@ function CreateAssignmentDialog({
   });
   const subjects = useQuery({
     queryKey: ["subjects", "assignment-form"],
-    queryFn: () => structureApi.subjects.list({ limit: 200 }),
+    queryFn: () => structureApi.subjects.list({ limit: MAX_PAGE_LIMIT }),
   });
 
   const create = useMutation({

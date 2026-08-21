@@ -32,6 +32,7 @@ import { apiErrorMessage } from "@/lib/api/auth";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { CYCLE_STATUSES } from "@/lib/validations/admission";
 import { CycleFormDialog } from "./cycle-form-dialog";
+import { formatDate } from "@/lib/utils/date";
 
 const ALL = "__all__";
 
@@ -101,7 +102,7 @@ export default function AdmissionCyclesPage() {
       id: "window",
       header: "Application Window",
       cell: ({ row }) =>
-        `${row.original.startAt.slice(0, 10)} → ${row.original.endAt.slice(0, 10)}`,
+        `${formatDate(row.original.startAt)} → ${formatDate(row.original.endAt)}`,
     },
     {
       id: "classes",

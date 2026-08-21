@@ -34,6 +34,7 @@ import {
 } from "@/lib/api/staff";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { useAuth } from "@/lib/store/hooks";
+import { formatDateTime } from "@/lib/utils/date";
 
 const ALL = "__all__";
 
@@ -179,7 +180,7 @@ export default function UsersPage() {
       header: "Last login",
       cell: ({ row }) =>
         row.original.lastLoginAt
-          ? new Date(row.original.lastLoginAt).toLocaleString()
+          ? formatDateTime(row.original.lastLoginAt)
           : "Never",
     },
     {

@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   ARCHIVE_LINK_LABELS,
   archiveApi,
@@ -285,7 +286,7 @@ export function ArchiveTab() {
                         ? ARCHIVE_LINK_LABELS[file.linkedType]
                         : "—"}
                     </td>
-                    <td className="p-3">{file.createdAt.slice(0, 10)}</td>
+                    <td className="p-3">{formatDate(file.createdAt)}</td>
                     <td className="p-3">
                       <div className="flex justify-end gap-2">
                         <Button

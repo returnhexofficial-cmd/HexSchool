@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/staff";
 import { structureApi } from "@/lib/api/structure";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { isoDateInput } from "@/lib/utils/date";
 import {
   BLOOD_GROUPS,
   DESIGNATIONS,
@@ -66,7 +67,7 @@ export function toFormValues(staff: StaffDetail): StaffFormValues {
     nidNumber: staff.nidNumber ?? "",
     presentAddress: staff.address?.present ?? "",
     permanentAddress: staff.address?.permanent ?? "",
-    joiningDate: staff.joiningDate.slice(0, 10),
+    joiningDate: isoDateInput(staff.joiningDate),
     employmentType: staff.employmentType,
   };
 }

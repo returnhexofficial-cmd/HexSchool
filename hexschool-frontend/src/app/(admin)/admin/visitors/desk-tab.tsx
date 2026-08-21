@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   VISITOR_PURPOSES,
   VISITOR_PURPOSE_LABELS,
@@ -284,7 +285,7 @@ export function DeskTab() {
                   {visitor.validUntil && (
                     <Badge variant="outline">
                       Pass to{" "}
-                      {new Date(visitor.validUntil).toLocaleDateString()}
+                      {formatDate(visitor.validUntil)}
                     </Badge>
                   )}
                   <Can permission="visitor.manage">

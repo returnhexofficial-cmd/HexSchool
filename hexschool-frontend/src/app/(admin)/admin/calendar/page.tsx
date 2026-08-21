@@ -38,6 +38,7 @@ import {
   monthWithinSession,
 } from "@/lib/utils/month-grid";
 import { cn } from "@/lib/utils";
+import { formatDate, isoDateInput } from "@/lib/utils/date";
 import {
   calendarEventSchema,
   holidaySchema,
@@ -311,9 +312,9 @@ function MonthList({
       {rows.map(({ kind, item }) => (
         <li key={item.id} className="flex items-center gap-3 px-4 py-2 text-sm">
           <span className="w-44 shrink-0 tabular-nums text-muted-foreground">
-            {item.startDate.slice(0, 10)}
-            {item.endDate.slice(0, 10) !== item.startDate.slice(0, 10)
-              ? ` → ${item.endDate.slice(0, 10)}`
+            {formatDate(item.startDate)}
+            {isoDateInput(item.endDate) !== isoDateInput(item.startDate)
+              ? ` → ${formatDate(item.endDate)}`
               : ""}
           </span>
           <Badge

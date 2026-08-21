@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { leaveApi, LEAVE_STATUS_LABELS } from "@/lib/api/hr";
 import { LEAVE_STATUS_VARIANT } from "@/lib/validations/hr";
+import { formatDate } from "@/lib/utils/date";
 
 /**
  * One teacher's leave, read from the **unified HR table** (M21) — the
@@ -91,8 +92,8 @@ export function LeavesTab({ teacherId }: { teacherId: string }) {
             {leaves.data.rows.map(({ application }) => (
               <TableRow key={application.id}>
                 <TableCell>{application.leaveType.name}</TableCell>
-                <TableCell>{application.fromDate.slice(0, 10)}</TableCell>
-                <TableCell>{application.toDate.slice(0, 10)}</TableCell>
+                <TableCell>{formatDate(application.fromDate)}</TableCell>
+                <TableCell>{formatDate(application.toDate)}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {Number(application.days)}
                 </TableCell>

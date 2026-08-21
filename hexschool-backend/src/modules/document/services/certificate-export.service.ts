@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
 import type { RegisterReportQueryDto } from '../dto';
 import { CertificateReportsService } from './certificate-reports.service';
+import { dhakaDisplayDate } from '../../../common/utils/clock.util';
 
 export interface ExportFile {
   buffer: Buffer;
@@ -131,7 +132,7 @@ export class CertificateExportService {
     doc
       .fontSize(9)
       .text(
-        `${report.from} to ${report.to}   |   ${report.rows.length} entr${report.rows.length === 1 ? 'y' : 'ies'}   |   ${report.totals.issued} standing, ${report.totals.revoked} revoked, ${report.totals.duplicates} duplicate(s)   |   Printed ${new Date().toISOString().slice(0, 10)}`,
+        `${report.from} to ${report.to}   |   ${report.rows.length} entr${report.rows.length === 1 ? 'y' : 'ies'}   |   ${report.totals.issued} standing, ${report.totals.revoked} revoked, ${report.totals.duplicates} duplicate(s)   |   Printed ${dhakaDisplayDate(new Date())}`,
       );
     doc.moveDown(0.8);
 

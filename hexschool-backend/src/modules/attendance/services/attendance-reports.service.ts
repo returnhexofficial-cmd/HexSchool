@@ -18,9 +18,12 @@ import { StudentsRepository } from '../../student/repositories/students.reposito
 import {
   AttendanceCounts,
   AttendanceSummary,
+  cohortPercentage,
   countByStatus,
   emptyCounts,
+  rangePercentage,
   round2,
+  sameDayPercentage,
   summarize,
 } from '../calc/percentage.util';
 import {
@@ -209,7 +212,8 @@ export class AttendanceReportsService {
         enrolled: roster.length,
         marked: marks.length,
         counts,
-        percentage: this.dayPercentage(counts),
+        // One day: of those marked, how many were present.
+        percentage: sameDayPercentage(counts),
       });
     }
 
@@ -224,7 +228,7 @@ export class AttendanceReportsService {
       },
       { enrolled: 0, marked: 0, counts: emptyCounts(), percentage: 0 },
     );
-    totals.percentage = this.dayPercentage(totals.counts);
+    totals.percentage = sameDayPercentage(totals.counts);
 
     const single = query.sectionId
       ? (bySection.get(query.sectionId) ?? [])
@@ -347,6 +351,32 @@ export class AttendanceReportsService {
       bySection.set(row.sectionId, list);
     }
 
+    /**
+     * Working days attributable to each section the student sat in.
+     *
+     * A transfer splits the window: section A owns the days from the student's
+     * enrolment there until the next enrolment starts, and the last section
+     * owns the rest. Without this the per-section percentage had to fall back
+     * on marked days, which put a second, different `percentage` next to the
+     * summary's — 42.86% and 60% for the same student (QA finding F28).
+     */
+    const ordered = [...enrollments].sort(
+      (a, b) => a.enrollmentDate.getTime() - b.enrollmentDate.getTime(),
+    );
+    const windowDays = new Map<string, number>();
+    ordered.forEach((enrollment, index) => {
+      const startsAt = isoDate(enrollment.enrollmentDate);
+      const next = ordered[index + 1];
+      const endsBefore = next ? isoDate(next.enrollmentDate) : null;
+      const owned = days.filter(
+        (day) => day >= startsAt && (endsBefore === null || day < endsBefore),
+      ).length;
+      windowDays.set(
+        enrollment.sectionId,
+        (windowDays.get(enrollment.sectionId) ?? 0) + owned,
+      );
+    });
+
     const sectionBlocks = await Promise.all(
       [...bySection.entries()].map(async ([sectionId, sectionRows]) => {
         const section = await this.sections.findDetail(sectionId, schoolId);
@@ -356,7 +386,7 @@ export class AttendanceReportsService {
           sectionName: section?.name ?? '—',
           className: section?.class.name ?? '—',
           counts,
-          percentage: this.dayPercentage(counts),
+          percentage: rangePercentage(counts, windowDays.get(sectionId) ?? 0),
         };
       }),
     );
@@ -481,19 +511,32 @@ export class AttendanceReportsService {
         enrolled: roster.length,
         marked: marks.length,
         counts,
-        percentage: this.dayPercentage(counts),
+        // A section across the window: every head owes a day per working day.
+        percentage: cohortPercentage(counts, days.length, roster.length),
       });
     }
+
+    /**
+     * The school-wide figure is a cohort too, so it needs the same denominator
+     * as the section rows: working days × every enrolled head. Passing the
+     * bare working-day count read **100%** for a school where two students
+     * between them attended six of fourteen owed days (QA finding F28).
+     */
+    const headcount = sectionRows.reduce((sum, row) => sum + row.enrolled, 0);
+    const overallCounts = countByStatus(rows);
 
     return {
       from: isoDate(from),
       to: isoDate(to),
       workingDays: days.length,
-      overall: summarize(countByStatus(rows), days.length),
+      overall: {
+        ...summarize(overallCounts, days.length),
+        percentage: cohortPercentage(overallCounts, days.length, headcount),
+      },
       sections: sectionRows,
       trend: days.map((date) => ({
         date,
-        percentage: this.dayPercentage(countByStatus(byDate.get(date) ?? [])),
+        percentage: sameDayPercentage(countByStatus(byDate.get(date) ?? [])),
       })),
     };
   }
@@ -554,20 +597,6 @@ export class AttendanceReportsService {
   // ── internals ───────────────────────────────────────────────────────
 
   /** Share of the day's marks that count as attended (present + late + ½). */
-  private dayPercentage(counts: AttendanceCounts): number {
-    const denominator =
-      counts[AttendanceStatus.PRESENT] +
-      counts[AttendanceStatus.ABSENT] +
-      counts[AttendanceStatus.LATE] +
-      counts[AttendanceStatus.LEAVE] +
-      counts[AttendanceStatus.HALF_DAY];
-    if (denominator === 0) return 0;
-    const attended =
-      counts[AttendanceStatus.PRESENT] +
-      counts[AttendanceStatus.LATE] +
-      counts[AttendanceStatus.HALF_DAY] * 0.5;
-    return round2((attended / denominator) * 100);
-  }
 
   /** Working days on or after the student's join date (M12 §6). */
   private eligibleDays(days: string[], enrolledFrom: Date | null): number {

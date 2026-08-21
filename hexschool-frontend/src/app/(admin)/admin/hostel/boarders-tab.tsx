@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { enrollmentApi } from "@/lib/api/enrollment";
+import { formatDate } from "@/lib/utils/date";
 import {
   ALLOCATION_STATUS_LABELS,
   ALLOCATION_STATUS_VARIANT,
@@ -177,7 +178,7 @@ export function BoardersTab() {
                         Room {row.bed.room.roomNo} · bed {row.bed.bedNo}
                       </div>
                     </td>
-                    <td className="p-3">{row.startDate}</td>
+                    <td className="p-3">{formatDate(row.startDate)}</td>
                     <td className="p-3">
                       ৳{formatBdt(row.bed.room.monthlyFee)}
                     </td>

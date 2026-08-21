@@ -22,6 +22,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { alumniApi, alumniEventApi, type AlumniEvent } from "@/lib/api/community";
+import { formatDate } from "@/lib/utils/date";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 
 /**
  * Alumni events and their guest lists (roadmap §5's "events manager").
@@ -83,7 +85,7 @@ export function EventsTab() {
                 <div>
                   <p className="font-medium">{event.title}</p>
                   <p className="text-sm text-muted-foreground">
-                    {new Date(event.eventDate).toLocaleDateString()}
+                    {formatDate(event.eventDate)}
                     {event.venue ? ` · ${event.venue}` : ""}
                   </p>
                 </div>
@@ -342,7 +344,7 @@ function GuestListDialog({
 
   const approved = useQuery({
     queryKey: ["alumni", { status: "APPROVED", forEvent: true }],
-    queryFn: () => alumniApi.list({ status: "APPROVED", limit: 300 }),
+    queryFn: () => alumniApi.list({ status: "APPROVED", limit: MAX_PAGE_LIMIT }),
   });
 
   const register = useMutation({

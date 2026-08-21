@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { communicationApi, SmsCredit } from "@/lib/api/communication";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * Buckets CONSUME rows by calendar month. Only consumption is plotted —
@@ -142,7 +143,7 @@ export function CreditsTab() {
             {ledger.data.map((row) => (
               <TableRow key={row.id}>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                  {new Date(row.createdAt).toLocaleString()}
+                  {formatDateTime(row.createdAt)}
                 </TableCell>
                 <TableCell>{row.type}</TableCell>
                 <TableCell className="text-right">

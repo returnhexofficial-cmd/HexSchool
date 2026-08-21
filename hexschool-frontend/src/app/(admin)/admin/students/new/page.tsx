@@ -33,6 +33,7 @@ import {
 } from "@/lib/api/students";
 import { structureApi } from "@/lib/api/structure";
 import { BLOOD_GROUPS } from "@/lib/validations/staff";
+import { formatDate } from "@/lib/utils/date";
 import {
   GUARDIAN_RELATIONS,
   RELIGIONS,
@@ -860,7 +861,7 @@ function ReviewStep({
         {row("Gender / DOB", `${personal.gender} · ${personal.dob}`)}
         {row("Religion / Blood", `${personal.religion} · ${personal.bloodGroup || "—"}`)}
         {row("Birth certificate", personal.birthCertificateNo)}
-        {row("Admission", `${personal.admissionDate} → ${className}`)}
+        {row("Admission", `${formatDate(personal.admissionDate)} → ${className}`)}
         {row("Previous school", personal.previousSchool)}
         {row(
           "Guardians",

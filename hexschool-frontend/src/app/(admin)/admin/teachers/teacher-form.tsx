@@ -21,6 +21,7 @@ import {
 } from "@/lib/api/teachers";
 import { structureApi } from "@/lib/api/structure";
 import { BLOOD_GROUPS } from "@/lib/validations/staff";
+import { isoDateInput } from "@/lib/utils/date";
 import {
   TEACHER_DESIGNATIONS,
   teacherSchema,
@@ -64,7 +65,7 @@ export function toFormValues(teacher: TeacherDetail): TeacherFormValues {
     nidNumber: teacher.nidNumber ?? "",
     presentAddress: teacher.address?.present ?? "",
     permanentAddress: teacher.address?.permanent ?? "",
-    joiningDate: teacher.joiningDate.slice(0, 10),
+    joiningDate: isoDateInput(teacher.joiningDate),
     salaryGrade: teacher.salaryGrade ?? "",
     mpoIndexNo: teacher.mpoIndexNo ?? "",
     specialization: teacher.specialization ?? "",

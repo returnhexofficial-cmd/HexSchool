@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
   dateRange,
+  dhakaDisplayDate,
   dhakaMinutesOfDay,
   dhakaToday,
   minutesOfDay,
@@ -44,5 +45,35 @@ describe('Dhaka clock helpers', () => {
       '2026-07-21',
       '2026-07-22',
     ]);
+  });
+});
+
+/**
+ * QA finding F24 (backend half) — a student ID card printed
+ * `Date of Birth 2014-01-01`, and five other generated documents printed the
+ * same machine form on paper handed to parents.
+ */
+describe('dhakaDisplayDate', () => {
+  it('renders DD/MM/YYYY, not the ISO form', () => {
+    expect(dhakaDisplayDate(new Date('2014-01-01T00:00:00.000Z'))).toBe(
+      '01/01/2014',
+    );
+  });
+
+  it('pads a single-digit day and month', () => {
+    expect(dhakaDisplayDate(new Date('2026-08-05T00:00:00.000Z'))).toBe(
+      '05/08/2026',
+    );
+  });
+
+  it('reads the Dhaka calendar, not the UTC one', () => {
+    // 19:30 UTC on the 18th is already 01:30 on the 19th in Dhaka — the hour
+    // at which a receipt printed in Bangladesh would otherwise be back-dated.
+    expect(dhakaDisplayDate(new Date('2026-08-18T19:30:00.000Z'))).toBe(
+      '19/08/2026',
+    );
+    expect(dhakaDisplayDate(new Date('2026-08-18T17:30:00.000Z'))).toBe(
+      '18/08/2026',
+    );
   });
 });

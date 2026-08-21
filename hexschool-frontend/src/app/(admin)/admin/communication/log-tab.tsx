@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDateTime } from "@/lib/utils/date";
 import {
   communicationApi,
   NotificationChannel,
@@ -115,7 +116,7 @@ export function LogTab() {
             {log.data?.rows.map((r) => (
               <TableRow key={r.id}>
                 <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                  {new Date(r.createdAt).toLocaleString()}
+                  {formatDateTime(r.createdAt)}
                 </TableCell>
                 <TableCell>{NOTIFICATION_CHANNEL_LABELS[r.channel]}</TableCell>
                 <TableCell className="text-xs">{r.destination ?? "—"}</TableCell>

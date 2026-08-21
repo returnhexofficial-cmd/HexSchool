@@ -109,10 +109,15 @@ CRUD   /api/v1/guardians                          POST /api/v1/guardians/:id/cre
 | QR rotate + single/batch ID card PDF (%PDF, incomplete flag) | ✅ | e2e |
 | XLSX template + dry-run report + commit (Bangla names) | ✅ | e2e |
 | Soft delete burns the UID | ✅ | e2e |
+| Photo upload → renders from MinIO | ✅ | browser (M09-02) |
+| Document upload with a Bangla title → retrievable | ✅ | browser (M09-03/04) |
+| ID card PDF content (logo, photo, QR, DD/MM/YYYY dob) | ✅ | browser (M09-06), after **F24** |
+| Medical tab hidden **and** API 403 for a role without the code | ✅ | browser (M09-07/08) |
+| XLSX import: dry run → partial commit → sibling guardian dedup | ✅ | browser (M09-09–14) |
 
 ## Remaining TODOs
 - [ ] Section-scoped ID-card batch endpoint (with M11).
-- [ ] In-browser upload / ID-card print click-throughs.
+- [x] In-browser upload / ID-card print click-throughs — done, see [`docs/qa/09-students-guardians.md`](../qa/09-students-guardians.md). Found **F24** (the ID card printed `Date of Birth 2014-01-01`).
 - [ ] Configurable ID-card template.
 
 ## Links to Related Modules

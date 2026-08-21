@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { rbacApi, type AuditLogEntry } from "@/lib/api/rbac";
+import { formatDateTime } from "@/lib/utils/date";
 
 /** Audit-log slice for one staff record (M03 provides the API). */
 export function ActivityTab({ staffId }: { staffId: string }) {
@@ -37,7 +38,7 @@ export function ActivityTab({ staffId }: { staffId: string }) {
     {
       id: "createdAt",
       header: "When",
-      cell: ({ row }) => new Date(row.original.createdAt).toLocaleString(),
+      cell: ({ row }) => formatDateTime(row.original.createdAt),
     },
     {
       id: "action",
@@ -87,7 +88,7 @@ export function ActivityTab({ staffId }: { staffId: string }) {
           <DialogHeader>
             <DialogTitle>
               {selected?.action} ·{" "}
-              {selected ? new Date(selected.createdAt).toLocaleString() : ""}
+              {selected ? formatDateTime(selected.createdAt) : ""}
             </DialogTitle>
           </DialogHeader>
           {selected ? (

@@ -18,6 +18,7 @@ import { apiErrorMessage } from "@/lib/api/auth";
 import { schoolApi } from "@/lib/api/school";
 import { teachersApi, type TeacherEvaluation } from "@/lib/api/teachers";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
+import { formatDate } from "@/lib/utils/date";
 import {
   evaluationSchema,
   type EvaluationValues,
@@ -170,7 +171,7 @@ export function EvaluationsTab({ teacherId }: { teacherId: string }) {
                   </span>
                   <span className="text-sm text-muted-foreground">/ 100</span>
                   <Badge variant="outline">
-                    {evaluation.evaluatedAt.slice(0, 10)}
+                    {formatDate(evaluation.evaluatedAt)}
                   </Badge>
                 </div>
                 <Can permission="teacher.evaluation.manage">

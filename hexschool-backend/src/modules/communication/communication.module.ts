@@ -7,6 +7,8 @@ import { SchoolsRepository } from '../school/repositories/schools.repository';
 import { EmailAdapter } from './adapters/email.adapter';
 import { HttpSmsAdapter } from './adapters/http-sms.adapter';
 import { LogSmsAdapter } from './adapters/log-sms.adapter';
+import { SmsOutboxService } from './services/sms-outbox.service';
+import { DevSmsController } from './controllers/dev-sms.controller';
 import { NotificationTemplatesController } from './controllers/notification-templates.controller';
 import { NotificationsController } from './controllers/notifications.controller';
 import { NoticesController } from './controllers/notices.controller';
@@ -53,6 +55,7 @@ import { TemplateService } from './services/template.service';
     BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE }),
   ],
   controllers: [
+    DevSmsController,
     NotificationTemplatesController,
     NotificationsController,
     NoticesController,
@@ -75,6 +78,7 @@ import { TemplateService } from './services/template.service';
     ScheduledNoticeJob,
     HttpSmsAdapter,
     LogSmsAdapter,
+    SmsOutboxService,
     EmailAdapter,
     NotificationTemplatesRepository,
     NotificationsRepository,

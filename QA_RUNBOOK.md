@@ -5,7 +5,7 @@ and, crucially, **reset** between rounds. Results go in
 [`docs/qa/`](./docs/qa/) — see [`docs/qa/README.md`](./docs/qa/README.md) for the
 index and [`docs/qa/FINDINGS.md`](./docs/qa/FINDINGS.md) for the defect register.
 
-The automated suites (2422 backend unit, 1033 e2e, 666 Vitest) prove units and API
+The automated suites (2431 backend unit, 1033 e2e, 668 Vitest) prove units and API
 contracts. This environment proves the app behaves in a real browser.
 
 ---
@@ -30,6 +30,12 @@ docker compose up -d postgres redis minio mailpit
 | redis | 6379 | BullMQ; `/health` returns 503 without it |
 | minio | 9000 API, **9001 console** | verifying uploads landed (bucket `smis`, `minioadmin`/`minioadmin`) |
 | mailpit | 1025 SMTP, **8025 web + API** | OTP, password reset, notices, invoices |
+
+**Phone OTP / SMS has no container.** The log records a message's *length*, never its
+body, so an SMS-gated flow cannot be completed from the log alone — the M10 public
+admission wizard opens with one. Start the backend with `SMS_DEV_OUTBOX=true` and read
+messages from `GET http://localhost:5007/api/v1/dev/sms?to=<number>` (finding **F19**).
+The endpoint 404s when the flag is off and can never run in production.
 
 ### 2 · Database
 
@@ -70,7 +76,7 @@ first, so run it as often as you like.
 ```bash
 cd hexschool-backend
 DATABASE_URL="postgresql://smis:smis@localhost:5433/smis" \
-  AUTH_THROTTLE_ENABLED=false npm run start:dev
+  AUTH_THROTTLE_ENABLED=false SMS_DEV_OUTBOX=true npm run start:dev
 ```
 
 > **`AUTH_THROTTLE_ENABLED=false` is required for the Playwright suite.** Credential
@@ -259,7 +265,7 @@ DATABASE_URL="postgresql://smis:smis@localhost:5433/smis" NODE_ENV=test \
 cd hexschool-frontend && npm run test:e2e
 ```
 
-Baseline: **2422 backend unit / 666 frontend Vitest / 26 browser**. The backend e2e suite is 1033 across 29 suites, with two known
+Baseline: **2431 backend unit / 668 frontend Vitest / 26 browser**. The backend e2e suite is 1033 across 29 suites, with two known
 failures in `hr.e2e-spec.ts` (finding **F10**).
 
 Record the outcome in the tracker **and** in the module's own

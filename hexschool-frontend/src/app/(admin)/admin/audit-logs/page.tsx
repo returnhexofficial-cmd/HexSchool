@@ -26,6 +26,7 @@ import {
 import { rbacApi, type AuditLogEntry } from "@/lib/api/rbac";
 import { AUDIT_ACTIONS } from "@/lib/constants/enums";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { endOfDayIso, startOfDayIso } from "@/lib/utils/date";
 
 const ACTION_BADGE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   CREATE: "default",
@@ -59,8 +60,8 @@ export default function AuditLogsPage() {
         limit,
         action: action || undefined,
         entityType: debouncedEntityType || undefined,
-        dateFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
-        dateTo: dateTo ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
+        dateFrom: dateFrom ? startOfDayIso(dateFrom) : undefined,
+        dateTo: dateTo ? endOfDayIso(dateTo) : undefined,
       }),
     placeholderData: keepPreviousData,
   });

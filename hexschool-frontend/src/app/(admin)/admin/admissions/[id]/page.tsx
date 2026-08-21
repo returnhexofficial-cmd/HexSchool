@@ -21,6 +21,7 @@ import { ApplicationsTab } from "./applications-tab";
 import { MeritTab } from "./merit-tab";
 import { ReportsTab } from "./reports-tab";
 import { TestsTab } from "./tests-tab";
+import { formatDate } from "@/lib/utils/date";
 
 const TABS = [
   ["applications", "Applications"],
@@ -102,7 +103,7 @@ export default function AdmissionCycleDetailPage({
             </Badge>
           </span>
         }
-        description={`${c.session.name} · ${c.startAt.slice(0, 10)} → ${c.endAt.slice(0, 10)} · ${
+        description={`${c.session.name} · ${formatDate(c.startAt)} → ${formatDate(c.endAt)} · ${
           c.testRequired ? "admission test required" : "no admission test"
         }`}
       >

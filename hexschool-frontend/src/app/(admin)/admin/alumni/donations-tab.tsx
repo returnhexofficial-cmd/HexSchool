@@ -22,6 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   DONATION_METHODS,
   DONATION_METHOD_LABELS,
@@ -54,7 +56,7 @@ export function DonationsTab() {
 
   const list = useQuery({
     queryKey: ["donations", params],
-    queryFn: () => donationApi.list({ limit: 200, ...params }),
+    queryFn: () => donationApi.list({ limit: MAX_PAGE_LIMIT, ...params }),
   });
 
   const summary = useQuery({
@@ -204,7 +206,7 @@ export function DonationsTab() {
                     {donation.receiptNo}
                   </td>
                   <td className="p-3">
-                    {new Date(donation.receivedAt).toLocaleDateString()}
+                    {formatDate(donation.receivedAt)}
                   </td>
                   <td className="p-3 font-medium">{donation.donorName}</td>
                   <td className="p-3">
@@ -349,7 +351,7 @@ function RecordDonationDialog({
 
   const alumni = useQuery({
     queryKey: ["alumni", { status: "APPROVED", forDonation: true }],
-    queryFn: () => alumniApi.list({ status: "APPROVED", limit: 300 }),
+    queryFn: () => alumniApi.list({ status: "APPROVED", limit: MAX_PAGE_LIMIT }),
   });
 
   const save = useMutation({

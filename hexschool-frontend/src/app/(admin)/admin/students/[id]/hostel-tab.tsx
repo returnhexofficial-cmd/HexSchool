@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { LoadingBlock } from "@/components/shared/spinner";
 import { Badge } from "@/components/ui/badge";
+import { formatDate } from "@/lib/utils/date";
 import {
   ALLOCATION_STATUS_LABELS,
   ALLOCATION_STATUS_VARIANT,
@@ -69,7 +70,7 @@ export function StudentHostelTab({ studentId }: { studentId: string }) {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-md border p-3">
           <p className="text-xs uppercase text-muted-foreground">Living in since</p>
-          <p className="font-medium">{live.startDate}</p>
+          <p className="font-medium">{formatDate(live.startDate)}</p>
         </div>
         <div className="rounded-md border p-3">
           <p className="text-xs uppercase text-muted-foreground">Seat rent</p>

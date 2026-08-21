@@ -18,10 +18,35 @@ function TooltipProvider({
   )
 }
 
+/**
+ * Self-providing, so a `<Tooltip>` works wherever it is placed.
+ *
+ * Radix's `Root` throws "`Tooltip` must be used within `TooltipProvider`" with
+ * no provider above it, and that throw reaches the route's error boundary —
+ * the whole page becomes "Something went wrong".
+ *
+ * QA finding **F34**: the routine builder's red-cell tooltip is rendered only
+ * when a cell actually conflicts, so the crash was invisible until a browser
+ * round produced a real double-booking. The conflict indicator is the module's
+ * headline feature, and it took the page down at precisely the moment it had
+ * something to say.
+ *
+ * Providing here rather than at each call site is what upstream shadcn does
+ * now, and it means the next consumer cannot reintroduce this.
+ */
 function Tooltip({
+  delayDuration,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+  return (
+    <TooltipProvider delayDuration={delayDuration}>
+      <TooltipPrimitive.Root
+        data-slot="tooltip"
+        delayDuration={delayDuration}
+        {...props}
+      />
+    </TooltipProvider>
+  )
 }
 
 function TooltipTrigger({

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Donation, Visitor } from '@prisma/client';
 import PDFDocument from 'pdfkit';
 import { SchoolsRepository } from '../../school/repositories/schools.repository';
+import { dhakaDisplayDate } from '../../../common/utils/clock.util';
 
 /** A6 landscape — a gate pass is a card, not a page. */
 const PASS_W = 419.53;
@@ -72,7 +73,7 @@ export class CommunityPdfService {
       [
         'Valid until',
         visitor.validUntil
-          ? visitor.validUntil.toISOString().slice(0, 10)
+          ? dhakaDisplayDate(visitor.validUntil)
           : 'Today only',
       ],
     ];
@@ -128,7 +129,7 @@ export class CommunityPdfService {
     doc.fontSize(10).font('Helvetica');
     const rows: Array<[string, string]> = [
       ['Receipt no', donation.receiptNo],
-      ['Date', donation.receivedAt.toISOString().slice(0, 10)],
+      ['Date', dhakaDisplayDate(donation.receivedAt)],
       ['Received from', donation.donorName],
       ['Amount', `BDT ${Number(donation.amount).toFixed(2)}`],
       ['Method', donation.method],
@@ -158,7 +159,7 @@ export class CommunityPdfService {
         .fontSize(9)
         .font('Helvetica')
         .text(
-          `Cancelled on ${donation.cancelledAt.toISOString().slice(0, 10)} — ${donation.cancelledReason ?? ''}`,
+          `Cancelled on ${dhakaDisplayDate(donation.cancelledAt)} — ${donation.cancelledReason ?? ''}`,
           { align: 'center' },
         );
       doc.fillColor('#000');

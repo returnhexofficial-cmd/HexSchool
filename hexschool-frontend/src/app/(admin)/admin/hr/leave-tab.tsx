@@ -47,6 +47,7 @@ import {
 } from "@/lib/api/hr";
 import { LEAVE_STATUS_VARIANT } from "@/lib/validations/hr";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
+import { formatDate } from "@/lib/utils/date";
 
 const ALL = "__all__";
 
@@ -185,8 +186,8 @@ export function LeaveTab() {
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell>{application.fromDate.slice(0, 10)}</TableCell>
-                <TableCell>{application.toDate.slice(0, 10)}</TableCell>
+                <TableCell>{formatDate(application.fromDate)}</TableCell>
+                <TableCell>{formatDate(application.toDate)}</TableCell>
                 <TableCell className="text-right tabular-nums">
                   {Number(application.days)}
                 </TableCell>

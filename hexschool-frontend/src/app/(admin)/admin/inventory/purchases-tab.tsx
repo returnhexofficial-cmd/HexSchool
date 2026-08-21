@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   ASSET_CONDITIONS,
   formatBdt,
@@ -244,7 +245,7 @@ function PurchaseDialog({
   });
   const items = useQuery({
     queryKey: ["inventory-items", "picker"],
-    queryFn: () => inventoryApi.listItems({ limit: 200 }),
+    queryFn: () => inventoryApi.listItems({ limit: MAX_PAGE_LIMIT }),
   });
 
   const byId = useMemo(

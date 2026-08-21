@@ -105,10 +105,11 @@ DELETE /api/v1/promotions/:id                    (delete DRAFT)
 | Section roster | ✅ | `GET /sections/:id/students` |
 | Section delete guard | ✅ | 409 with live enrollments |
 | Promotion build → execute → rollback | ✅ | 6 promoted, new roster created, rollback restores |
+| **In-browser QA (Playwright MCP, 2026-08-18)** | 🔶 | 4/5 scenarios; promotion deferred. **Closes the enrollment half of this doc's owed click-through**: after admitting an application the student surfaced in the enrollable picker (already-enrolled students did not), enrolling assigned roll 3, and the DB confirmed `NEW · ACTIVE · QA Class 6 §A`. Critically, admission created the student with **0 enrollments** — no silent auto-enrolment, exactly as designed. Promotion deferred to pass D/E: its rollback guard only bites once attendance (M12) and marks (M15) exist, so driving it now would prove only the happy path. See [`docs/qa/11-enrollment-promotion.md`](../qa/11-enrollment-promotion.md) and [`J1`](../qa/journeys/J1-admission-to-enrollment.md). |
 
 ## Remaining TODOs
 - [ ] Start enforcing the promotion rollback guard once M12/M15 tables exist.
-- [ ] On-device click-through of the enrollment + promotion UIs.
+- [x] In-browser click-through of the **enrollment** UI — done 2026-08-18 (enrollable picker → enroll → roll assigned). Promotion still owed: deferred to pass D/E so the rollback guard can be tested once M12/M15 data exists.
 - [ ] Consider target-capacity warnings during promotion preview.
 
 ## Links to Related Modules

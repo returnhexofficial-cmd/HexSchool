@@ -36,6 +36,7 @@ import { SeatPlansRepository } from '../repositories/seat-plans.repository';
 import { ExamSettingsService } from './exam-settings.service';
 import { EXAM_RESULT_GATE } from './exam.gates';
 import type { ExamResultGate } from './exam.gates';
+import { dhakaToday } from '../../../common/utils/clock.util';
 
 export interface ExamOverview {
   exam: ExamWithRelations;
@@ -608,7 +609,7 @@ export class ExamsService {
     override: boolean,
     actor: AccessTokenPayload,
   ): Promise<void> {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dhakaToday();
     if (today > isoDate(exam.endDate)) return;
 
     if (!override) {

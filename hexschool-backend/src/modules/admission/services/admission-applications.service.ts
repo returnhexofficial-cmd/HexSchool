@@ -35,6 +35,7 @@ import {
 } from '../repositories/admission-applications.repository';
 import { AdmissionCyclesRepository } from '../repositories/admission-cycles.repository';
 import { MeritListService } from './merit-list.service';
+import { dhakaToday } from '../../../common/utils/clock.util';
 
 /** Guardian snapshot shape stored on the application (public.dto). */
 interface GuardianSnapshot {
@@ -327,7 +328,7 @@ export class AdmissionApplicationsService {
         religion: app.religion,
         presentAddress: app.presentAddress as AddressDto,
         permanentAddress: app.permanentAddress as AddressDto,
-        admissionDate: new Date().toISOString().slice(0, 10),
+        admissionDate: dhakaToday(),
         admissionClassId: app.classId,
         previousSchool: app.previousSchool ?? undefined,
         guardians: [

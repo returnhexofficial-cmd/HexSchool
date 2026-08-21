@@ -43,6 +43,8 @@ import {
   type PromotionMapping,
 } from "@/lib/api/enrollment";
 import { structureApi } from "@/lib/api/structure";
+import { formatDate } from "@/lib/utils/date";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 
 const STATUS_VARIANT: Record<
   PromotionBatchStatus,
@@ -101,7 +103,7 @@ export default function PromotionsPage() {
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[b.status]}>{b.status}</Badge>
                   </TableCell>
-                  <TableCell>{b.createdAt.slice(0, 10)}</TableCell>
+                  <TableCell>{formatDate(b.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="sm"
@@ -154,7 +156,7 @@ function NewPromotionDialog({
   const targetSections = useQuery({
     queryKey: ["sections", { sessionId: toSessionId }],
     queryFn: () =>
-      structureApi.sections.list({ sessionId: toSessionId, limit: 200 }),
+      structureApi.sections.list({ sessionId: toSessionId, limit: MAX_PAGE_LIMIT }),
     enabled: !!toSessionId,
   });
 

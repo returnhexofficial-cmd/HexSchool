@@ -39,6 +39,7 @@ import {
   EnrollmentWithRelations,
 } from '../repositories/enrollments.repository';
 import { EnrollmentTransfersRepository } from '../repositories/enrollment-transfers.repository';
+import { dhakaToday } from '../../../common/utils/clock.util';
 
 export interface BulkEnrollResult {
   enrolled: EnrollmentWithRelations[];
@@ -679,7 +680,7 @@ export class EnrollmentsService {
 
   private resolveDate(input?: string): Date {
     if (input) return parseDate(input);
-    return parseDate(new Date().toISOString().slice(0, 10));
+    return parseDate(dhakaToday());
   }
 
   private async createRow(

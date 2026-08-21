@@ -45,6 +45,7 @@ import {
   type Payment,
 } from "@/lib/api/fee";
 import { structureApi } from "@/lib/api/structure";
+import { formatDate } from "@/lib/utils/date";
 import {
   INVOICE_STATUS_LABELS,
   INVOICE_STATUS_VARIANT,
@@ -489,7 +490,7 @@ function InvoiceDetailDialog({
               <Row label="Paid" value={formatBDT(detail.data.paidTotal)} />
               <Row
                 label="Due date"
-                value={detail.data.dueDate.slice(0, 10)}
+                value={formatDate(detail.data.dueDate)}
               />
             </dl>
 

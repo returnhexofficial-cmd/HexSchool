@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { communicationApi } from "@/lib/api/communication";
 import { useAuth } from "@/lib/store/hooks";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils/date";
 
 /**
  * The in-app notification bell (Module 17). Polls the inbox every 30s
@@ -71,7 +72,7 @@ export function NotificationBell() {
               >
                 <p className="whitespace-pre-line">{n.bodyRendered}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {new Date(n.createdAt).toLocaleString()}
+                  {formatDateTime(n.createdAt)}
                 </p>
               </div>
             ))

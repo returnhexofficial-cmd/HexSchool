@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingBlock } from "@/components/shared/spinner";
 import { cn } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils/date";
 import {
   TICKET_CATEGORIES,
   TICKET_CATEGORY_LABELS,
@@ -198,7 +199,7 @@ function TicketThread({
           <p className="font-medium">{ticket.subject}</p>
           <p className="font-mono text-xs text-muted-foreground">
             {ticket.ticketNo} ·{" "}
-            {new Date(ticket.createdAt).toLocaleDateString()}
+            {formatDate(ticket.createdAt)}
           </p>
         </div>
         <Badge variant={TICKET_STATUS_VARIANT[ticket.status]}>
@@ -230,7 +231,7 @@ function TicketThread({
             >
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>{comment.authorName}</span>
-                <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                <span>{formatDateTime(comment.createdAt)}</span>
               </div>
               <p className="mt-1 whitespace-pre-wrap">{comment.body}</p>
             </div>

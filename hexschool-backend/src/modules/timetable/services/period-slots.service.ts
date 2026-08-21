@@ -36,6 +36,36 @@ export interface PeriodSlotView {
   displayOrder: number;
 }
 
+
+/**
+ * The wire shape of a period slot.
+ *
+ * `start_time`/`end_time` are `@db.Time` columns, which Prisma hands back as a
+ * **Date on 1970-01-01** — so serialising the model directly puts
+ * `1970-01-01T07:30:00.000Z` on the wire.
+ *
+ * Exported because it must be the *only* way a slot reaches a client. It was
+ * private, and `GET /timetables/:id` embedded the raw model instead: the same
+ * column arrived as `"07:30"` from one endpoint and as a 1970 timestamp from
+ * the other, and the routine builder printed every row of its grid as
+ * `1970-01-01T07:30:00.000Z–1970-01-01T08:15:00.000Z` (QA finding F30).
+ */
+export function toPeriodSlotView(slot: PeriodSlot): PeriodSlotView {
+  const startMinutes = timeColumnMinutes(slot.startTime);
+  const endMinutes = timeColumnMinutes(slot.endTime);
+  return {
+    id: slot.id,
+    shiftId: slot.shiftId,
+    name: slot.name,
+    startTime: minutesLabel(startMinutes),
+    endTime: minutesLabel(endMinutes),
+    startMinutes,
+    endMinutes,
+    type: slot.type,
+    displayOrder: slot.displayOrder,
+  };
+}
+
 /**
  * The bell schedule of each shift (roadmap M13 §4). Slots are validated
  * against their shift's working window and against each other — an
@@ -317,18 +347,6 @@ export class PeriodSlotsService {
   }
 
   private toView(slot: PeriodSlot): PeriodSlotView {
-    const startMinutes = timeColumnMinutes(slot.startTime);
-    const endMinutes = timeColumnMinutes(slot.endTime);
-    return {
-      id: slot.id,
-      shiftId: slot.shiftId,
-      name: slot.name,
-      startTime: minutesLabel(startMinutes),
-      endTime: minutesLabel(endMinutes),
-      startMinutes,
-      endMinutes,
-      type: slot.type,
-      displayOrder: slot.displayOrder,
-    };
+    return toPeriodSlotView(slot);
   }
 }

@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { formatDate } from "@/lib/utils/date";
 import {
   CERTIFICATE_STATUS_LABELS,
   CERTIFICATE_STATUS_VARIANT,
@@ -221,7 +222,7 @@ export function RegisterTab() {
                     </div>
                   </td>
                   <td className="p-3">
-                    {row.issuedAt ? row.issuedAt.slice(0, 10) : "—"}
+                    {formatDate(row.issuedAt)}
                   </td>
                   <td className="p-3">
                     <Badge variant={CERTIFICATE_STATUS_VARIANT[row.status]}>

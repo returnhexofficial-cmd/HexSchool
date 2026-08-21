@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatDateTime, formatDateLong } from "./date";
+import {
+  endOfDayIso,
+  formatDate,
+  formatDateLong,
+  formatDateTime,
+  startOfDayIso,
+} from "./date";
 
 /**
  * Regression tests for QA finding F9 — the students list printed
@@ -68,5 +74,38 @@ describe("formatDateLong", () => {
 
   it("renders an em dash for nullish values", () => {
     expect(formatDateLong(undefined)).toBe("—");
+  });
+});
+
+/**
+ * Regression tests for QA finding F25 — an admission cycle whose window was
+ * built as a **UTC** day stayed open six hours past its advertised close, and
+ * an audit filter built in the *viewer's* timezone returned different rows on
+ * different machines.
+ */
+describe("day boundaries", () => {
+  it("starts a Dhaka day six hours before UTC midnight", () => {
+    expect(startOfDayIso("2026-08-31")).toBe("2026-08-30T18:00:00.000Z");
+  });
+
+  it("ends a Dhaka day before UTC midnight, not after it", () => {
+    expect(endOfDayIso("2026-08-31")).toBe("2026-08-31T17:59:59.999Z");
+  });
+
+  it("round-trips through formatDate to the day that was picked", () => {
+    // The bug: `2026-08-31T23:59:59.999Z` displays as 01/09/2026 in Dhaka.
+    expect(formatDate("2026-08-31T23:59:59.999Z")).toBe("01/09/2026");
+    // The fix keeps the picked day on both ends.
+    expect(formatDate(startOfDayIso("2026-08-31"))).toBe("31/08/2026");
+    expect(formatDate(endOfDayIso("2026-08-31"))).toBe("31/08/2026");
+  });
+
+  it("brackets the whole local day and nothing outside it", () => {
+    const start = new Date(startOfDayIso("2026-08-31")).getTime();
+    const end = new Date(endOfDayIso("2026-08-31")).getTime();
+    expect(end - start).toBe(86_400_000 - 1);
+    // 00:30 Dhaka on the 31st is inside; 00:30 on 1 September is not.
+    expect(new Date("2026-08-31T00:30:00+06:00").getTime()).toBeGreaterThan(start);
+    expect(new Date("2026-09-01T00:30:00+06:00").getTime()).toBeGreaterThan(end);
   });
 });

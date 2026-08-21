@@ -5,7 +5,7 @@ description: Run in-browser QA of SMIS/HexSchool through the Playwright MCP serv
 
 # SMIS browser QA
 
-Jest/Vitest prove units and API contracts (2422 backend unit / 1033 e2e / 666 Vitest).
+Jest/Vitest prove units and API contracts (2445 backend unit / 1033 e2e / 681 Vitest).
 This skill proves the app behaves **in a real browser**, and fixes what it finds in the
 same pass.
 
@@ -26,7 +26,7 @@ cd hexschool-backend
 docker compose up -d postgres redis minio mailpit     # never a bare `up -d`
 DATABASE_URL="postgresql://smis:smis@localhost:5433/smis" npm run seed:qa
 DATABASE_URL="postgresql://smis:smis@localhost:5433/smis" \
-  AUTH_THROTTLE_ENABLED=false npm run start:dev
+  AUTH_THROTTLE_ENABLED=false SMS_DEV_OUTBOX=true npm run start:dev
 cd hexschool-frontend && npm run dev
 ```
 
@@ -46,13 +46,21 @@ exists.
 ## The committed browser suite
 
 ```bash
-cd hexschool-frontend && npm run test:e2e        # 26 specs, ~40 s
+cd hexschool-frontend && npm run test:e2e        # 41 specs, ~1.8 min
 ```
 
 `e2e/smoke.spec.ts` (harness health + F1/F9 guards), `e2e/sweeps/` (`permissions` —
-role × route, guards F8; `a11y` — axe over the admin panel and public site),
-`e2e/modules/`, `e2e/journeys/`, and `e2e/support/` (`auth`, `console-guard`,
-`mailpit`, `ui`, `a11y`).
+role × route, guards F8; `a11y` — axe over the admin panel and public site; `dates` —
+no ISO date rendered on any page), `e2e/modules/`, `e2e/journeys/`, and `e2e/support/`
+(`auth`, `console-guard`, `mailpit`, `ui`, `a11y`).
+
+**Dates are the bug that keeps coming back** — F9 → F18 → F24, three times in three
+different shapes, plus F25 and F29 for the boundary/"today" variants. Two source guards
+now know several shapes each (`no-unlocalised-dates.test.ts` in the frontend,
+`no-utc-today.spec.ts` in the backend), but the one that keeps catching *new* ones is
+`sweeps/dates.spec.ts`, because it reads the **rendered page** and so needs no knowledge
+of field names — it is what caught `effectiveFrom`, which ends in neither `Date` nor
+`At`. Add a page to its list whenever a pass reaches a new screen.
 
 **Accessibility.** `expectNoA11yViolations(page, label)` blocks on serious/critical and
 reports moderate/minor. When a violation is systemic rather than page-specific, exclude
@@ -153,6 +161,7 @@ is a free checklist — use it. Then add:
 | Surface | How |
 |---|---|
 | Email / OTP | Mailpit API `http://localhost:8025/api/v1/messages` |
+| SMS / phone OTP | `GET /api/v1/dev/sms?to=<number>` with `SMS_DEV_OUTBOX=true` — the log never carries the body (**F19**) |
 | Uploads | MinIO console `:9001` (`minioadmin`/`minioadmin`), bucket `smis` |
 | Queued work | Bull Board `/admin/queues` (`admin`/`admin-dev-pass`) |
 | Envelope contract | The UI showing `apiErrorMessage`'s fallback *"Something went wrong. Please try again."* means the response did **not** carry the standard error envelope |
@@ -167,7 +176,7 @@ cd hexschool-backend && DATABASE_URL="postgresql://smis:smis@localhost:5433/smis
 cd hexschool-frontend && npm run test:e2e
 ```
 
-Baseline: **2422 backend unit / 666 frontend Vitest / 26 browser**. The backend e2e
+Baseline: **2445 backend unit / 681 frontend Vitest / 41 browser**. The backend e2e
 suite has two known failures in `hr.e2e-spec.ts` (finding **F10**) — confirm any new
 failure is yours before chasing it.
 

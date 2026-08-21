@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiErrorMessage } from "@/lib/api/auth";
 import { examApi } from "@/lib/api/exam";
+import { formatDate } from "@/lib/utils/date";
 import {
   CERTIFICATE_TYPE_LABELS,
   certificateApi,
@@ -207,7 +208,7 @@ export function CertificateReportsTab() {
               <span>{CERTIFICATE_TYPE_LABELS[row.type]}</span>
               <span className="text-muted-foreground">{row.studentName}</span>
               <span className="text-xs text-muted-foreground">
-                {row.issueDate}
+                {formatDate(row.issueDate)}
               </span>
               {row.status === "REVOKED" && (
                 <Badge variant="destructive">Revoked</Badge>

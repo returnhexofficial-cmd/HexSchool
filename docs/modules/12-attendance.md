@@ -145,13 +145,19 @@ None. Two behaviour changes that consumers should know about:
 | Promotion rollback with attendance present | ✅ blocked | 409 (M11 guard live) |
 | QR time thresholds, dedupe window, shift start | ✅ unit | Fake-timer specs cover PRESENT/LATE/HALF_DAY and re-scan |
 | Auto-absent + absent-SMS jobs | ✅ unit | Setting gates, cutoff, holiday skip, idempotency, cap, dedupe |
+| Marking grid: Dhaka-day default, cycle, save, re-mark in place | ✅ | browser (M12-02/06/08/09) |
+| Holiday + COMPLETED-session guards announced *and* enforced | ✅ | browser (M12-11–14) |
+| Leave retro-correction and marking-time override, both directions | ✅ | browser (M12-16/17) |
+| QR check-in: confirmation card, Dhaka day, idempotent re-scan | ✅ | browser (M12-24–28) |
+| Report percentages follow the roadmap formula | ✅ | browser (M12-33–35), after finding **F28** |
 
 Tests: **344 backend unit** (61 new) + **17 attendance e2e** (157 e2e total) / **119 frontend** (12 new). The full e2e run shows the known-flaky `school.e2e-spec` audit-diff race (PROJECT_CONTEXT §18) on some runs; it passes standalone and is unrelated to this module.
 
 ## Remaining TODOs
 
 - [ ] In-browser click-through: the QR scanner against a real phone camera (the `BarcodeDetector` path is untested outside unit-level logic; the manual-entry path is e2e-covered).
-- [ ] In-browser click-through: marking grid with 100+ students (roadmap §9 performance check) — the grid is a plain table today, virtualize if it drags.
+- [ ] In-browser click-through: marking grid with 100+ students (roadmap §9 performance check) — the grid is a plain table today, virtualize if it drags.  
+      *(Still owed — the QA sections hold two students each; needs a fixture built for it.)*
 - [ ] Run the auto-absent and absent-SMS crons against a live day once M17 makes SMS real.
 - [ ] Swap `periodId: null` for real periods when M13 lands, and add the `period_id` FK.
 

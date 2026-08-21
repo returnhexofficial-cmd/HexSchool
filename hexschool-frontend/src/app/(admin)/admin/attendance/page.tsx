@@ -43,6 +43,7 @@ import {
 } from "@/lib/api/attendance";
 import { structureApi } from "@/lib/api/structure";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
+import { formatDate } from "@/lib/utils/date";
 import {
   ATTENDANCE_STATUS_LABELS,
   MARKABLE_STATUSES,
@@ -518,7 +519,7 @@ function ConvertHolidayDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Convert {date} to a holiday</DialogTitle>
+          <DialogTitle>Convert {formatDate(date)} to a holiday</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Every attendance record on this date becomes HOLIDAY, so the day

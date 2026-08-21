@@ -73,5 +73,5 @@ cd hexschool-frontend && npm run test:e2e
 
 The e2e suite is where this project's real bugs have been found. Run it.
 
-Baseline: **2422 backend unit / 666 frontend Vitest / 26 browser**. `hr.e2e-spec.ts`
+Baseline: **2445 backend unit / 681 frontend Vitest / 41 browser**. `hr.e2e-spec.ts`
 has two known pre-existing failures — see finding F10 in `docs/qa/FINDINGS.md`.

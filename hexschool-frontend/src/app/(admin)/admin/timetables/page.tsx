@@ -41,6 +41,7 @@ import { structureApi } from "@/lib/api/structure";
 import { timetableApi, type TimetableStatus } from "@/lib/api/timetable";
 import { useAcademicSession } from "@/lib/hooks/use-academic-session";
 import { TIMETABLE_STATUS_LABELS } from "@/lib/validations/timetable";
+import { formatDate } from "@/lib/utils/date";
 
 const STATUS_VARIANT: Record<
   TimetableStatus,
@@ -196,7 +197,7 @@ export default function TimetablesPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>v{row.version}</TableCell>
-                      <TableCell>{row.effectiveFrom}</TableCell>
+                      <TableCell>{formatDate(row.effectiveFrom)}</TableCell>
                       <TableCell className="text-right">
                         <Button size="sm" variant="ghost" asChild>
                           <Link href={`/admin/timetables/${row.id}`}>

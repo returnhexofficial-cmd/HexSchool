@@ -148,7 +148,7 @@ export default function QrScanPage() {
         <Card>
           <CardContent className="space-y-4 pt-6">
             <div className="aspect-video overflow-hidden rounded-md border bg-muted">
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              { }
               <video
                 ref={videoRef}
                 className="size-full object-cover"

@@ -23,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { admissionPublicApi } from "@/lib/api/admissions";
+import { formatDate } from "@/lib/utils/date";
 
 /** Public admission landing: open cycles + per-class seats and fees. */
 export default function AdmissionLandingPage() {
@@ -78,7 +79,7 @@ export default function AdmissionLandingPage() {
               </CardTitle>
               <CardDescription>
                 Session {cycle.session.name} · applications close{" "}
-                {cycle.endAt.slice(0, 10)}
+                {formatDate(cycle.endAt)}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -112,7 +113,7 @@ export default function AdmissionLandingPage() {
                         {cycle.testRequired ? (
                           <TableCell>
                             {test
-                              ? `${test.testDate.slice(0, 10)}${test.venue ? ` · ${test.venue}` : ""}`
+                              ? `${formatDate(test.testDate)}${test.venue ? ` · ${test.venue}` : ""}`
                               : "To be announced"}
                           </TableCell>
                         ) : null}

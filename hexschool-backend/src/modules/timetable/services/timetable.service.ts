@@ -13,7 +13,7 @@ import {
   UserType,
   Weekday,
 } from '../../../common/constants';
-import { timeColumnMinutes } from '../../../common/utils/clock.util';
+import { dhakaToday, timeColumnMinutes } from '../../../common/utils/clock.util';
 import { isoDate, parseDate } from '../../academic/calendar/date.util';
 import { ClassSubjectsRepository } from '../../academic/repositories/class-subjects.repository';
 import { SectionsRepository } from '../../academic/repositories/sections.repository';
@@ -44,6 +44,10 @@ import {
   TimetableWithSection,
 } from '../repositories/timetables.repository';
 import { TimetableSettingsService } from './timetable-settings.service';
+import {
+  PeriodSlotView,
+  toPeriodSlotView,
+} from './period-slots.service';
 
 /** Statuses that occupy a teacher: a draft holds no one to anything. */
 const LIVE_STATUSES = [TimetableStatus.PUBLISHED];
@@ -62,7 +66,8 @@ export interface ReplaceEntriesResult {
 
 export interface TimetableDetail {
   timetable: TimetableWithSection;
-  slots: PeriodSlot[];
+  /** Views, not Prisma models — `@db.Time` must never reach a client raw (F30). */
+  slots: PeriodSlotView[];
   days: Weekday[];
   entries: EntryWithRelations[];
   /** Conflicts the CURRENT saved grid has — recomputed on read so a
@@ -133,7 +138,7 @@ export class TimetableService {
 
     return {
       timetable,
-      slots,
+      slots: slots.map(toPeriodSlotView),
       days: config.workingDays,
       entries,
       conflicts: detectConflicts(
@@ -673,7 +678,7 @@ export class TimetableService {
   }
 
   private defaultEffectiveFrom(start: Date, end: Date): Date {
-    const today = parseDate(new Date().toISOString().slice(0, 10));
+    const today = parseDate(dhakaToday());
     if (today.getTime() < start.getTime()) return start;
     if (today.getTime() > end.getTime()) return end;
     return today;

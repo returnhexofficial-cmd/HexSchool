@@ -45,6 +45,8 @@ import {
   type Weekday,
 } from "@/lib/api/timetable";
 import { cn } from "@/lib/utils";
+import { formatDate, isoDateInput } from "@/lib/utils/date";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   CONFLICT_KIND_LABELS,
   cellKey,
@@ -251,7 +253,7 @@ export default function TimetableBuilderPage({
     <main className="flex-1 space-y-6 p-8 pb-28">
       <PageHeader
         title={`${timetable.section.class.name} — ${timetable.section.name}`}
-        description={`${timetable.session.name} · v${timetable.version} · effective from ${timetable.effectiveFrom}${
+        description={`${timetable.session.name} · v${timetable.version} · effective from ${formatDate(timetable.effectiveFrom)}${
           timetable.section.shift ? ` · ${timetable.section.shift.name} shift` : ""
         }`}
       >
@@ -455,7 +457,11 @@ export default function TimetableBuilderPage({
 
       {publishOpen ? (
         <PublishDialog
-          defaultDate={timetable.effectiveFrom}
+          // The API returns an instant; an <input type="date"> needs the
+          // machine date. Passing the instant made the input render empty
+          // while the state kept the full ISO string, so the default publish
+          // path always 400'd on the DTO's YYYY-MM-DD rule (QA finding F33).
+          defaultDate={isoDateInput(timetable.effectiveFrom)}
           filled={cells.size}
           capacity={capacity}
           isPending={publish.isPending}
@@ -651,7 +657,7 @@ function CellEditor({
 
   const sections = useQuery({
     queryKey: ["sections", "combined", sessionId],
-    queryFn: () => structureApi.sections.list({ sessionId, limit: 200 }),
+    queryFn: () => structureApi.sections.list({ sessionId, limit: MAX_PAGE_LIMIT }),
     enabled: !!sessionId,
     staleTime: 60_000,
   });
@@ -744,6 +750,17 @@ function CellEditor({
               ))}
             </SelectContent>
           </Select>
+          {subjectId && !teachers.isPending && teacherOptions.length === 0 ? (
+            // The list is built from this session's M08 assignments, so a
+            // school that has not filled the assignment matrix yet gets an
+            // empty dropdown and no way to tell why. The period-slots page
+            // handles the same dead end by naming the missing prerequisite.
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              No teacher holds a subject in this session yet. Assign teachers to
+              sections and subjects first — the routine draws its list from
+              there.
+            </p>
+          ) : null}
           {teacherId && owner && teacherId !== owner.id ? (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               Not the assigned teacher for this subject — saving needs the

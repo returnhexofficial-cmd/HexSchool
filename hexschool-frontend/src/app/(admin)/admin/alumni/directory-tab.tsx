@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiErrorMessage } from "@/lib/api/auth";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 import {
   ALUMNI_STATUS_LABELS,
   alumniApi,
@@ -49,7 +50,7 @@ export function DirectoryTab() {
     queryKey: ["alumni", { search, batchYear, status: "APPROVED" }],
     queryFn: () =>
       alumniApi.list({
-        limit: 200,
+        limit: MAX_PAGE_LIMIT,
         status: "APPROVED",
         search: search || undefined,
         batchYear: batchYear ? Number(batchYear) : undefined,

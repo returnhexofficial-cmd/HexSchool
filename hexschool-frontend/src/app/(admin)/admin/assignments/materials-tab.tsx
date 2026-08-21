@@ -57,6 +57,7 @@ import {
   type MaterialFormValues,
 } from "@/lib/validations/assignment";
 import { FieldError } from "./assignments-tab";
+import { MAX_PAGE_LIMIT } from "@/lib/constants/pagination";
 
 const ALL = "__all__";
 const CLASS_WIDE = "__class_wide__";
@@ -309,7 +310,7 @@ function MaterialDialog({
   });
   const subjects = useQuery({
     queryKey: ["subjects", "material-form"],
-    queryFn: () => structureApi.subjects.list({ limit: 200 }),
+    queryFn: () => structureApi.subjects.list({ limit: MAX_PAGE_LIMIT }),
   });
 
   const create = useMutation({
